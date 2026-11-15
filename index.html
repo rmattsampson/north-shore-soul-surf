@@ -423,7 +423,8 @@ function updWater(){
     w.huiT=ri(320,560); setMsg("⚠️ Da HUI stay in da water — keep your distance!",130); beep(160,.2,'sawtooth'); }
   for(const h of w.huis){
     if(h.surf){ // riding a wave in
-      if(h.wave && w.waves.includes(h.wave)){ h.y=h.wave.y; h.x+=h.vx*0.4; }
+      if(h.wave && w.waves.includes(h.wave)){ h.y=h.wave.y; h.x+=h.vx*0.4;
+        h.x=clamp(h.x, h.wave.x-h.wave.len/2+8, h.wave.x+h.wave.len/2-8); }  // stay on the face
       else { h.surf=false; h.wave=null; }
       if(h.y>=SEABOT-6){ h.surf=false; h.wave=null; h.y=SEATOP+12; h.x=rnd(40,W-40); }
     } else {
@@ -446,7 +447,8 @@ function updWater(){
     setMsg("Laird paddling out... Mr. Big Wave, so humble 🙄",130); }
   if(w.laird){ const L=w.laird; L.t--;
     if(L.surf){
-      if(L.wave && w.waves.includes(L.wave)){ L.y=L.wave.y; L.x+=Math.sin(frame*0.1)*0.8; }
+      if(L.wave && w.waves.includes(L.wave)){ L.y=L.wave.y; L.x+=Math.sin(frame*0.1)*0.8;
+        L.x=clamp(L.x, L.wave.x-L.wave.len/2+8, L.wave.x+L.wave.len/2-8); }  // stay on the face
       else { L.surf=false; L.wave=null; }
       if(L.y>=SEABOT-6){ L.surf=false; L.wave=null; }
     } else {
@@ -554,16 +556,35 @@ function drawBeachProps(){
   if(beach.photographer) drawPhotog(beach.photographer.x,beach.photographer.y);
   if(beach.buggy) drawBuggy(beach.buggy.x,SHORE+16);
 }
+function drawBeachBoard(x,y,facing,moving){
+  // the surfer's board on the sand: carried upright at your side while walking,
+  // stuck nose-up in the sand beside you when you stop.
+  const fx=facing<0?-1:1;
+  if(moving){
+    // carried upright, tucked under the arm, leaning with you
+    const bx=x+fx*9;
+    px(bx-2,y-26,4,30,player.board); px(bx-2,y-26,4,1,'#fff');
+    px(bx-2,y-26,4,3,shade(player.board,30)); // nose
+  } else {
+    // planted in the sand, nose up, beside you
+    const bx=x+fx*12;
+    px(bx-2,y-30,4,34,player.board); px(bx-1,y-30,1,34,'#fff');
+    px(bx-3,y-31,6,4,shade(player.board,30));   // rounded nose
+    px(bx-3,y+2,6,3,C.sandWet);                 // little sand divot at the tail
+  }
+}
 function drawBeach(){
   drawBeachProps();
   drawPalm(30,H-6); drawPalm(W-30,H-6);
   if(player.knockT>0){
+    drawBeachBoard(player.x,player.y,player.facing,false);
     drawDude(player.x,player.y,C.skin,player.board,player.facing,'down',frame);
     const secs=Math.ceil(player.knockT/60);
     ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
     ctx.fillText('OUT COLD '+secs+'s',player.x,player.y-14); ctx.textAlign='left';
   } else {
     const moving=keys.left||keys.right||keys.up||keys.down;
+    drawBeachBoard(player.x,player.y,player.facing,moving);
     drawDude(player.x,player.y,C.skin,player.board,player.facing,moving?'walk':'stand',frame);
     if(player.injured) px(player.x-3,player.y-20,6,3,C.bad);
   }
