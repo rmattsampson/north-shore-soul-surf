@@ -39,10 +39,13 @@ const ctx = cv.getContext('2d');
 const W = cv.width, H = cv.height;
 ctx.imageSmoothingEnabled = false;
 
-/* ---- responsive integer scaling ---- */
+/* ---- responsive scaling: fill the window, minimal wasted space ---- */
 function fit(){
-  const mw = Math.min(innerWidth-20, 960), mh = Math.min(innerHeight-56, 640);
-  const s = Math.max(1, Math.floor(Math.min(mw/W, mh/H)));
+  const mw = innerWidth-16, mh = innerHeight-44;
+  // use the largest scale that fits; prefer integer, but fall back to fractional
+  // when an integer step would waste a lot of space
+  const raw = Math.min(mw/W, mh/H);
+  const s = raw >= 2 ? Math.floor(raw) : raw;   // crisp integer when big, else fill
   cv.style.width=(W*s)+'px'; cv.style.height=(H*s)+'px';
 }
 addEventListener('resize', fit); fit();
@@ -228,12 +231,12 @@ function softShadow(x,y,w){ // elliptical drop shadow on the sand/water
    ============================================================ */
 let seaPhase=0;
 function drawSky(){
-  // smooth dithered sunset gradient (32-bit) instead of hard 18px bands
-  gradBand(0,0,W,36, C.skyTop, C.s2, 10);
-  gradBand(0,36,W,36, C.s2, C.s3, 10);
-  gradBand(0,72,W,46, C.s3, C.s5, 12);
-  // sun — glowing disc with soft haze rings
-  const sx=W*0.62, sy=100;
+  // smaller sky now (horizon at 96): compress the dithered sunset gradient
+  gradBand(0,0,W,30, C.skyTop, C.s2, 9);
+  gradBand(0,30,W,30, C.s2, C.s3, 9);
+  gradBand(0,60,W,36, C.s3, C.s5, 10);
+  // sun — glowing disc with soft haze rings (sits lower on the new horizon)
+  const sx=W*0.62, sy=80;
   ctx.save(); ctx.globalAlpha=0.16; ctx.fillStyle=C.sun;
   ctx.beginPath(); ctx.arc(sx,sy,40,0,Math.PI*2); ctx.fill();
   ctx.globalAlpha=0.12; ctx.beginPath(); ctx.arc(sx,sy,54,0,Math.PI*2); ctx.fill(); ctx.restore();
@@ -255,19 +258,19 @@ function cloud(x,y){
   for(let xx=x+2;xx<x+44;xx+=2) if(dither(xx,y+11,0.5)) px(xx,y+11,1,1,'#d87ca0'); // dithered base
 }
 function ridge(pts,col){ ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(pts[0][0],118);
-  for(const p of pts) ctx.lineTo(p[0],p[1]); ctx.lineTo(pts[pts.length-1][0],118); ctx.closePath(); ctx.fill(); }
+  for(const p of pts) ctx.lineTo(p[0],p[1]); ctx.lineTo(pts[pts.length-1][0],96); ctx.closePath(); ctx.fill(); }
+function ridgeBase(){ return 96; }
 function drawMountains(){
-  // back ridge (purple), ragged stepped peaks
-  ridge([[0,96],[30,78],[55,88],[90,58],[130,80],[175,66],[220,92],[260,74],[300,96],[330,88]], C.mtnB);
-  // front ridge (green) with a sunlit (right) and shadowed (left) face
-  ridge([[0,112],[26,86],[48,98],[78,60],[96,74],[120,52],[150,84],[200,104]], C.mtnA);
-  ridge([[0,112],[26,86],[48,98],[78,60],[96,74],[120,52],[120,112]], shade(C.mtnA,-22)); // shadow side
+  // smaller ridges, base pinned to the new horizon (96)
+  ridge([[0,78],[30,64],[55,72],[90,50],[130,66],[175,56],[220,74],[260,62],[300,78],[330,72]], C.mtnB);
+  ridge([[0,92],[26,72],[48,80],[78,52],[96,62],[120,46],[150,70],[200,86]], C.mtnA);
+  ridge([[0,92],[26,72],[48,80],[78,52],[96,62],[120,46],[120,92]], shade(C.mtnA,-22)); // shadow side
   ctx.fillStyle=shade(C.mtnA,24);  // sunlit facet
-  ctx.beginPath(); ctx.moveTo(120,52); ctx.lineTo(150,84); ctx.lineTo(132,84); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(120,46); ctx.lineTo(146,70); ctx.lineTo(130,70); ctx.closePath(); ctx.fill();
   // dithered ridge haze at the base where it meets the sea
-  for(let x=0;x<W;x+=2) if(dither(x,116,0.4)) px(x,116,1,2,shade(C.mtnB,20));
+  for(let x=0;x<W;x+=2) if(dither(x,94,0.4)) px(x,94,1,2,shade(C.mtnB,20));
 }
-const SEATOP=118, SEABOT=250, SHORE=250;
+const SEATOP=96, SEABOT=252, SHORE=252;
 function drawSeaBands(){
   // 32-bit translucent depth gradient: deep at the horizon → bright toward shore, dithered
   gradBand(0,SEATOP,W,(SEABOT-SEATOP)*0.5, C.seaDeep, C.sea1, 10);
@@ -366,8 +369,8 @@ let beach={}, water={ waves:[], huis:[], pro:null, shark:null, surfing:false, cu
 let beachBuilt=false;
 
 function buildBeach(){
-  beach={ photographer:null, buggy:null, chandler:{x:58,y:H-54},
-    props:[], photoT:ri(160,340), buggyT:ri(260,560), chatCool:60 };
+  beach={ photographer:null, buggy:null, chandler:{x:58,y:H-54}, local:null, tourist:null,
+    props:[], photoT:ri(160,340), buggyT:ri(260,560), chatCool:60, localT:ri(2400,3600), touristT:ri(600,1600) };
   const kinds=['slipper','honu','cooler'];
   for(let i=0;i<3;i++) beach.props.push({k:kinds[i],x:rnd(90,W-90),y:rnd(H-70,H-24)});
   beachBuilt=true;
@@ -432,6 +435,8 @@ function update(){
   if(consume('mute')){ muted=!muted; setMsg(muted?"🔇 muted":"🔊 sound on",60); }
   if(beachBuilt||state==='beach'||state==='water') tickWaves();  // swell keeps rolling in every scene
   if(beachBuilt) tickBuggy();  // lifeguard ATV keeps driving even while you surf
+  if(beachBuilt) tickLocal();  // a local strolls the beach ~1/min and drops stuff
+  if(beachBuilt) tickTourist();  // rare lost-tourist parody walk-on
   if(state==='splash'){ if(consume('enter')){ state='help'; beep(660,.1);} else if(consume('space')){ enterBeach(); } return; }
   if(state==='help'){ if(consume('enter')||consume('space')){ enterBeach(); } return; }
   if(state==='gameover'){ if(consume('enter')||consume('space')){ score=0; state='splash'; } return; }
@@ -493,6 +498,79 @@ function tickBuggy(){
 }
 
 function photographerOut(){ return beach && beach.photographer; }
+
+// Original parody walk-ons (NOT the real copyrighted characters): a leisure-suit guy,
+// a space-janitor in a jumpsuit, a cartoon knight. One at a time, rare & intermittent.
+const TOURISTS = [
+  { kind:'suit',   line:"'I musta took one wrong turn, brah.'" },
+  { kind:'space',  line:"'This is NOT the space station...'" },
+  { kind:'knight', line:"'Hark! Wrong quest entirely.'" }
+];
+function tickTourist(){
+  const b=beach; if(!beachBuilt) return;
+  if(!b.tourist){
+    if(b.touristT>0){ b.touristT--; return; }
+    if(Math.random()<0.004){   // rare
+      const t=TOURISTS[ri(0,TOURISTS.length-1)];
+      const fromLeft=Math.random()<0.5;
+      b.tourist={ kind:t.kind, line:t.line, x:fromLeft?-20:W+20, dir:fromLeft?1:-1,
+        y:SHORE+ri(20,H-SHORE-18), said:false };
+    } else b.touristT=ri(120,300);
+  } else {
+    const T=b.tourist; T.x+=0.8*T.dir;
+    if(!T.said && T.x>W*0.35 && T.x<W*0.65){ T.said=true; if(state==='beach') setMsg(T.line,140); beep(440,.07,'square'); }
+    if(T.x<-30||T.x>W+30){ b.tourist=null; b.touristT=ri(1800,4200); }
+  }
+}
+function drawTourist(T){
+  softShadow(T.x,T.y+13,9);
+  const fx=T.dir<0?-1:1;
+  ctx.save(); ctx.translate(T.x|0,T.y|0); ctx.scale(fx,1);
+  const step=(frame>>2)%2?2:0;
+  if(T.kind==='suit'){
+    // leisure-suit lounge guy: open white suit, chest, gold chain, shades
+    px(-4,6,3,7-step,'#efe9d0'); px(1,6,3,7+step,'#efe9d0'); px(-4,13,4,2,'#2a2a2a'); px(1,13,4,2,'#2a2a2a');
+    px(-5,-4,10,10,'#f4eedd'); px(-2,-4,4,10,'#c88a4e'); px(-1,0,2,2,'#ffd23f'); // suit + open chest + chain
+    px(-7,-2,3,6,'#f4eedd'); px(5,-2,3,6,'#f4eedd');
+    px(-3,-11,7,7,'#c88a4e'); px(-3,-12,7,3,'#3a2a12'); px(-3,-9,7,2,'#111'); // head + hair + shades
+  } else if(T.kind==='space'){
+    // space-janitor: teal jumpsuit, utility collar, mop over shoulder
+    px(-4,6,3,7-step,'#2a8a9a'); px(1,6,3,7+step,'#2a8a9a'); px(-4,13,4,2,'#111'); px(1,13,4,2,'#111');
+    px(-5,-4,10,10,'#2fa0b0'); px(-5,-4,10,2,'#8fd'); // jumpsuit + collar
+    px(-7,-2,3,6,'#2a8a9a'); px(5,-2,3,6,'#2a8a9a');
+    px(-3,-11,7,7,'#c88a4e'); px(-3,-12,7,3,'#6a4a2a');
+    px(7,-14,2,16,'#9a6a2a'); px(6,-16,4,3,'#ccc'); // mop handle + head
+  } else { // cartoon knight
+    px(-4,6,3,7-step,'#889'); px(1,6,3,7+step,'#889'); px(-4,13,4,2,'#556'); px(1,13,4,2,'#556');
+    px(-5,-4,10,10,'#aab'); px(-5,-4,10,2,'#dde'); // armor + highlight
+    px(-7,-2,3,6,'#889'); px(5,-2,3,6,'#889');
+    px(-3,-11,7,7,'#aab'); px(-3,-12,7,3,'#889'); px(-1,-10,3,2,'#223'); // helmet + visor slit
+    px(6,-20,2,18,'#7a4a22'); px(5,-22,4,5,'#c33'); // lance + pennant
+  }
+  ctx.restore();
+}
+
+// a local walks down the beach every ~1 min and leaves a couple things behind
+function tickLocal(){
+  const b=beach; if(!beachBuilt) return;
+  if(!b.local){
+    if(b.localT>0){ b.localT--; return; }
+    // enter from a random side, carrying 1-2 things to drop as they stroll
+    const fromLeft=Math.random()<0.5;
+    b.local={ x: fromLeft?-20:W+20, dir: fromLeft?1:-1,
+      y: SHORE + ri(24, H-SHORE-20),
+      drops: ri(1,2), nextDrop: ri(40,110) };
+    if(state==='beach') setMsg("One local strolling down da beach...",110);
+  } else {
+    const L=b.local; L.x += 0.9*L.dir;
+    // drop a thing as they walk (sandal or cooler), becomes a pickup
+    if(L.drops>0){ L.nextDrop--; if(L.nextDrop<=0){
+      const k = Math.random()<0.5?'slipper':'cooler';
+      b.props.push({ k, x:clamp(L.x,24,W-24), y:L.y+6 });
+      L.drops--; L.nextDrop=ri(80,160); beep(600,.05,'triangle'); } }
+    if(L.x<-30||L.x>W+30){ b.local=null; b.localT=ri(2400,3600); }  // gone; next in ~1 min
+  }
+}
 
 function updWater(){
   const w=water;
@@ -701,6 +779,9 @@ function drawBeachProps(){
   for(const p of beach.props){ if(!p.got){ softShadow(p.x,p.y+4,7); drawProp(p); } }
   if(beach.photographer) drawPhotog(beach.photographer.x,beach.photographer.y);
   if(beach.buggy){ softShadow(beach.buggy.x,SHORE+28,18); drawBuggy(beach.buggy.x,SHORE+16); }
+  if(beach.local){ const L=beach.local; softShadow(L.x,L.y+13,9);
+    drawDude(L.x,L.y,'#b07a44','#8a4a6a',L.dir,(frame>>2)%2?'walk':'stand',frame); }
+  if(beach.tourist) drawTourist(beach.tourist);
 }
 function drawBeachBoard(x,y,facing,moving){
   // the surfer's board on the sand: carried upright at your side while walking,
