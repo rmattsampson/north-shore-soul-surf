@@ -283,13 +283,28 @@ function floatScore(txt,x,y,col){ flash={txt,x,y,col:col||C.gold}; flashT=70; }
 
 const player={ x:W/2, y:0, facing:1, board:C.good, injured:0, recover:0, downT:0, invuln:0, trickT:0, trickKind:'', knockT:0 };
 
+// Chandler's talk-story — ORIGINAL soul-surf lines written in his mentor/pidgin spirit
+// (not quotes from the film). Keep da aloha.
+const CHANDLER_LINES = [
+  "'Surfing's not something you learn, braddah. It's someting you remembah.'",
+  "'Da ocean no care how good you tink you stay. Respeck it.'",
+  "'Chasing points? Nah. Chase da feeling, cuz — points come after.'",
+  "'Every wave only comes once. Be ready, o' let 'um go wit' aloha.'",
+  "'Da Hui stay territorial, but da water belongs to nobody. Paddle wit' humility.'",
+  "'You fall, you get worked, you paddle back out. Dat's da whole ting.'",
+  "'Soul surfin', braddah — one wave, one breath, no clock.'",
+  "'Don't fight da wave. Listen to 'um. She'll tell you where to go.'",
+  "'Laird going talk big. Let your surfin' do da talking instead.'",
+  "'Fear is jus' da ocean asking if you really wanna dance. Say yes.'"
+];
+
 let beach={}, water={ waves:[], huis:[], laird:null, shark:null, surfing:false, cur:null, spray:[], crashes:[],
   ride:0, combo:0, waveT:30, sharkT:9999, huiT:9999, lairdT:9999, style:0 };
 let beachBuilt=false;
 
 function buildBeach(){
   beach={ photographer:null, buggy:null, chandler:{x:58,y:H-54},
-    props:[], photoT:ri(160,340), buggyT:ri(260,560) };
+    props:[], photoT:ri(160,340), buggyT:ri(260,560), chatCool:60 };
   const kinds=['slipper','honu','cooler'];
   for(let i=0;i<3;i++) beach.props.push({k:kinds[i],x:rnd(90,W-90),y:rnd(H-70,H-24)});
   beachBuilt=true;
@@ -373,6 +388,11 @@ function updBeach(){
     if(player.recover>80){ player.injured=0; player.recover=0; beep(540,.14,'triangle');
       setMsg("Chandler: 'You good now, braddah. Surf wit' aloha.'",150); }
     else if(frame%30===0) setMsg("Chandler patching you up... hang loose",40);
+  } else if(near(player.x,player.y,b.chandler.x,b.chandler.y+6,22)){
+    // walk up to Chandler and he talks story — original soul-surf lines, pidgin spirit
+    if(b.chatCool>0) b.chatCool--;
+    else { setMsg("Chandler: "+CHANDLER_LINES[ri(0,CHANDLER_LINES.length-1)],150);
+      beep(500,.08,'triangle'); b.chatCool=260; }
   }
   for(const p of b.props){ if(!p.got && near(player.x,player.y,p.x,p.y,15)){
     p.got=true; score+=5; beep(760,.06); floatScore('+5',p.x,p.y-10,C.good);
