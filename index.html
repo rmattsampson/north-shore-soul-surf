@@ -312,7 +312,12 @@ function buildBeach(){
 
 function enterBeach(reason){
   if(!beachBuilt) buildBeach();          // beach persists; built once, never wiped
-  state='beach'; player.x=W/2; player.y=H-40; player.facing=1; player.downT=0;
+  // come ashore where you left the water: keep your x, land at the shoreline
+  const comingFromWater = (state==='water');
+  state='beach';
+  if(comingFromWater){ player.x=clamp(player.x,16,W-16); player.y=SHORE+10; }
+  else { player.x=W/2; player.y=H-40; }
+  player.facing=1; player.downT=0;
   setMsg(reason||"PAU HANA — walk da beach. STOP walking to plant your board. ↑ at da shoreline fo' paddle out",180);
 }
 function enterWater(){
