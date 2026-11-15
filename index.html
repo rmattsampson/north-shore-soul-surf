@@ -122,30 +122,56 @@ function px(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(x|0,y|0,w|0,h|0); }
    ============================================================ */
 function drawDude(x,y,skin,trunks,facing,pose,t){
   const fx=facing<0?-1:1;
+  const skinD = shade(skin,-28);            // shadow tone
   ctx.save(); ctx.translate(x|0,y|0); ctx.scale(fx,1);
-  if(pose==='down'){ px(-8,2,16,5,skin); px(-6,-1,5,5,C.hair);
+  if(pose==='down'){ px(-8,2,16,5,skin); px(-8,5,16,2,skinD); px(-6,-1,5,5,C.hair);
     const b=(t>>2)%2; px(-11,-6,3,3,b?C.gold:C.foam); px(9,-7,3,3,b?C.foam:C.gold); ctx.restore(); return; }
   const stride=pose==='walk'?Math.sin(t*0.35)*2:0;
-  if(pose==='surf'){
-    const crouch=pose==='surf'?2:0;
-    px(-6,6,4,6,skin); px(2,6,4,6,skin);
-    px(-8,11,7,3,'#20303a'); px(2,11,7,3,'#20303a');
-    px(-4,3-crouch,9,4,trunks);
-    px(-4,-4-crouch,9,8,skin);
-    px(-10,-4-crouch,5,3,skin); px(5,-6-crouch,5,3,skin);
-    px(-3,-11-crouch,7,7,skin); px(-3,-12-crouch,7,3,C.hair);
-  } else if(pose==='paddle'){
-    px(-4,4,9,4,trunks); px(-4,-2,9,7,skin);
-    px(-10,0+Math.sin(t*0.5)*1,5,3,skin); px(5,0-Math.sin(t*0.5)*1,5,3,skin);
-    px(-3,-8,7,6,skin); px(-3,-9,7,3,C.hair);
-  } else {
-    px(-3,6,3,7+stride,skin); px(1,6,3,7-stride,skin);
-    px(-3,13,4,2,'#20303a'); px(1,13,4,2,'#20303a');
-    px(-4,3,9,4,trunks); px(-4,-4,9,8,skin);
-    px(-6,-3,3,6,skin); px(4,-3,3,6,skin);
-    px(-3,-11,7,7,skin); px(-3,-12,7,3,C.hair);
+
+  if(pose==='surf'||pose==='cut'||pose==='lip'||pose==='barrel'){
+    // crouch amount + lean per trick
+    let crouch=2, leanArmUp=false, tuck=false, lean=0;
+    if(pose==='cut'){ crouch=4; lean=-3; }          // low carve, leaning back
+    else if(pose==='lip'){ crouch=0; leanArmUp=true; } // standing tall, arm to the sky
+    else if(pose==='barrel'){ crouch=6; tuck=true; }   // deep tuck
+    // legs (bent, wide stance)
+    px(-6,6,4,6,skin); px(-6,9,4,3,skinD);
+    px(2,6,4,6,skin);  px(2,9,4,3,skinD);
+    px(-8,11,7,3,'#1b2a33'); px(2,11,7,3,'#1b2a33');   // feet planted
+    // trunks w/ waistband + side stripe
+    px(-4+lean,3-crouch,9,4,trunks); px(-4+lean,3-crouch,9,1,shade(trunks,30)); px(3+lean,3-crouch,1,4,shade(trunks,-30));
+    // torso + chest shade
+    px(-4+lean,-4-crouch,9,8,skin); px(1+lean,-4-crouch,4,8,skinD);
+    // arms per pose
+    if(tuck){ px(-9+lean,-1-crouch,5,3,skin); px(5+lean,-1-crouch,5,3,skin); }     // tucked in tight
+    else if(leanArmUp){ px(-10+lean,-10-crouch,4,8,skin); px(5+lean,-3-crouch,5,3,skin); } // one arm up
+    else { px(-11+lean,-3-crouch,6,3,skin); px(5+lean,-6-crouch,6,3,skin); }       // arms out, styling
+    // head + hair + face
+    px(-3+lean,-11-crouch,7,7,skin); px(1+lean,-11-crouch,3,7,skinD);
+    px(-3+lean,-12-crouch,7,3,C.hair); px(-3+lean,-12-crouch,2,4,C.hair);
+    ctx.restore(); return;
   }
+  if(pose==='paddle'){
+    px(-5,4,10,4,trunks); px(-5,4,10,1,shade(trunks,30));
+    px(-5,-2,10,7,skin); px(1,-2,4,7,skinD);
+    px(-11,0+Math.sin(t*0.5)*1,6,3,skin); px(5,0-Math.sin(t*0.5)*1,6,3,skin);  // stroking arms
+    px(-3,-8,7,6,skin); px(1,-8,3,6,skinD); px(-3,-9,7,3,C.hair);
+    ctx.restore(); return;
+  }
+  // stand / walk
+  px(-3,6,3,7+stride,skin); px(1,6,3,7-stride,skin);
+  px(-3,13,4,2,'#1b2a33'); px(1,13,4,2,'#1b2a33');
+  px(-4,3,9,4,trunks); px(-4,3,9,1,shade(trunks,30));
+  px(-4,-4,9,8,skin); px(1,-4,4,8,skinD);
+  px(-6,-3,3,6,skin); px(4,-3,3,6,skin);
+  px(-3,-11,7,7,skin); px(1,-11,3,7,skinD); px(-3,-12,7,3,C.hair);
   ctx.restore();
+}
+function shade(hex,amt){ // lighten(+)/darken(-) a #rrggbb
+  const n=parseInt(hex.slice(1),16);
+  let r=(n>>16)+amt, g=((n>>8)&255)+amt, b=(n&255)+amt;
+  r=r<0?0:r>255?255:r; g=g<0?0:g>255?255:g; b=b<0?0:b>255?255:b;
+  return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
 }
 function drawBoard(x,y,col,facing){
   const fx=facing<0?-1:1; ctx.save(); ctx.translate(x|0,y|0); ctx.scale(fx,1);
@@ -244,7 +270,7 @@ let msg='', msgT=0, flash=null, flashT=0;
 function setMsg(m,d=140){ msg=m; msgT=d; }
 function floatScore(txt,x,y,col){ flash={txt,x,y,col:col||C.gold}; flashT=70; }
 
-const player={ x:W/2, y:0, facing:1, board:C.good, injured:0, recover:0, downT:0 };
+const player={ x:W/2, y:0, facing:1, board:C.good, injured:0, recover:0, downT:0, invuln:0, trickT:0, trickKind:'' };
 
 let beach={}, water={};
 let beachBuilt=false;
@@ -265,7 +291,7 @@ function enterBeach(reason){
 function enterWater(){
   if(player.injured){ setMsg("You stay hurt, cuz — go find Chandler fo' heal!",150); return; }
   state='water'; player.x=W*0.28; player.y=SEABOT-14; player.facing=1; player.downT=0;
-  water={ waves:[], huis:[], laird:null, shark:null, surfing:false, cur:null,
+  water={ waves:[], huis:[], laird:null, shark:null, surfing:false, cur:null, spray:[],
     ride:0, combo:0, waveT:30, sharkT:ri(620,1100), huiT:ri(260,480), lairdT:ri(360,700), style:0 };
   setMsg("Paddle out (↑). Line up wit' a swell → SPACE drop-in",160);
 }
@@ -324,6 +350,10 @@ function updWater(){
   for(const wv of w.waves) wv.y+=wv.spd*(w.surfing&&w.cur===wv?1.4:1);
   w.waves=w.waves.filter(wv=>wv.y<SEABOT+8);
 
+  if(player.invuln>0) player.invuln--;
+  if(player.trickT>0) player.trickT--;
+  for(const s of w.spray){ s.x+=s.vx; s.y+=s.vy; s.vy+=0.22; s.life--; }
+  w.spray=w.spray.filter(s=>s.life>0);
   if(player.downT>0){ player.downT--; if(player.downT===0 && player.y>SEABOT-4) { } return; }
 
   const paddling=!w.surfing;
@@ -364,7 +394,14 @@ function updWater(){
     w.huiT=ri(320,560); setMsg("⚠️ Da HUI stay in da water — keep your distance!",130); beep(160,.2,'sawtooth'); }
   for(const h of w.huis){ h.x+=h.vx; h.y+=h.vy;
     if(h.x<16||h.x>W-16)h.vx*=-1; if(h.y>SEABOT-6){ h.y=SEATOP+12; h.x=rnd(40,W-40); }
-    if(near(player.x,player.y,h.x,h.y,15)) wipeout("Da Hui wen' knock you off! Respect da lineup, haole."); }
+    if(player.downT===0 && player.invuln===0 && near(player.x,player.y,h.x,h.y,15)){
+      wipeout("Da Hui wen' knock you off! Respect da lineup.");
+      // bump apart so you don't get stuck in a knock-down loop
+      player.y=clamp(player.y+24,SEATOP+6,SEABOT);
+      player.x=clamp(player.x+(player.x<h.x?-26:26),14,W-14);
+      h.y=clamp(h.y-18,SEATOP+12,SEABOT-6);
+      player.invuln=90;  // ~1.5s grace to paddle clear
+    } }
 
   // LAIRD — cocky, blocks/snakes, no damage
   if(w.lairdT>0)w.lairdT--; else if(!w.laird){ w.laird={x:rnd(60,W-60),y:SEATOP+12,t:ri(360,560)};
@@ -388,7 +425,15 @@ function updWater(){
 
 function trick(name,pts,col){ const w=water; w.combo++; w.style+=pts;
   score+=pts*w.combo; floatScore((w.combo>1?('x'+w.combo+' '):'')+name,player.x,player.y-16,col);
-  beep(880+w.combo*50,.08,'square'); }
+  beep(880+w.combo*50,.08,'square');
+  // drive the trick animation: distinct pose + spray burst
+  player.trickKind = name.startsWith('BARREL')?'barrel' : name.startsWith('Off')?'lip' : 'cut';
+  player.trickT = player.trickKind==='barrel'?34:22;
+  spawnSpray(player.x, player.y, player.trickKind); }
+function spawnSpray(x,y,kind){
+  const n = kind==='barrel'?16:9;
+  for(let i=0;i<n;i++) water.spray.push({ x, y:y-4,
+    vx:rnd(-2.6,2.6), vy:rnd(-3.2,-0.6), life:ri(16,30), kind }); }
 function endRide(){ const w=water; if(!w.surfing)return;
   let bonus=Math.floor(w.ride*0.6)+w.style, note="Nice ride! "+w.ride+" frames";
   if(photographerOut()){ bonus*=2; note="📷 PHOTO SCORE! DOUBLE — "+w.ride+" frames"; beep(990,.14); }
@@ -528,12 +573,25 @@ function drawWater(){
   if(w.laird){ drawBoard(w.laird.x,w.laird.y+6,C.sea1,-1); drawDude(w.laird.x,w.laird.y-8,C.skin,'#111',-1,'paddle',frame);
     px(w.laird.x-12,w.laird.y-26,26,4,'#111'); ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
     ctx.fillText('LAIRD',w.laird.x,w.laird.y-29); ctx.textAlign='left'; }
+  // spray particles (behind the surfer)
+  for(const s of w.spray){ const c = s.kind==='barrel'?C.purp : s.life>12?'#fff':C.foam; px(s.x,s.y,2,2,c); }
   // player
   if(player.downT>0){ drawDude(player.x,player.y,C.skin,player.board,player.facing,'down',frame); }
-  else { drawBoard(player.x,player.y+7,player.board,player.facing);
-    drawDude(player.x,player.y-8,C.skin,player.board,player.facing,w.surfing?'surf':'paddle',frame);
-    if(w.surfing){ px(player.x-18,player.y-30,36,4,'#003'); ctx.fillStyle=C.good; ctx.font='8px monospace'; ctx.textAlign='center';
-      ctx.fillText('SHREDDIN',player.x,player.y-31); ctx.textAlign='left'; } }
+  else {
+    drawBoard(player.x,player.y+7,player.board,player.facing);
+    const pose = !w.surfing ? 'paddle'
+               : player.trickT>0 ? player.trickKind   // 'cut' | 'lip' | 'barrel'
+               : 'surf';
+    // board carve tilt during a cutback reads as a little spray arc under the tail
+    if(w.surfing&&player.trickT>0){ for(let i=0;i<4;i++) px(player.x-14+i*8, player.y+9+Math.sin(frame*0.4+i)*2, 3,2, C.foam); }
+    drawDude(player.x,player.y-8,C.skin,player.board,player.facing,pose,frame);
+    if(w.surfing){
+      const label = player.trickT>0 ? (player.trickKind==='barrel'?'BARREL!':player.trickKind==='lip'?'OFF-DA-LIP':'CUTBACK') : 'SHREDDIN';
+      const col = player.trickT>0 ? (player.trickKind==='barrel'?C.purp:C.gold) : C.good;
+      px(player.x-20,player.y-32,40,4,'#002'); ctx.fillStyle=col; ctx.font='8px monospace'; ctx.textAlign='center';
+      ctx.fillText(label,player.x,player.y-33); ctx.textAlign='left';
+    }
+  }
   if(player.injured) px(player.x-3,player.y-28,6,3,C.bad);
 }
 function drawShark(x,y){ px(x-14,y-3,26,7,C.shark); px(x-17,y-1,4,4,C.shark); px(x-14,y+2,22,3,C.sharkBelly);
