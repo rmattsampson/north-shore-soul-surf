@@ -190,17 +190,51 @@ function drawBoard(x,y,col,facing){
 }
 
 /* ============================================================
+   32-BIT RENDER HELPERS — gradient ramps, ordered dithering, soft shadow
+   ============================================================ */
+// 4x4 Bayer ordered-dither threshold matrix (0..15)
+const BAYER=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
+function dither(x,y,t){ return BAYER[(y&3)*4+(x&3)] < t*16; }
+function lerpCol(a,b,t){ // blend two #rrggbb
+  const na=parseInt(a.slice(1),16), nb=parseInt(b.slice(1),16);
+  const r=Math.round(((na>>16)&255)*(1-t)+((nb>>16)&255)*t);
+  const g=Math.round(((na>>8)&255)*(1-t)+((nb>>8)&255)*t);
+  const bl=Math.round((na&255)*(1-t)+(nb&255)*t);
+  return '#'+((1<<24)+(r<<16)+(g<<8)+bl).toString(16).slice(1);
+}
+// vertical gradient band from colA(top) to colB(bottom), dithered at the seams
+function gradBand(x,y,w,h,colA,colB,steps){
+  steps=steps||h; const sh=Math.max(1,h/steps);
+  for(let i=0;i<steps;i++){
+    const t=i/(steps-1||1);
+    px(x, y+i*sh, w, Math.ceil(sh)+1, lerpCol(colA,colB,t));
+    // dither a 2px seam into the next tone for a smooth 32-bit blend
+    if(i<steps-1){ const nc=lerpCol(colA,colB,(i+1)/(steps-1||1)); const yy=(y+i*sh+sh)|0;
+      for(let xx=x;xx<x+w;xx+=2) if(dither(xx,yy,0.5)) px(xx,yy,1,1,nc); }
+  }
+}
+function softShadow(x,y,w){ // elliptical drop shadow on the sand/water
+  ctx.save(); ctx.globalAlpha=0.22; ctx.fillStyle='#000';
+  ctx.beginPath(); ctx.ellipse(x,y,w,w*0.35,0,0,Math.PI*2); ctx.fill(); ctx.restore();
+}
+
+/* ============================================================
    BACKGROUND
    ============================================================ */
 let seaPhase=0;
 function drawSky(){
-  const b=[C.skyTop,C.s1,C.s2,C.s3,C.s4,C.s5], bh=18;
-  for(let i=0;i<b.length;i++) px(0,i*bh,W,bh,b[i]);
-  // sun — layered disc with a soft rim, sitting on the horizon
+  // smooth dithered sunset gradient (32-bit) instead of hard 18px bands
+  gradBand(0,0,W,36, C.skyTop, C.s2, 10);
+  gradBand(0,36,W,36, C.s2, C.s3, 10);
+  gradBand(0,72,W,46, C.s3, C.s5, 12);
+  // sun — glowing disc with soft haze rings
   const sx=W*0.62, sy=100;
-  for(let r=24;r>=0;r-=4){
-    const shade = r>18?'#f7b25a' : r>12?C.sun : r>6?'#ffe6a0' : C.sunCore;
-    px(sx-r,sy-r,r*2,r*2,shade);
+  ctx.save(); ctx.globalAlpha=0.16; ctx.fillStyle=C.sun;
+  ctx.beginPath(); ctx.arc(sx,sy,40,0,Math.PI*2); ctx.fill();
+  ctx.globalAlpha=0.12; ctx.beginPath(); ctx.arc(sx,sy,54,0,Math.PI*2); ctx.fill(); ctx.restore();
+  for(let r=26;r>=0;r-=2){
+    const t=r/26, col = lerpCol(C.sunCore, '#f7a24a', t);
+    ctx.fillStyle=col; ctx.beginPath(); ctx.arc(sx,sy,r,0,Math.PI*2); ctx.fill();
   }
   // soft stacked clouds (no hard edges)
   cloud(392,34); cloud(60,24); cloud(300,30);
@@ -210,38 +244,39 @@ function drawSky(){
   px(300-bw*0.6,46,4,2,'#2a1a2a'); px(304-bw*0.6,47,3,2,'#2a1a2a');
 }
 function cloud(x,y){
+  // soft cloud with a lit top edge and dithered underside
   px(x,y+4,46,5,'#f3a6c0'); px(x+6,y,34,5,'#f6b8cd'); px(x+2,y+8,42,3,'#e894b4');
+  px(x+6,y,34,2,'#ffc9dd');  // lit top
+  for(let xx=x+2;xx<x+44;xx+=2) if(dither(xx,y+11,0.5)) px(xx,y+11,1,1,'#d87ca0'); // dithered base
 }
 function ridge(pts,col){ ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(pts[0][0],118);
   for(const p of pts) ctx.lineTo(p[0],p[1]); ctx.lineTo(pts[pts.length-1][0],118); ctx.closePath(); ctx.fill(); }
 function drawMountains(){
   // back ridge (purple), ragged stepped peaks
   ridge([[0,96],[30,78],[55,88],[90,58],[130,80],[175,66],[220,92],[260,74],[300,96],[330,88]], C.mtnB);
-  // front ridge (green), taller on the left like the reference
+  // front ridge (green) with a sunlit (right) and shadowed (left) face
   ridge([[0,112],[26,86],[48,98],[78,60],[96,74],[120,52],[150,84],[200,104]], C.mtnA);
-  // a couple of ridge-shadow facets for depth
-  ctx.fillStyle='#24482f';
-  ctx.beginPath(); ctx.moveTo(120,52); ctx.lineTo(150,84); ctx.lineTo(120,84); ctx.closePath(); ctx.fill();
+  ridge([[0,112],[26,86],[48,98],[78,60],[96,74],[120,52],[120,112]], shade(C.mtnA,-22)); // shadow side
+  ctx.fillStyle=shade(C.mtnA,24);  // sunlit facet
+  ctx.beginPath(); ctx.moveTo(120,52); ctx.lineTo(150,84); ctx.lineTo(132,84); ctx.closePath(); ctx.fill();
+  // dithered ridge haze at the base where it meets the sea
+  for(let x=0;x<W;x+=2) if(dither(x,116,0.4)) px(x,116,1,2,shade(C.mtnB,20));
 }
 const SEATOP=118, SEABOT=250, SHORE=250;
 function drawSeaBands(){
-  // still water: deep at the horizon, lighter toward shore (no sideways scroll)
-  const rows=Math.ceil((SEABOT-SEATOP)/4);
-  for(let i=0;i<rows;i++){
-    const yy=SEATOP+i*4, f=i/rows;
-    const col = f<0.33?C.seaDeep : f<0.6?C.sea1 : f<0.82?C.sea2 : C.sea3;
-    px(0,yy,W,4,col);
+  // 32-bit translucent depth gradient: deep at the horizon → bright toward shore, dithered
+  gradBand(0,SEATOP,W,(SEABOT-SEATOP)*0.5, C.seaDeep, C.sea1, 10);
+  gradBand(0,SEATOP+(SEABOT-SEATOP)*0.5,W,(SEABOT-SEATOP)*0.5, C.sea1, C.sea3, 10);
+  // subtle shimmer: translucent light streaks that bob in place
+  ctx.save(); ctx.globalAlpha=0.5;
+  for(let i=0;i<12;i++){
+    const yy=SEATOP+8+i*11, bob=Math.sin(frame*0.03+i)*1;
+    for(let x=(i*47)%90; x<W; x+=90){ px(x, yy+bob, 16, 1, lerpCol(C.sea3,C.foam,0.6)); }
   }
-  // a few gentle, near-static chop glints that bob in place (no horizontal drift)
-  for(let i=0;i<10;i++){
-    const yy=SEATOP+12+i*12;
-    const bob=Math.sin(frame*0.03 + i)*1;
-    for(let x=(i*53)%80; x<W; x+=80){
-      px(x, yy+bob, 14, 1, C.foam);
-    }
-  }
-  // sun glitter ladder on the water (vertical, under the sun)
+  ctx.restore();
+  // sun glitter ladder — brighter core with a soft translucent halo
   const sx=W*0.62;
+  ctx.save(); ctx.globalAlpha=0.35; px(sx-7,SEATOP,14,SEABOT-SEATOP,'#ffd98a'); ctx.restore();
   for(let yy=SEATOP+2; yy<SEABOT; yy+=5){
     const wob=Math.sin(yy*0.4 + frame*0.02)*3;
     px(sx-4+wob, yy, 9, 2, '#ffd98a');
@@ -249,11 +284,14 @@ function drawSeaBands(){
   }
 }
 function drawSand(){
-  px(0,SHORE,W,H-SHORE,C.sand);
+  // 32-bit sand: dithered wet-to-dry gradient down the beach
+  gradBand(0,SHORE,W,H-SHORE, C.sandWet, C.sand, 8);
   // beveled shoreline: bright foam lip, then a wet-sand band, then dry sand
   px(0,SHORE-3,W,3,C.foam);
   px(0,SHORE,W,2,'#fff');
   px(0,SHORE+2,W,4,C.sandWet);
+  // wet-sheen reflection just below the waterline (translucent)
+  ctx.save(); ctx.globalAlpha=0.3; for(let x=0;x<W;x+=3) if(dither(x,SHORE+7,0.5)) px(x,SHORE+6,2,3,'#fff'); ctx.restore();
   // scalloped foam edge
   for(let x=0;x<W;x+=14) px(x+3,SHORE-4,8,2,C.foam);
   ctx.fillStyle=C.sandDot;
@@ -644,14 +682,16 @@ function drawHelp(){
 
 function drawBeachProps(){
   // Chandler + his hale (always on the sand, both scenes)
+  softShadow(beach.chandler.x, beach.chandler.y+12, 11);
   px(38,beach.chandler.y-10,46,18,'#6b4a2a'); px(34,beach.chandler.y-15,54,6,'#8a5a2a');
+  px(38,beach.chandler.y-15,54,2,'#a56a33');   // lit roof edge
   drawDude(beach.chandler.x,beach.chandler.y,'#a86a34',C.sea3,1,'stand',frame);
   px(beach.chandler.x-14,beach.chandler.y-26,30,4,'#111');
   ctx.fillStyle=C.good; ctx.font='7px monospace'; ctx.textAlign='center';
   ctx.fillText('CHANDLER',beach.chandler.x,beach.chandler.y-29); ctx.textAlign='left';
-  for(const p of beach.props){ if(!p.got) drawProp(p); }
+  for(const p of beach.props){ if(!p.got){ softShadow(p.x,p.y+4,7); drawProp(p); } }
   if(beach.photographer) drawPhotog(beach.photographer.x,beach.photographer.y);
-  if(beach.buggy) drawBuggy(beach.buggy.x,SHORE+16);
+  if(beach.buggy){ softShadow(beach.buggy.x,SHORE+28,18); drawBuggy(beach.buggy.x,SHORE+16); }
 }
 function drawBeachBoard(x,y,facing,moving){
   // the surfer's board on the sand: carried upright at your side while walking,
@@ -675,6 +715,7 @@ function drawBeach(){
   drawWaves();   // swell keeps rolling in while you're on the sand
   drawPalm(30,H-6); drawPalm(W-30,H-6);
   if(player.knockT>0){
+    softShadow(player.x, player.y+12, 11);
     drawBeachBoard(player.x,player.y,player.facing,false);
     drawDude(player.x,player.y,C.skin,player.board,player.facing,'down',frame);
     const secs=Math.ceil(player.knockT/60);
@@ -682,6 +723,7 @@ function drawBeach(){
     ctx.fillText('OUT COLD '+secs+'s',player.x,player.y-14); ctx.textAlign='left';
   } else {
     const moving=keys.left||keys.right||keys.up||keys.down;
+    softShadow(player.x, player.y+13, 10);
     drawBeachBoard(player.x,player.y,player.facing,moving);
     drawDude(player.x,player.y,C.skin,player.board,player.facing,moving?'walk':'stand',frame);
     if(player.injured) px(player.x-3,player.y-20,6,3,C.bad);
@@ -768,8 +810,8 @@ function drawWater(){
   // waves — curved crest with a breaking foam lip + shaded face
   drawWaves();
   if(w.shark) drawShark(w.shark.x,w.shark.y);
-  for(const h of w.huis) drawHui(h.x,h.y,h.surf);
-  if(w.pro){ const L=w.pro; drawBoard(L.x,L.y+6,C.sea1,-1); drawDude(L.x,L.y-8,C.skin,'#111',-1,L.surf?'surf':'paddle',frame);
+  for(const h of w.huis){ softShadow(h.x, h.y+9, 11); drawHui(h.x,h.y,h.surf); }
+  if(w.pro){ const L=w.pro; softShadow(L.x, L.y+9, 12); drawBoard(L.x,L.y+6,C.sea1,-1); drawDude(L.x,L.y-8,C.skin,'#111',-1,L.surf?'surf':'paddle',frame);
     const nm=L.name.toUpperCase(), nw=nm.length*5+6;
     px(L.x-nw/2,L.y-28,nw,6,'#111'); ctx.fillStyle=C.gold; ctx.font='7px monospace'; ctx.textAlign='center';
     ctx.fillText(nm,L.x,L.y-23); ctx.textAlign='left'; }
@@ -778,6 +820,7 @@ function drawWater(){
   // player
   if(player.downT>0){ drawDude(player.x,player.y,C.skin,player.board,player.facing,'down',frame); }
   else {
+    softShadow(player.x, player.y+9, 13);
     drawBoard(player.x,player.y+4,player.board,player.facing);
     const pose = !w.surfing ? 'paddle'
                : player.trickT>0 ? player.trickKind   // 'cut' | 'lip' | 'barrel'
