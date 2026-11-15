@@ -283,7 +283,7 @@ function floatScore(txt,x,y,col){ flash={txt,x,y,col:col||C.gold}; flashT=70; }
 
 const player={ x:W/2, y:0, facing:1, board:C.good, injured:0, recover:0, downT:0, invuln:0, trickT:0, trickKind:'', knockT:0 };
 
-let beach={}, water={ waves:[], huis:[], laird:null, shark:null, surfing:false, cur:null, spray:[],
+let beach={}, water={ waves:[], huis:[], laird:null, shark:null, surfing:false, cur:null, spray:[], crashes:[],
   ride:0, combo:0, waveT:30, sharkT:9999, huiT:9999, lairdT:9999, style:0 };
 let beachBuilt=false;
 
@@ -317,8 +317,27 @@ function tickWaves(){
     w.waves.push({ y:SEATOP+10, x:rnd(60,W-60), len:rnd(70,150), spd:rnd(0.16,0.32), messy, rode:false });
     w.waveT=ri(90,180);
   }
+  // waves that reach the shoreline CRASH: spawn a whitewater burst, then remove them
+  for(const wv of w.waves){
+    if(!wv.crashed && wv.y>=SHORE-6){
+      wv.crashed=true;
+      spawnCrash(wv.x, wv.len, wv.messy);
+      beep(wv.messy?150:220, .18, 'sawtooth', .03);   // shorebreak thud
+    }
+  }
   for(const wv of w.waves) wv.y+=wv.spd*(w.surfing&&w.cur===wv?1.4:1);
-  w.waves=w.waves.filter(wv=>wv.y<SEABOT+8);
+  w.waves=w.waves.filter(wv=>wv.y<SHORE-4);           // gone once it breaks on the sand
+  // advance crash foam
+  for(const c of w.crashes){ c.life--; c.r+=1.4; }
+  w.crashes=w.crashes.filter(c=>c.life>0);
+}
+function spawnCrash(x,len,messy){
+  // a line of foam puffs along the shoreline where the wave broke
+  const half=len/2, n=Math.max(5,(len/14)|0);
+  for(let i=0;i<n;i++){
+    water.crashes.push({ x:x-half + (i/(n-1))*len, y:SHORE-4,
+      r:rnd(1,3), life:ri(18,30), messy });
+  }
 }
 
 /* ============================================================
@@ -447,9 +466,12 @@ function updWater(){
     } else {
       h.x+=h.vx; h.y+=h.vy;
       if(h.x<16||h.x>W-16)h.vx*=-1; if(h.y>SEABOT-6){ h.y=SEATOP+12; h.x=rnd(40,W-40); }
-      // reliably catch a clean wave whose crest is passing through the Hui's zone
-      const wv=w.waves.find(v=>!v.messy && v!==w.cur && Math.abs(v.y-h.y)<10 && h.x>v.x-v.len/2 && h.x<v.x+v.len/2);
-      if(wv && Math.random()<0.5){ h.surf=true; h.wave=wv; }
+      // actively hunt a clean wave: drift toward the nearest crest, then grab it
+      let best=null, bd=1e9;
+      for(const v of w.waves){ if(v.messy||v===w.cur) continue;
+        if(h.x>v.x-v.len/2-20 && h.x<v.x+v.len/2+20){ const d=Math.abs(v.y-h.y); if(d<bd){ bd=d; best=v; } } }
+      if(best){ h.y += Math.sign(best.y-h.y)*0.5;   // paddle to meet the wave
+        if(bd<14 && Math.random()<0.8){ h.surf=true; h.wave=best; } }
     }
     if(player.downT===0 && player.invuln===0 && near(player.x,player.y,h.x,h.y,15)){
       wipeout("Da Hui wen' knock you off! Respect da lineup.");
@@ -471,8 +493,12 @@ function updWater(){
       if(L.y>=SEABOT-6){ L.surf=false; L.wave=null; }
     } else {
       L.y+=0.22;
-      const wv=w.waves.find(v=>!v.messy && v!==w.cur && Math.abs(v.y-L.y)<10 && L.x>v.x-v.len/2 && L.x<v.x+v.len/2);
-      if(wv && Math.random()<0.6){ L.surf=true; L.wave=wv; setMsg("Laird droppin' in — 'Watch THIS!' 🙄",110); }
+      // hunt the nearest clean wave and drop in more readily (Mr. Big Wave neva miss)
+      let best=null, bd=1e9;
+      for(const v of w.waves){ if(v.messy||v===w.cur) continue;
+        if(L.x>v.x-v.len/2-20 && L.x<v.x+v.len/2+20){ const d=Math.abs(v.y-L.y); if(d<bd){ bd=d; best=v; } } }
+      if(best){ L.y += Math.sign(best.y-L.y)*0.6;
+        if(bd<14 && Math.random()<0.85){ L.surf=true; L.wave=best; setMsg("Laird droppin' in — 'Watch THIS!' 🙄",110); } }
     }
     if(near(player.x,player.y,L.x,L.y,15)&&w.surfing){
       setMsg("Laird SNAKED your wave! 'Did you see that one?!' — ugh.",110);
@@ -507,6 +533,9 @@ function endRide(){ const w=water; if(!w.surfing)return;
   score+=bonus; floatScore('+'+bonus,player.x,player.y-18,C.gold);
   setMsg(note+(w.combo>1?(" · "+w.combo+"x combo!"):""),130);
   w.surfing=false; w.cur=null; w.ride=0; w.combo=0; w.style=0;
+  // kick back out to the lineup, prone and paddling — no lingering stand
+  player.y=clamp(player.y-28, SEATOP+20, SEABOT-20);
+  player.trickT=0; player.trickKind='';
   if(score>high){ high=score; setHS(high); floatScore('NEW BEST!',W/2,40,C.purp); }
 }
 function wipeout(reason){ const w=water; w.surfing=false; w.cur=null; w.ride=0; w.combo=0; w.style=0;
@@ -672,6 +701,14 @@ function drawWaves(){
     if(riding){ // lit-up ridable face glowing under the board
       px(x0,wv.y+5,wv.len,2,'#aef'); px(x0,wv.y+7,wv.len,1,'#6cf');
     }
+  }
+  // shorebreak CRASH foam — bursts along the sand where waves broke
+  for(const c of w.crashes){
+    const a=c.life/30, r=c.r|0;
+    const col = c.messy ? '#dfeef2' : '#fff';
+    px(c.x-r, c.y-2, r*2, 3, col);                 // spreading foam line
+    px(c.x-(r>>1), c.y-4-(a*3|0), Math.max(2,r), 2, col); // upward splash puff
+    if(c.life>18) px(c.x-1, c.y-6-(a*4|0), 2, 2, col);    // flung droplet
   }
 }
 function drawWater(){
