@@ -345,9 +345,9 @@ const PROS = [
   { name:'Gerry Lopez',       line:"Mr. Pipeline, smooth as glass." },
   { name:'Duke Kahanamoku',   line:"da father of surfing himself." },
   { name:'John John Florence',line:"North Shore local, pure flow." },
-  { name:'Carissa Moore',     line:"world champ, all aloha." },
+  { name:'Carissa Moore',     line:"world champ, all aloha.", female:true },
   { name:'Mark Foo',          line:"chargin' da big ones." },
-  { name:'Rell Sunn',         line:"'Queen of Makaha', style fo' days." },
+  { name:'Rell Sunn',         line:"'Queen of Makaha', style fo' days.", female:true },
   { name:'Andy Irons',        line:"fierce lines, Kauai fire." }
 ];
 
@@ -638,7 +638,7 @@ function updWater(){
   // FAMOUS SURFER — one at a time (Laird is in the roster). Cocky, snakes your wave, no damage.
   if(w.proT>0)w.proT--; else if(!w.pro){
     const p=PROS[ri(0,PROS.length-1)];
-    w.pro={ name:p.name, line:p.line, x:rnd(60,W-60), y:SEATOP+12, t:ri(360,560), surf:false, wave:null };
+    w.pro={ name:p.name, line:p.line, female:!!p.female, x:rnd(60,W-60), y:SEATOP+12, t:ri(360,560), surf:false, wave:null };
     setMsg(p.name+" paddling out — "+p.line,140); beep(520,.1,'triangle'); }
   if(w.pro){ const L=w.pro; L.t--;
     if(L.surf){
@@ -888,6 +888,9 @@ function drawWater(){
   if(w.shark) drawShark(w.shark.x,w.shark.y);
   for(const h of w.huis){ softShadow(h.x, h.y+9, 11); drawHui(h.x,h.y,h.surf); }
   if(w.pro){ const L=w.pro; softShadow(L.x, L.y+9, 12); drawBoard(L.x,L.y+4,C.sea1,-1); drawDude(L.x,L.y-5,C.skin,'#111',-1,L.surf?'surf':'paddle',frame);
+    if(L.female){ // swim top for the women surfers (original, generic)
+      const ty = L.surf ? L.y-14 : L.y-6;   // torso height differs surf vs paddle
+      px(L.x-5,ty,10,3,'#ff5aa0'); px(L.x-5,ty,10,1,'#ff8cc0'); } // bikini top band + highlight
     const nm=L.name.toUpperCase(), nw=nm.length*5+6;
     px(L.x-nw/2,L.y-28,nw,6,'#111'); ctx.fillStyle=C.gold; ctx.font='7px monospace'; ctx.textAlign='center';
     ctx.fillText(nm,L.x,L.y-23); ctx.textAlign='left'; }
