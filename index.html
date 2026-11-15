@@ -417,9 +417,12 @@ function updWater(){
   }
 
   if(w.surfing){
-    w.ride++; score+=1;
-    // follow the wave toward shore
-    player.y=w.cur.y;
+    // if the wave you're on is gone (reached shore / fizzled), the ride is over — back to paddling
+    if(!w.cur || !w.waves.includes(w.cur)){ endRide(); }
+    else {
+      w.ride++; score+=1;
+      // follow the wave toward shore
+      player.y=w.cur.y;
     if(frame%5===0) beep(280+Math.min(w.ride,220),.02,'sine',.012);
     // tricks — capture each key ONCE, then decide (fixes Z being eaten by &&)
     const zHit=consume('z'), xHit=consume('x');
@@ -428,6 +431,7 @@ function updWater(){
     else if(xHit) trick('Off-da-lip!',45,C.gold);
     // end the ride: reach inside, kick out, or wave fizzles
     if(player.y>=SEABOT-6 || consume('space') || w.cur.y>=SEABOT+4){ endRide(); }
+    }
   }
 
   // HUI
@@ -688,13 +692,13 @@ function drawWater(){
   // player
   if(player.downT>0){ drawDude(player.x,player.y,C.skin,player.board,player.facing,'down',frame); }
   else {
-    drawBoard(player.x,player.y+7,player.board,player.facing);
+    drawBoard(player.x,player.y+4,player.board,player.facing);
     const pose = !w.surfing ? 'paddle'
                : player.trickT>0 ? player.trickKind   // 'cut' | 'lip' | 'barrel'
                : 'surf';
     // board carve tilt during a cutback reads as a little spray arc under the tail
     if(w.surfing&&player.trickT>0){ for(let i=0;i<4;i++) px(player.x-14+i*8, player.y+9+Math.sin(frame*0.4+i)*2, 3,2, C.foam); }
-    drawDude(player.x,player.y-8,C.skin,player.board,player.facing,pose,frame);
+    drawDude(player.x,player.y-5,C.skin,player.board,player.facing,pose,frame);
     if(w.surfing){
       const label = player.trickT>0 ? (player.trickKind==='barrel'?'BARREL!':player.trickKind==='lip'?'OFF-DA-LIP':'CUTBACK') : 'SHREDDIN';
       const col = player.trickT>0 ? (player.trickKind==='barrel'?C.purp:C.gold) : C.good;
