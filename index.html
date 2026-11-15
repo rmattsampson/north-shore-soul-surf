@@ -270,7 +270,7 @@ let msg='', msgT=0, flash=null, flashT=0;
 function setMsg(m,d=140){ msg=m; msgT=d; }
 function floatScore(txt,x,y,col){ flash={txt,x,y,col:col||C.gold}; flashT=70; }
 
-const player={ x:W/2, y:0, facing:1, board:C.good, injured:0, recover:0, downT:0, invuln:0, trickT:0, trickKind:'' };
+const player={ x:W/2, y:0, facing:1, board:C.good, injured:0, recover:0, downT:0, invuln:0, trickT:0, trickKind:'', knockT:0 };
 
 let beach={}, water={};
 let beachBuilt=false;
@@ -311,6 +311,11 @@ function update(){
 
 function updBeach(){
   const b=beach, sp=1.5;
+  if(player.knockT>0){            // knocked out by the ATV — no control, but the beach keeps going
+    player.knockT--;
+    if(b.buggy){ b.buggy.x+=1.4; if(b.buggy.x>W+30){ b.buggy=null; b.buggyT=ri(380,760); } }
+    return;
+  }
   if(keys.left){ player.x-=sp; player.facing=-1; }
   if(keys.right){ player.x+=sp; player.facing=1; }
   if(keys.up) player.y-=sp;
@@ -330,11 +335,22 @@ function updBeach(){
     if(p.k==='honu') setMsg("A honu restin'. Give 'um space, yeah.",90);
     if(p.k==='cooler') setMsg("Cooler stay empty. Somebody wen' drink all da grindz.",90);
   }}
-  if(b.photoT>0)b.photoT--; else if(!b.photographer){ b.photographer={x:rnd(140,340),y:H-60,t:ri(300,520)};
-    setMsg("📷 Photographer on da beach — go score waves fo' DOUBLE points!",150); beep(880,.1); }
-  if(b.photographer){ b.photographer.t--; if(b.photographer.t<0)b.photographer=null; }
+  // photographer: out only ~20% of the time. When his timer elapses, ROLL:
+  // 20% he shows up (new spot, picked once), else he stays away for another window.
+  // While he IS out we never touch his position — just count down his visit.
+  if(b.photoT>0) b.photoT--;
+  else if(!b.photographer){
+    if(Math.random()<0.20){ b.photographer={x:rnd(140,340),y:H-60,t:ri(300,520)};
+      setMsg("📷 Photographer on da beach — go score waves fo' DOUBLE points!",150); beep(880,.1); }
+    else b.photoT=ri(260,520);   // keep him off the beach, try again later
+  }
+  if(b.photographer){ b.photographer.t--; if(b.photographer.t<0){ b.photographer=null; b.photoT=ri(300,560); } }
   if(b.buggyT>0)b.buggyT--; else if(!b.buggy){ b.buggy={x:-30}; }
-  if(b.buggy){ b.buggy.x+=1.4; if(b.buggy.x>W+30){ b.buggy=null; b.buggyT=ri(380,760); } }
+  if(b.buggy){ b.buggy.x+=1.4; if(b.buggy.x>W+30){ b.buggy=null; b.buggyT=ri(380,760); }
+    // ATV hits you -> knocked out cold for ~3 seconds (just like real life, braddah)
+    else if(player.knockT===0 && near(player.x,player.y,b.buggy.x,SHORE+16,16)){
+      player.knockT=180; beep(90,.4,'sawtooth',.06);
+      setMsg("💥 LIFEGUARD ATV wen' run you ovah! Out cold fo' 3 seconds...",180); } }
 }
 
 function photographerOut(){ return beach && beach.photographer; }
@@ -381,9 +397,11 @@ function updWater(){
     // follow the wave toward shore
     player.y=w.cur.y;
     if(frame%5===0) beep(280+Math.min(w.ride,220),.02,'sine',.012);
-    // tricks
-    if(consume('z')&&consume('x')) trick('BARREL!!',120,C.purp);
-    else { if(consume('z')) trick('Cutback!',30,C.good); if(consume('x')) trick('Off-da-lip!',45,C.gold); }
+    // tricks — capture each key ONCE, then decide (fixes Z being eaten by &&)
+    const zHit=consume('z'), xHit=consume('x');
+    if(zHit&&xHit) trick('BARREL!!',120,C.purp);
+    else if(zHit) trick('Cutback!',40,C.good);
+    else if(xHit) trick('Off-da-lip!',45,C.gold);
     // end the ride: reach inside, kick out, or wave fizzles
     if(player.y>=SEABOT-6 || consume('space') || w.cur.y>=SEABOT+4){ endRide(); }
   }
@@ -511,9 +529,16 @@ function drawBeachProps(){
 function drawBeach(){
   drawBeachProps();
   drawPalm(30,H-6); drawPalm(W-30,H-6);
-  const moving=keys.left||keys.right||keys.up||keys.down;
-  drawDude(player.x,player.y,C.skin,player.board,player.facing,moving?'walk':'stand',frame);
-  if(player.injured) px(player.x-3,player.y-20,6,3,C.bad);
+  if(player.knockT>0){
+    drawDude(player.x,player.y,C.skin,player.board,player.facing,'down',frame);
+    const secs=Math.ceil(player.knockT/60);
+    ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
+    ctx.fillText('OUT COLD '+secs+'s',player.x,player.y-14); ctx.textAlign='left';
+  } else {
+    const moving=keys.left||keys.right||keys.up||keys.down;
+    drawDude(player.x,player.y,C.skin,player.board,player.facing,moving?'walk':'stand',frame);
+    if(player.injured) px(player.x-3,player.y-20,6,3,C.bad);
+  }
 }
 function drawProp(p){
   if(p.k==='slipper'){ px(p.x-5,p.y,10,4,'#2e6bbf'); px(p.x-1,p.y-2,2,3,'#1a4a8a'); }
@@ -560,13 +585,28 @@ function drawWater(){
   // are the SAME persistent beach, drawn on the shore at the bottom of the water view.
   drawBeachProps();
   drawPalm(30,H-6); drawPalm(W-30,H-6);
-  // waves (swell lines)
+  // waves — curved crest with a breaking foam lip + shaded face
   for(const wv of w.waves){
-    const col=wv.messy?'#bfe4ec':C.foam, body=wv.messy?'#7fb4c4':C.sea3;
-    px(wv.x-wv.len/2,wv.y-1,wv.len,5,body);
-    px(wv.x-wv.len/2,wv.y-3,wv.len,2,col);
-    if(wv.messy){ for(let i=-wv.len/2;i<wv.len/2;i+=12) px(wv.x+i,wv.y-6,6,3,'#fff'); }
-    if(w.surfing&&w.cur===wv){ px(wv.x-wv.len/2,wv.y+3,wv.len,2,'#9fe'); } // lit-up face
+    const half=wv.len/2, x0=wv.x-half;
+    const riding=w.surfing&&w.cur===wv;
+    // sample a gentle arc so the crest curves instead of a flat bar
+    for(let i=0;i<wv.len;i+=3){
+      const t=i/wv.len;                    // 0..1 across the wave
+      const arc=Math.sin(t*Math.PI)*3;     // peak in the middle
+      const x=x0+i, yc=wv.y-arc;
+      const faceCol = wv.messy ? '#6fa6b8' : (riding?'#6fd6e6':C.sea3);
+      const lipCol  = wv.messy ? '#dfeef2' : C.foam;
+      px(x, yc+2, 3, 5, shade(faceCol,-18));  // lower face (shadow)
+      px(x, yc,   3, 3, faceCol);             // mid face
+      px(x, yc-2, 3, 2, lipCol);              // breaking lip
+      if(!wv.messy && (i%9===0)) px(x, yc-4, 2, 2, '#fff');  // foam flecks on the crest
+    }
+    if(wv.messy){ // whitewater chop on a closeout
+      for(let i=-half;i<half;i+=7) px(wv.x+i, wv.y-6+Math.sin((i+frame)*0.3)*2, 5, 3, '#fff');
+    }
+    if(riding){ // lit-up ridable face glowing under the board
+      px(x0,wv.y+5,wv.len,2,'#aef'); px(x0,wv.y+7,wv.len,1,'#6cf');
+    }
   }
   if(w.shark) drawShark(w.shark.x,w.shark.y);
   for(const h of w.huis) drawHui(h.x,h.y);
