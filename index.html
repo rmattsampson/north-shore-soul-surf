@@ -152,10 +152,21 @@ function drawDude(x,y,skin,trunks,facing,pose,t){
     ctx.restore(); return;
   }
   if(pose==='paddle'){
-    px(-5,4,10,4,trunks); px(-5,4,10,1,shade(trunks,30));
-    px(-5,-2,10,7,skin); px(1,-2,4,7,skinD);
-    px(-11,0+Math.sin(t*0.5)*1,6,3,skin); px(5,0-Math.sin(t*0.5)*1,6,3,skin);  // stroking arms
-    px(-3,-8,7,6,skin); px(1,-8,3,6,skinD); px(-3,-9,7,3,C.hair);
+    // prone, side-on: lying flat on the board, chest lifted, arms stroking forward
+    const strokeF=Math.sin(t*0.35), strokeB=Math.sin(t*0.35+Math.PI);
+    // legs/feet trailing back along the board
+    px(-12,2,8,3,skin); px(-12,3,8,1,skinD);
+    // hips + trunks
+    px(-6,0,7,4,trunks); px(-6,0,7,1,shade(trunks,30));
+    // torso lying flat, chest end lifted a touch
+    px(0,-1,8,4,skin); px(0,2,8,1,skinD);
+    // head up, looking forward over the nose of the board
+    px(7,-3,5,5,skin); px(10,-3,2,5,skinD); px(7,-4,5,2,C.hair);
+    // arms reaching ahead and down into the water, alternating stroke
+    px(9,-1+strokeF*2,5,2,skin);   // forward (reaching) arm
+    px(2,3+strokeB*2,5,2,skin);    // trailing (pulling) arm
+    // little hand-splash at the stroking hand
+    if(strokeF>0.6) px(13,2,3,2,C.foam);
     ctx.restore(); return;
   }
   // stand / walk
@@ -410,25 +421,42 @@ function updWater(){
   if(w.huiT>0)w.huiT--; else if(w.huis.length<2){
     w.huis.push({ x:rnd(W*0.45,W-30), y:ri(SEATOP+14,SEABOT-16), vx:rnd(-0.25,0.25), vy:rnd(0.08,0.22) });
     w.huiT=ri(320,560); setMsg("⚠️ Da HUI stay in da water — keep your distance!",130); beep(160,.2,'sawtooth'); }
-  for(const h of w.huis){ h.x+=h.vx; h.y+=h.vy;
-    if(h.x<16||h.x>W-16)h.vx*=-1; if(h.y>SEABOT-6){ h.y=SEATOP+12; h.x=rnd(40,W-40); }
+  for(const h of w.huis){
+    if(h.surf){ // riding a wave in
+      if(h.wave && w.waves.includes(h.wave)){ h.y=h.wave.y; h.x+=h.vx*0.4; }
+      else { h.surf=false; h.wave=null; }
+      if(h.y>=SEABOT-6){ h.surf=false; h.wave=null; h.y=SEATOP+12; h.x=rnd(40,W-40); }
+    } else {
+      h.x+=h.vx; h.y+=h.vy;
+      if(h.x<16||h.x>W-16)h.vx*=-1; if(h.y>SEABOT-6){ h.y=SEATOP+12; h.x=rnd(40,W-40); }
+      // sometimes da Hui catch a wave and surf it in
+      if(Math.random()<0.004){ const wv=w.waves.find(v=>!v.messy&&v!==w.cur&&Math.abs(v.y-h.y)<16&&Math.abs(v.x-h.x)<v.len/2); if(wv){ h.surf=true; h.wave=wv; } }
+    }
     if(player.downT===0 && player.invuln===0 && near(player.x,player.y,h.x,h.y,15)){
       wipeout("Da Hui wen' knock you off! Respect da lineup.");
       // bump apart so you don't get stuck in a knock-down loop
       player.y=clamp(player.y+24,SEATOP+6,SEABOT);
       player.x=clamp(player.x+(player.x<h.x?-26:26),14,W-14);
-      h.y=clamp(h.y-18,SEATOP+12,SEABOT-6);
+      h.y=clamp(h.y-18,SEATOP+12,SEABOT-6); h.surf=false; h.wave=null;
       player.invuln=90;  // ~1.5s grace to paddle clear
     } }
 
-  // LAIRD — cocky, blocks/snakes, no damage
-  if(w.lairdT>0)w.lairdT--; else if(!w.laird){ w.laird={x:rnd(60,W-60),y:SEATOP+12,t:ri(360,560)};
+  // LAIRD — cocky, blocks/snakes, no damage — and rips when he catches one
+  if(w.lairdT>0)w.lairdT--; else if(!w.laird){ w.laird={x:rnd(60,W-60),y:SEATOP+12,t:ri(360,560),surf:false,wave:null};
     setMsg("Laird paddling out... Mr. Big Wave, so humble 🙄",130); }
-  if(w.laird){ w.laird.y+=0.22; w.laird.t--;
-    if(near(player.x,player.y,w.laird.x,w.laird.y,15)&&w.surfing){
+  if(w.laird){ const L=w.laird; L.t--;
+    if(L.surf){
+      if(L.wave && w.waves.includes(L.wave)){ L.y=L.wave.y; L.x+=Math.sin(frame*0.1)*0.8; }
+      else { L.surf=false; L.wave=null; }
+      if(L.y>=SEABOT-6){ L.surf=false; L.wave=null; }
+    } else {
+      L.y+=0.22;
+      if(Math.random()<0.006){ const wv=w.waves.find(v=>!v.messy&&v!==w.cur&&Math.abs(v.y-L.y)<16&&Math.abs(v.x-L.x)<v.len/2); if(wv){ L.surf=true; L.wave=wv; setMsg("Laird droppin' in — 'Watch THIS!' 🙄",110); } }
+    }
+    if(near(player.x,player.y,L.x,L.y,15)&&w.surfing){
       setMsg("Laird SNAKED your wave! 'Did you see that one?!' — ugh.",110);
-      player.x=clamp(player.x+(player.x<w.laird.x?-22:22),20,W-20); }
-    if(w.laird.t<0||w.laird.y>SEABOT){ w.laird=null; } }
+      player.x=clamp(player.x+(player.x<L.x?-22:22),20,W-20); }
+    if(L.t<0||L.y>SEABOT){ w.laird=null; } }
 
   // SHARK
   if(w.sharkT>0)w.sharkT--; else if(!w.shark){ w.shark={x:-24,y:ri(SEATOP+24,SEABOT-16),vx:rnd(0.5,0.85)};
@@ -609,10 +637,10 @@ function drawWater(){
     }
   }
   if(w.shark) drawShark(w.shark.x,w.shark.y);
-  for(const h of w.huis) drawHui(h.x,h.y);
-  if(w.laird){ drawBoard(w.laird.x,w.laird.y+6,C.sea1,-1); drawDude(w.laird.x,w.laird.y-8,C.skin,'#111',-1,'paddle',frame);
-    px(w.laird.x-12,w.laird.y-26,26,4,'#111'); ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
-    ctx.fillText('LAIRD',w.laird.x,w.laird.y-29); ctx.textAlign='left'; }
+  for(const h of w.huis) drawHui(h.x,h.y,h.surf);
+  if(w.laird){ const L=w.laird; drawBoard(L.x,L.y+6,C.sea1,-1); drawDude(L.x,L.y-8,C.skin,'#111',-1,L.surf?'surf':'paddle',frame);
+    px(L.x-12,L.y-26,26,4,'#111'); ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
+    ctx.fillText('LAIRD',L.x,L.y-29); ctx.textAlign='left'; }
   // spray particles (behind the surfer)
   for(const s of w.spray){ const c = s.kind==='barrel'?C.purp : s.life>12?'#fff':C.foam; px(s.x,s.y,2,2,c); }
   // player
@@ -636,7 +664,7 @@ function drawWater(){
 }
 function drawShark(x,y){ px(x-14,y-3,26,7,C.shark); px(x-17,y-1,4,4,C.shark); px(x-14,y+2,22,3,C.sharkBelly);
   px(x-2,y-10,5,7,C.shark); px(x+10,y-2,4,2,'#222'); }
-function drawHui(x,y){ drawBoard(x,y+6,'#222',-1); drawDude(x,y-8,C.huiSkin,C.hui,-1,'paddle',frame);
+function drawHui(x,y,surfing){ drawBoard(x,y+6,'#222',-1); drawDude(x,y-8,C.huiSkin,C.hui,-1,surfing?'surf':'paddle',frame);
   px(x-9,y-26,18,4,'#111'); ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
   ctx.fillText('HUI',x,y-29); ctx.textAlign='left'; }
 
