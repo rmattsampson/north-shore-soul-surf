@@ -906,7 +906,7 @@ function drawWater(){
   drawWaves();
   if(w.shark) drawShark(w.shark.x,w.shark.y);
   for(const h of w.huis){ softShadow(h.x, h.y+9, 11); drawHui(h.x,h.y,h.surf); }
-  if(w.pro){ const L=w.pro; softShadow(L.x, L.y+9, 12); drawBoard(L.x,L.y+6,C.sea1,-1); drawDude(L.x,L.y-8,C.skin,'#111',-1,L.surf?'surf':'paddle',frame);
+  if(w.pro){ const L=w.pro; softShadow(L.x, L.y+9, 12); drawBoard(L.x,L.y+4,C.sea1,-1); drawDude(L.x,L.y-5,C.skin,'#111',-1,L.surf?'surf':'paddle',frame);
     const nm=L.name.toUpperCase(), nw=nm.length*5+6;
     px(L.x-nw/2,L.y-28,nw,6,'#111'); ctx.fillStyle=C.gold; ctx.font='7px monospace'; ctx.textAlign='center';
     ctx.fillText(nm,L.x,L.y-23); ctx.textAlign='left'; }
@@ -934,7 +934,7 @@ function drawWater(){
 }
 function drawShark(x,y){ px(x-14,y-3,26,7,C.shark); px(x-17,y-1,4,4,C.shark); px(x-14,y+2,22,3,C.sharkBelly);
   px(x-2,y-10,5,7,C.shark); px(x+10,y-2,4,2,'#222'); }
-function drawHui(x,y,surfing){ drawBoard(x,y+6,'#222',-1); drawDude(x,y-8,C.huiSkin,C.hui,-1,surfing?'surf':'paddle',frame);
+function drawHui(x,y,surfing){ drawBoard(x,y+4,'#222',-1); drawDude(x,y-5,C.huiSkin,C.hui,-1,surfing?'surf':'paddle',frame);
   px(x-9,y-26,18,4,'#111'); ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
   ctx.fillText('HUI',x,y-29); ctx.textAlign='left'; }
 
