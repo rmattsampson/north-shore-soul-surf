@@ -372,7 +372,7 @@ let beachBuilt=false;
 
 function buildBeach(){
   beach={ photographer:null, buggy:null, chandler:{x:58,y:H-54}, local:null, tourist:null,
-    props:[], photoT:ri(160,340), buggyT:ri(260,560), chatCool:60, localT:ri(2400,3600), touristT:ri(600,1600) };
+    props:[], photoT:ri(160,340), buggyT:ri(260,560), chatCool:60, localT:ri(2400,3600), touristT:ri(300,700) };
   const kinds=['slipper','honu','cooler'];
   for(let i=0;i<3;i++) beach.props.push({k:kinds[i],x:rnd(90,W-90),y:rnd(H-70,H-24)});
   beachBuilt=true;
@@ -512,16 +512,15 @@ function tickTourist(){
   const b=beach; if(!beachBuilt) return;
   if(!b.tourist){
     if(b.touristT>0){ b.touristT--; return; }
-    if(Math.random()<0.004){   // rare
-      const t=TOURISTS[ri(0,TOURISTS.length-1)];
-      const fromLeft=Math.random()<0.5;
-      b.tourist={ kind:t.kind, line:t.line, x:fromLeft?-20:W+20, dir:fromLeft?1:-1,
-        y:SHORE+ri(20,H-SHORE-18), said:false };
-    } else b.touristT=ri(120,300);
+    // timer elapsed → a walk-on definitely appears (no rare dice roll)
+    const t=TOURISTS[ri(0,TOURISTS.length-1)];
+    const fromLeft=Math.random()<0.5;
+    b.tourist={ kind:t.kind, line:t.line, x:fromLeft?-20:W+20, dir:fromLeft?1:-1,
+      y:SHORE+ri(20,H-SHORE-18), said:false };
   } else {
     const T=b.tourist; T.x+=0.8*T.dir;
     if(!T.said && T.x>W*0.35 && T.x<W*0.65){ T.said=true; if(state==='beach') setMsg(T.line,140); beep(440,.07,'square'); }
-    if(T.x<-30||T.x>W+30){ b.tourist=null; b.touristT=ri(1800,4200); }
+    if(T.x<-30||T.x>W+30){ b.tourist=null; b.touristT=ri(1200,2400); }  // next in ~20-40s
   }
 }
 function drawTourist(T){
