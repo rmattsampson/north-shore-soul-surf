@@ -564,11 +564,15 @@ function tickLocal(){
     if(state==='beach') setMsg("One local strolling down da beach...",110);
   } else {
     const L=b.local; L.x += 0.9*L.dir;
-    // drop a thing as they walk (sandal or cooler), becomes a pickup
+    // drop a thing as they walk (sandal or cooler), becomes a pickup — max 3 of each kind
     if(L.drops>0){ L.nextDrop--; if(L.nextDrop<=0){
-      const k = Math.random()<0.5?'slipper':'cooler';
-      b.props.push({ k, x:clamp(L.x,24,W-24), y:L.y+6 });
-      L.drops--; L.nextDrop=ri(80,160); beep(600,.05,'triangle'); } }
+      const countNotGot = k => b.props.filter(p=>p.k===k && !p.got).length;
+      const want = Math.random()<0.5 ? 'slipper' : 'cooler';
+      const other = want==='slipper' ? 'cooler' : 'slipper';
+      // pick the preferred kind if under cap, else the other if under cap, else skip
+      const k = countNotGot(want)<3 ? want : countNotGot(other)<3 ? other : null;
+      if(k){ b.props.push({ k, x:clamp(L.x,24,W-24), y:L.y+6 }); beep(600,.05,'triangle'); }
+      L.drops--; L.nextDrop=ri(80,160); } }
     if(L.x<-30||L.x>W+30){ b.local=null; b.localT=ri(2400,3600); }  // gone; next in ~1 min
   }
 }
