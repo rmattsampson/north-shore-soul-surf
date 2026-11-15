@@ -5,17 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>North Shore — Soul Surf</title>
 <style>
-  :root { --scale: 1; }
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body {
-    height:100%; background:#1a0f26; color:#ffe9c7;
-    font-family: "Courier New", monospace; overflow:hidden;
+    height:100%; background:#140a20; color:#ffe9c7;
+    font-family:"Courier New",monospace; overflow:hidden;
     display:flex; align-items:center; justify-content:center;
     -webkit-user-select:none; user-select:none; touch-action:none;
   }
-  #wrap { position:relative; image-rendering:pixelated; }
-  canvas { display:block; image-rendering:pixelated; background:#1a0f26;
-           box-shadow:0 0 0 3px #5de0c4, 0 8px 40px rgba(0,0,0,.6); border-radius:4px; }
+  #wrap { position:relative; }
+  canvas { display:block; image-rendering:pixelated;
+           box-shadow:0 0 0 3px #5de0c4, 0 8px 44px rgba(0,0,0,.65); border-radius:4px; }
   #hint { position:absolute; left:0; right:0; bottom:-26px; text-align:center;
           font-size:11px; letter-spacing:1px; color:#8fb; opacity:.7; }
   @media (max-width:640px){ #hint{ display:none; } }
@@ -24,14 +23,15 @@
 <body>
 <div id="wrap">
   <canvas id="game" width="480" height="320"></canvas>
-  <div id="hint">← → move · ↑ paddle out · SPACE surf/drop-in · Z cutback · X off-the-lip · Z+X barrel · ↓ go in · ENTER start · M mute</div>
+  <div id="hint">← → steer · ↑ paddle out · SPACE drop-in / kick out · Z cutback · X off-the-lip · Z+X barrel · ↓ go to beach · ENTER start · M mute</div>
 </div>
 <script>
 "use strict";
 /* ============================================================
-   NORTH SHORE — SOUL SURF
+   NORTH SHORE — SOUL SURF  (v2)
    One-file 16-bit surf game. Canvas + vanilla JS, art in code.
    No winners/losers. localStorage high score. 100% offline.
+   Homage to NORTH SHORE (1987). Likeness: full copy, Matt's call.
    ============================================================ */
 
 const cv = document.getElementById('game');
@@ -41,583 +41,454 @@ ctx.imageSmoothingEnabled = false;
 
 /* ---- responsive integer scaling ---- */
 function fit(){
-  const maxW = Math.min(window.innerWidth-24, 960);
-  const maxH = Math.min(window.innerHeight-60, 640);
-  const s = Math.max(1, Math.floor(Math.min(maxW/W, maxH/H)));
-  cv.style.width = (W*s)+'px';
-  cv.style.height = (H*s)+'px';
+  const mw = Math.min(innerWidth-20, 960), mh = Math.min(innerHeight-56, 640);
+  const s = Math.max(1, Math.floor(Math.min(mw/W, mh/H)));
+  cv.style.width=(W*s)+'px'; cv.style.height=(H*s)+'px';
 }
-window.addEventListener('resize', fit); fit();
+addEventListener('resize', fit); fit();
 
-/* ---- palette (sunset North Shore) ---- */
+/* ---- palette ---- */
 const C = {
-  skyTop:'#2b1a4a', sky1:'#5a2a6b', sky2:'#b34a7a', sky3:'#e8683f',
-  sky4:'#f59a3c', sky5:'#ffc94d',
+  skyTop:'#2b1a4a', s1:'#5a2a6b', s2:'#b34a7a', s3:'#e8683f', s4:'#f59a3c', s5:'#ffc94d',
   sun:'#ffe08a', sunCore:'#fff3c4',
-  seaDeep:'#13405f', sea1:'#1c6a8c', sea2:'#2f93aa', foam:'#eafcff',
+  seaDeep:'#10395a', sea1:'#1c6a8c', sea2:'#2f93aa', sea3:'#4fb4c4', foam:'#eafcff',
   sand:'#e9cf8f', sandDot:'#d8b66f', sandWet:'#c9a85f',
   mtnA:'#2d5a3f', mtnB:'#3f2a56',
-  skin:'#c88a4e', skin2:'#a86a34', hair:'#2a1a12',
-  boardR:'#ff5d5d', boardY:'#ffd23f', boardB:'#4aa3ff', boardG:'#4ad991',
-  hui:'#3a2a44', huiSkin:'#9a5a2e',
+  skin:'#c88a4e', hair:'#2a1a12',
+  huiSkin:'#9a5a2e', hui:'#3a2a44',
   shark:'#5a6b78', sharkBelly:'#cdd8de',
-  night:'#0f0a1a', txt:'#ffe9c7', good:'#5de0c4', bad:'#ff6b6b', gold:'#ffd27f'
+  txt:'#ffe9c7', good:'#5de0c4', bad:'#ff6b6b', gold:'#ffd27f', purp:'#c9a0ff'
 };
 
 /* ---- input ---- */
-const keys = {};
-const pressed = {};
-addEventListener('keydown', e=>{
-  const k = norm(e);
-  if(k){ if(!keys[k]) pressed[k]=true; keys[k]=true;
-    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault(); }
-});
-addEventListener('keyup', e=>{ const k=norm(e); if(k) keys[k]=false; });
-function norm(e){
-  switch(e.key){
-    case 'ArrowLeft': case 'a': case 'A': return 'left';
-    case 'ArrowRight': case 'd': case 'D': return 'right';
-    case 'ArrowUp': case 'w': case 'W': return 'up';
-    case 'ArrowDown': case 's': case 'S': return 'down';
-    case ' ': return 'space';
-    case 'Enter': return 'enter';
-    case 'z': case 'Z': return 'z';
-    case 'x': case 'X': return 'x';
-    case 'm': case 'M': return 'mute';
-    default: return null;
-  }
-}
+const keys={}, pressed={};
+addEventListener('keydown',e=>{ const k=norm(e); if(k){ if(!keys[k])pressed[k]=true; keys[k]=true;
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault(); if(!actx)initAudio(); }});
+addEventListener('keyup',e=>{ const k=norm(e); if(k)keys[k]=false; });
+function norm(e){ switch(e.key){
+  case 'ArrowLeft':case 'a':case 'A':return 'left';
+  case 'ArrowRight':case 'd':case 'D':return 'right';
+  case 'ArrowUp':case 'w':case 'W':return 'up';
+  case 'ArrowDown':case 's':case 'S':return 'down';
+  case ' ':return 'space'; case 'Enter':return 'enter';
+  case 'z':case 'Z':return 'z'; case 'x':case 'X':return 'x';
+  case 'm':case 'M':return 'mute'; default:return null; } }
 function consume(k){ if(pressed[k]){ pressed[k]=false; return true; } return false; }
 
-/* ---- touch (simple): tap bottom thirds for move, top for action ---- */
-let touchAx=0;
-cv.addEventListener('touchstart', handleTouch, {passive:false});
-cv.addEventListener('touchmove', handleTouch, {passive:false});
-cv.addEventListener('touchend', ()=>{ keys.left=keys.right=keys.up=false; touchAx=0;
-  pressed.space=true; }, {passive:false});
-function handleTouch(e){
-  e.preventDefault();
-  const r = cv.getBoundingClientRect();
-  const t = e.touches[0]; if(!t) return;
-  const x = (t.clientX-r.left)/r.width, y=(t.clientY-r.top)/r.height;
-  keys.left = x<0.33; keys.right = x>0.66; keys.up = y<0.45;
-  if(state==='splash'||state==='gameover') pressed.enter=true;
-}
+/* ---- touch ---- */
+cv.addEventListener('touchstart',t=>{ onTouch(t); if(!actx)initAudio(); },{passive:false});
+cv.addEventListener('touchmove',onTouch,{passive:false});
+cv.addEventListener('touchend',e=>{ e.preventDefault(); keys.left=keys.right=keys.up=false;
+  pressed.space=true; if(state==='splash'||state==='help')pressed.enter=true; },{passive:false});
+function onTouch(e){ e.preventDefault(); const r=cv.getBoundingClientRect(), t=e.touches[0]; if(!t)return;
+  const x=(t.clientX-r.left)/r.width, y=(t.clientY-r.top)/r.height;
+  keys.left=x<.34; keys.right=x>.66; keys.up=y<.4; keys.down=y>.82; }
 
-/* ---- audio (tiny beeps, WebAudio, mute toggle) ---- */
-let muted=false, actx=null;
-function beep(freq=440, dur=0.08, type='square', vol=0.04){
-  if(muted) return;
-  try{
-    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
-    const o=actx.createOscillator(), g=actx.createGain();
-    o.type=type; o.frequency.value=freq; o.connect(g); g.connect(actx.destination);
-    g.gain.setValueAtTime(vol, actx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime+dur);
-    o.start(); o.stop(actx.currentTime+dur);
-  }catch(e){}
-}
+/* ---- audio ---- */
+let muted=false, actx=null, musicGain=null;
+function initAudio(){ try{ actx=new (AudioContext||webkitAudioContext)();
+  musicGain=actx.createGain(); musicGain.gain.value=0.0; musicGain.connect(actx.destination); startMusic(); }catch(e){} }
+function beep(f=440,d=.08,type='square',v=.05){ if(muted||!actx)return;
+  try{ const o=actx.createOscillator(),g=actx.createGain(); o.type=type; o.frequency.value=f;
+    o.connect(g); g.connect(actx.destination); g.gain.setValueAtTime(v,actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+d); o.start(); o.stop(actx.currentTime+d);}catch(e){} }
+/* mellow surf-rock-ish arpeggio loop */
+let musicStep=0, musicT=0;
+const scale=[0,3,5,7,10,12];
+function startMusic(){ if(musicGain) musicGain.gain.value = muted?0:0.0; }
+function music(){ if(!actx||muted){ if(musicGain)musicGain.gain.value=0; return; }
+  musicGain.gain.value=0.02; musicT++;
+  if(musicT%26===0){ const root=48+(Math.floor(musicStep/6)%2?5:0);
+    const n=root+scale[musicStep%scale.length];
+    const f=440*Math.pow(2,(n-69)/12);
+    const o=actx.createOscillator(),g=actx.createGain(); o.type='triangle'; o.frequency.value=f;
+    o.connect(g); g.connect(musicGain); g.gain.setValueAtTime(.5,actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+.4); o.start(); o.stop(actx.currentTime+.42);
+    musicStep++; } }
 
 /* ---- high score ---- */
-const HS_KEY='nsss_highscore';
-function getHS(){ return parseInt(localStorage.getItem(HS_KEY)||'0',10)||0; }
-function setHS(v){ try{ localStorage.setItem(HS_KEY, String(v)); }catch(e){} }
+const HS='nsss_hi';
+const getHS=()=>parseInt(localStorage.getItem(HS)||'0',10)||0;
+const setHS=v=>{ try{localStorage.setItem(HS,String(v));}catch(e){} };
+
+/* ---- utils ---- */
+const rnd=(a,b)=>a+Math.random()*(b-a), ri=(a,b)=>Math.floor(rnd(a,b+1));
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const near=(ax,ay,bx,by,r)=>{const dx=ax-bx,dy=ay-by;return dx*dx+dy*dy<r*r;};
+function px(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(x|0,y|0,w|0,h|0); }
 
 /* ============================================================
-   PIXEL DRAW HELPERS
+   SPRITES
    ============================================================ */
-function px(x,y,w,h,col){ ctx.fillStyle=col; ctx.fillRect(x|0,y|0,w|0,h|0); }
-
-/* little humanoid sprite, pose = 'stand'|'surf'|'paddle'|'down'|'walk' */
 function drawDude(x,y,skin,trunks,facing,pose,t){
-  facing = facing||1;
-  const fx = facing<0 ? -1 : 1;
+  const fx=facing<0?-1:1;
   ctx.save(); ctx.translate(x|0,y|0); ctx.scale(fx,1);
-  if(pose==='down'){
-    // wiped out — lying, stars
-    px(-8,2,16,5, skin); px(-6,-1,5,5, C.hair);
-    px(-10,-6,3,3, C.gold); px(8,-7,3,3, C.gold);
-    ctx.restore(); return;
-  }
-  // legs
-  const stride = pose==='walk' ? Math.sin(t*0.4)*2 : 0;
+  if(pose==='down'){ px(-8,2,16,5,skin); px(-6,-1,5,5,C.hair);
+    const b=(t>>2)%2; px(-11,-6,3,3,b?C.gold:C.foam); px(9,-7,3,3,b?C.foam:C.gold); ctx.restore(); return; }
+  const stride=pose==='walk'?Math.sin(t*0.35)*2:0;
   if(pose==='surf'){
-    px(-5,6,4,6, skin); px(2,6,4,6, skin);          // bent legs wide
-    px(-7,11,6,3, '#20303a'); px(2,11,6,3, '#20303a'); // feet on board
+    const crouch=pose==='surf'?2:0;
+    px(-6,6,4,6,skin); px(2,6,4,6,skin);
+    px(-8,11,7,3,'#20303a'); px(2,11,7,3,'#20303a');
+    px(-4,3-crouch,9,4,trunks);
+    px(-4,-4-crouch,9,8,skin);
+    px(-10,-4-crouch,5,3,skin); px(5,-6-crouch,5,3,skin);
+    px(-3,-11-crouch,7,7,skin); px(-3,-12-crouch,7,3,C.hair);
+  } else if(pose==='paddle'){
+    px(-4,4,9,4,trunks); px(-4,-2,9,7,skin);
+    px(-10,0+Math.sin(t*0.5)*1,5,3,skin); px(5,0-Math.sin(t*0.5)*1,5,3,skin);
+    px(-3,-8,7,6,skin); px(-3,-9,7,3,C.hair);
   } else {
-    px(-3,6,3,7+stride, skin); px(1,6,3,7-stride, skin);
-    px(-3,13,4,2, '#20303a'); px(1,13,4,2, '#20303a');
+    px(-3,6,3,7+stride,skin); px(1,6,3,7-stride,skin);
+    px(-3,13,4,2,'#20303a'); px(1,13,4,2,'#20303a');
+    px(-4,3,9,4,trunks); px(-4,-4,9,8,skin);
+    px(-6,-3,3,6,skin); px(4,-3,3,6,skin);
+    px(-3,-11,7,7,skin); px(-3,-12,7,3,C.hair);
   }
-  // trunks
-  px(-4,3,9,4, trunks);
-  // torso
-  px(-4,-4,9,8, skin);
-  // arms
-  if(pose==='surf'){ px(-9,-3,5,3, skin); px(5,-5,5,3, skin); } // arms out, styling
-  else if(pose==='paddle'){ px(-9,0,5,3, skin); px(5,0,5,3, skin); }
-  else { px(-6,-3,3,6, skin); px(4,-3,3,6, skin); }
-  // head
-  px(-3,-11,7,7, skin); px(-3,-12,7,3, C.hair);
   ctx.restore();
 }
-
-/* surfboard under feet */
-function drawBoard(x,y,col,facing,t){
-  const fx = facing<0?-1:1;
-  ctx.save(); ctx.translate(x|0,y|0); ctx.scale(fx,1);
-  px(-11,0,24,4, col);
-  px(-11,0,24,1, '#fff'); // stringer glint
-  px(10,0,4,4, col);
-  ctx.restore();
+function drawBoard(x,y,col,facing){
+  const fx=facing<0?-1:1; ctx.save(); ctx.translate(x|0,y|0); ctx.scale(fx,1);
+  px(-12,0,26,4,col); px(-12,0,26,1,'#fff'); px(11,1,5,3,col); ctx.restore();
 }
 
 /* ============================================================
-   BACKGROUND — sunset sky, sun, mountains, sea, sand
+   BACKGROUND
    ============================================================ */
 let seaPhase=0;
 function drawSky(){
-  const bands=[C.skyTop,C.sky1,C.sky2,C.sky3,C.sky4,C.sky5];
-  const bh=18;
-  for(let i=0;i<bands.length;i++) px(0,i*bh, W, bh, bands[i]);
-  // sun
+  const b=[C.skyTop,C.s1,C.s2,C.s3,C.s4,C.s5], bh=18;
+  for(let i=0;i<b.length;i++) px(0,i*bh,W,bh,b[i]);
   const sx=W*0.62, sy=96;
-  px(sx-22,sy-22,44,44, C.sun);
-  px(sx-14,sy-14,28,28, C.sunCore);
-  // sun reflection streak on sea later
-  // clouds
-  px(380,34,40,6, '#f3a6c0'); px(372,40,54,6, '#f3a6c0');
-  px(60,22,30,5,'#caa9d8');
-  // birds
-  px(150,54,4,2,'#2a1a2a'); px(154,53,3,2,'#2a1a2a');
-  px(300,46,4,2,'#2a1a2a'); px(304,47,3,2,'#2a1a2a');
+  px(sx-22,sy-22,44,44,C.sun); px(sx-14,sy-14,28,28,C.sunCore);
+  px(380,34,42,6,'#f3a6c0'); px(372,40,56,6,'#f3a6c0'); px(60,22,30,5,'#caa9d8');
+  const bw=(seaPhase*0.3)%40;
+  px(150-bw,54,4,2,'#2a1a2a'); px(154-bw,53,3,2,'#2a1a2a');
+  px(300-bw*0.6,46,4,2,'#2a1a2a'); px(304-bw*0.6,47,3,2,'#2a1a2a');
 }
 function drawMountains(){
-  // left ridge
-  ctx.fillStyle=C.mtnA;
-  ctx.beginPath(); ctx.moveTo(0,118); ctx.lineTo(120,52); ctx.lineTo(210,118); ctx.closePath(); ctx.fill();
-  ctx.fillStyle=C.mtnB;
-  ctx.beginPath(); ctx.moveTo(150,118); ctx.lineTo(250,70); ctx.lineTo(330,118); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=C.mtnA; ctx.beginPath(); ctx.moveTo(0,118); ctx.lineTo(120,52); ctx.lineTo(210,118); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=C.mtnB; ctx.beginPath(); ctx.moveTo(150,118); ctx.lineTo(250,70); ctx.lineTo(330,118); ctx.closePath(); ctx.fill();
 }
-function drawSea(y0){
-  px(0,y0,W,70, C.seaDeep);
-  // horizontal foam lines scrolling
-  for(let i=0;i<7;i++){
-    const yy = y0+8 + i*9;
-    const off = ((seaPhase*(0.4+i*0.12))% 36);
-    ctx.fillStyle = i%2? C.sea1:C.sea2;
-    for(let x=-36+off; x<W; x+=36){ px(x,yy,22,3, C.foam); }
+const SEATOP=118, SEABOT=250, SHORE=250;
+function drawSeaBands(){
+  px(0,SEATOP,W,SEABOT-SEATOP,C.seaDeep);
+  for(let i=0;i<13;i++){
+    const yy=SEATOP+6+i*10, off=((seaPhase*(0.5+i*0.09))%40);
+    const base=[C.sea1,C.sea2,C.sea3][i%3];
+    px(0,yy-3,W,7,base);
+    for(let x=-40+off;x<W;x+=40) px(x,yy,20,2,C.foam);
   }
-  // sun glitter column
   const sx=W*0.62;
-  for(let yy=y0+4; yy<y0+66; yy+=6){ px(sx-3+Math.sin(yy*0.5+seaPhase*0.1)*4,yy,6,2, '#ffd98a'); }
+  for(let yy=SEATOP+4;yy<SEABOT;yy+=6) px(sx-3+Math.sin(yy*0.5+seaPhase*0.1)*4,yy,6,2,'#ffd98a');
 }
-function drawSand(y0){
-  px(0,y0,W,H-y0, C.sand);
-  px(0,y0,W,3, C.foam);        // shoreline foam
-  px(0,y0+3,W,3, C.sandWet);
-  // sand speckle (static-ish)
+function drawSand(){
+  px(0,SHORE,W,H-SHORE,C.sand);
+  px(0,SHORE-2,W,3,C.foam); px(0,SHORE+1,W,3,C.sandWet);
   ctx.fillStyle=C.sandDot;
-  for(let i=0;i<140;i++){
-    const x=(i*53)%W, y=y0+8+((i*31)%(H-y0-10));
-    ctx.fillRect(x,y,2,2);
-  }
+  for(let i=0;i<150;i++){ const x=(i*53)%W, y=SHORE+8+((i*31)%(H-SHORE-10)); ctx.fillRect(x,y,2,2); }
 }
-function drawPalm(x,baseY){
-  px(x,baseY-46,6,46, '#7a4a22');            // trunk
-  for(let i=0;i<46;i+=6) px(x+ (i%12?1:-1),baseY-46+i,6,3,'#6a3f1d');
-  // fronds
-  const g='#2f9e52', g2='#277f43';
-  px(x-20,baseY-52,22,5,g); px(x-18,baseY-48,18,5,g2);
-  px(x+4,baseY-52,22,5,g);  px(x+8,baseY-48,18,5,g2);
-  px(x-12,baseY-58,30,5,g); px(x-10,baseY-62,24,5,g2);
+function drawPalm(x,by){
+  px(x,by-46,6,46,'#7a4a22'); for(let i=0;i<46;i+=6) px(x+(i%12?1:-1),by-46+i,6,3,'#6a3f1d');
+  const g='#2f9e52',g2='#277f43';
+  px(x-20,by-52,22,5,g); px(x-18,by-48,18,5,g2);
+  px(x+4,by-52,22,5,g);  px(x+8,by-48,18,5,g2);
+  px(x-12,by-58,30,5,g); px(x-10,by-62,24,5,g2);
 }
 
 /* ============================================================
-   GAME STATE
+   STATE
    ============================================================ */
-let state='splash';       // splash | beach | water | gameover
-let score=0, high=getHS();
-let flash=null, flashT=0;  // floating score text
-let msg='', msgT=0;        // talk-story banner
-let shaka=0;               // generic timer
-
-function setMsg(m,dur=140){ msg=m; msgT=dur; }
+let state='splash';  // splash | help | beach | water | gameover
+let score=0, high=getHS(), frame=0;
+let msg='', msgT=0, flash=null, flashT=0;
+function setMsg(m,d=140){ msg=m; msgT=d; }
 function floatScore(txt,x,y,col){ flash={txt,x,y,col:col||C.gold}; flashT=70; }
 
-/* ---------- player ---------- */
-const player = {
-  x: W/2, y: 0, facing:1,
-  board: C.boardR,
-  injured:0,          // >0 = shark-messed, must heal on beach
-  recover:0,
-};
+const player={ x:W/2, y:0, facing:1, board:C.good, injured:0, recover:0, downT:0 };
 
-/* ---------- BEACH entities ---------- */
-let beach = {};
+let beach={}, water={};
+
 function enterBeach(reason){
-  state='beach';
-  player.x = W/2; player.y = H-40; player.facing=1;
-  beach = {
-    photographer: null, buggy:null, chandler:null,
-    props:[], spawnT: 60, photoT: rnd(180,360), buggyT: rnd(300,600),
-  };
-  // scatter props
+  state='beach'; player.x=W/2; player.y=H-40; player.facing=1; player.downT=0;
+  beach={ photographer:null, buggy:null, chandler:{x:58,y:H-54},
+    props:[], photoT:ri(160,340), buggyT:ri(260,560) };
   const kinds=['slipper','honu','cooler'];
-  for(let i=0;i<3;i++) beach.props.push({k:kinds[i%kinds.length], x:rnd(40,W-40), y:rnd(H-70,H-20)});
-  // Chandler the healer always chillin near the hale
-  beach.chandler={ x: 58, y: H-54 };
-  if(reason) setMsg(reason, 180);
-  else setMsg("PAU HANA — walk the beach, ↑ paddle out", 160);
+  for(let i=0;i<3;i++) beach.props.push({k:kinds[i],x:rnd(90,W-90),y:rnd(H-70,H-24)});
+  setMsg(reason||"PAU HANA — walk da beach. ↑ at da shoreline fo' paddle out",160);
 }
-
-/* ---------- WATER entities ---------- */
-let water = {};
 function enterWater(){
-  if(player.injured){ setMsg("You stay hurt, cuz — go find Chandler fo' heal!", 160); return; }
-  state='water';
-  player.x = W*0.3; player.y = seaY()+30; player.facing=1;
-  water = {
-    waves:[], huis:[], laird:null, shark:null,
-    surfing:false, ride:0, rideClean:true, waveTimer:40,
-    sharkT: rnd(600,1100), huiT: rnd(240,480), lairdT: rnd(360,700),
-    combo:0, comboName:'',
-  };
-  setMsg("Paddle out! SPACE drop-in on a wave →", 160);
+  if(player.injured){ setMsg("You stay hurt, cuz — go find Chandler fo' heal!",150); return; }
+  state='water'; player.x=W*0.28; player.y=SEABOT-14; player.facing=1; player.downT=0;
+  water={ waves:[], huis:[], laird:null, shark:null, surfing:false, cur:null,
+    ride:0, combo:0, waveT:30, sharkT:ri(620,1100), huiT:ri(260,480), lairdT:ri(360,700), style:0 };
+  setMsg("Paddle out (↑). Line up wit' a swell → SPACE drop-in",160);
 }
-function seaY(){ return 108; }          // top of sea band
-const SEATOP=108, SEABOT=178, SHORE=178;
-
-/* ---------- helpers ---------- */
-function rnd(a,b){ return a + Math.random()*(b-a); }
-function ri(a,b){ return Math.floor(rnd(a,b+1)); }
-function clamp(v,a,b){ return v<a?a:v>b?b:v; }
-function hit(ax,ay,bx,by,r){ const dx=ax-bx,dy=ay-by; return dx*dx+dy*dy < r*r; }
 
 /* ============================================================
    UPDATE
    ============================================================ */
-let frame=0;
 function update(){
-  frame++; seaPhase+=1;
-  if(msgT>0) msgT--;
-  if(flashT>0){ flashT--; flash.y-=0.4; }
+  frame++; seaPhase++; music();
+  if(msgT>0)msgT--; if(flashT>0){ flashT--; flash.y-=0.4; }
   if(consume('mute')){ muted=!muted; setMsg(muted?"🔇 muted":"🔊 sound on",60); }
-
-  if(state==='splash'){ if(consume('enter')||consume('space')){ beep(660,.1); enterBeach(); } return; }
+  if(state==='splash'){ if(consume('enter')){ state='help'; beep(660,.1);} else if(consume('space')){ enterBeach(); } return; }
+  if(state==='help'){ if(consume('enter')||consume('space')){ enterBeach(); } return; }
   if(state==='gameover'){ if(consume('enter')||consume('space')){ score=0; state='splash'; } return; }
-  if(state==='beach') updateBeach();
-  else if(state==='water') updateWater();
+  if(state==='beach') updBeach(); else if(state==='water') updWater();
 }
 
-function updateBeach(){
-  const b=beach, spd=1.4;
-  if(keys.left){ player.x-=spd; player.facing=-1; }
-  if(keys.right){ player.x+=spd; player.facing=1; }
-  if(keys.up) player.y-=spd;
-  if(keys.down) player.y+=spd;
-  player.x=clamp(player.x,16,W-16);
-  player.y=clamp(player.y,SHORE+4,H-14);
+function updBeach(){
+  const b=beach, sp=1.5;
+  if(keys.left){ player.x-=sp; player.facing=-1; }
+  if(keys.right){ player.x+=sp; player.facing=1; }
+  if(keys.up) player.y-=sp;
+  if(keys.down) player.y+=sp;
+  player.x=clamp(player.x,16,W-16); player.y=clamp(player.y,SHORE+4,H-14);
+  if(player.y<=SHORE+6 && keys.up){ enterWater(); return; }
 
-  // walked into the surf line → paddle out
-  if(player.y<=SHORE+6 && consume('up')===false && keys.up){
-    // require being at shoreline and pressing up
-  }
-  if(player.y<=SHORE+6){ enterWater(); return; }
-
-  // heal at Chandler
-  if(player.injured && hit(player.x,player.y,b.chandler.x,b.chandler.y+6,20)){
+  if(player.injured && near(player.x,player.y,b.chandler.x,b.chandler.y+6,22)){
     player.recover++;
-    if(player.recover>90){ player.injured=0; player.recover=0; beep(520,.12,'triangle');
-      setMsg("Chandler: 'Eh, you good now braddah. Surf wit' aloha.'",160); }
-    else setMsg("Chandler patching you up... stay still, cuz",40);
+    if(player.recover>80){ player.injured=0; player.recover=0; beep(540,.14,'triangle');
+      setMsg("Chandler: 'You good now, braddah. Surf wit' aloha.'",150); }
+    else if(frame%30===0) setMsg("Chandler patching you up... hang loose",40);
   }
-
-  // props pickup (flavor + tiny points)
-  for(const p of b.props){
-    if(!p.got && hit(player.x,player.y,p.x,p.y,14)){
-      p.got=true; score+=5; beep(740,.06);
-      floatScore('+5',p.x,p.y-10,C.good);
-      if(p.k==='slipper') setMsg("Found one lost slippah. Classic.",90);
-      if(p.k==='honu') setMsg("A honu! Give 'um space, yeah.",90);
-      if(p.k==='cooler') setMsg("Cooler stay empty. Someone wen' drink all da grindz.",90);
-    }
-  }
-
-  // photographer timing
-  if(b.photoT>0) b.photoT--; else if(!b.photographer){ b.photographer={x:rnd(120,360),y:H-62,t:rnd(260,420)};
-    setMsg("📷 Photographer on da beach — go score waves fo' bonus!",150); }
-  if(b.photographer){ b.photographer.t--; if(b.photographer.t<0) b.photographer=null; }
-
-  // lifeguard buggy drives across
-  if(b.buggyT>0) b.buggyT--; else if(!b.buggy){ b.buggy={x:-30,y:SHORE+16,dir:1}; }
-  if(b.buggy){ b.buggy.x+=1.3*b.buggy.dir; if(b.buggy.x>W+30){ b.buggy=null; b.buggyT=rnd(400,800); } }
+  for(const p of b.props){ if(!p.got && near(player.x,player.y,p.x,p.y,15)){
+    p.got=true; score+=5; beep(760,.06); floatScore('+5',p.x,p.y-10,C.good);
+    if(p.k==='slipper') setMsg("Found one lost slippah. Classic North Shore.",90);
+    if(p.k==='honu') setMsg("A honu restin'. Give 'um space, yeah.",90);
+    if(p.k==='cooler') setMsg("Cooler stay empty. Somebody wen' drink all da grindz.",90);
+  }}
+  if(b.photoT>0)b.photoT--; else if(!b.photographer){ b.photographer={x:rnd(140,340),y:H-60,t:ri(300,520)};
+    setMsg("📷 Photographer on da beach — go score waves fo' DOUBLE points!",150); beep(880,.1); }
+  if(b.photographer){ b.photographer.t--; if(b.photographer.t<0)b.photographer=null; }
+  if(b.buggyT>0)b.buggyT--; else if(!b.buggy){ b.buggy={x:-30}; }
+  if(b.buggy){ b.buggy.x+=1.4; if(b.buggy.x>W+30){ b.buggy=null; b.buggyT=ri(380,760); } }
 }
 
-function updateWater(){
-  const w=water;
-  // spawn waves rolling toward shore
-  if(w.waveTimer>0) w.waveTimer--; else {
-    const messy = Math.random()<0.28;
-    w.waves.push({ x:W+20, y:ri(SEATOP+14,SEABOT-10), spd:rnd(0.9,1.6), messy, rode:false });
-    w.waveTimer = ri(70,140);
-  }
-  for(const wv of w.waves) wv.x-=wv.spd;
-  w.waves=w.waves.filter(wv=>wv.x>-30);
+function photographerOut(){ return beach && beach.photographer; }
 
-  // ---- paddling / positioning ----
-  const spd= w.surfing?2.2:1.4;
-  if(keys.left){ player.x-=spd; if(!w.surfing) player.facing=-1; }
-  if(keys.right){ player.x+=spd; if(!w.surfing) player.facing=1; }
-  if(!w.surfing){
-    if(keys.up) player.y-=1.3;
-    if(keys.down) player.y+=1.3;
+function updWater(){
+  const w=water;
+  // spawn swell lines moving toward shore (y grows downward = toward beach)
+  if(w.waveT>0)w.waveT--; else {
+    const messy=Math.random()<0.26;
+    w.waves.push({ y:SEATOP+10, x:rnd(60,W-60), len:rnd(70,150), spd:rnd(0.25,0.5), messy, rode:false });
+    w.waveT=ri(70,150);
   }
+  for(const wv of w.waves) wv.y+=wv.spd*(w.surfing&&w.cur===wv?1.6:1);
+  w.waves=w.waves.filter(wv=>wv.y<SEABOT+8);
+
+  if(player.downT>0){ player.downT--; if(player.downT===0 && player.y>SEABOT-4) { } return; }
+
+  const paddling=!w.surfing;
+  const sp=w.surfing?2.4:1.6;
+  if(keys.left){ player.x-=sp; if(paddling)player.facing=-1; }
+  if(keys.right){ player.x+=sp; if(paddling)player.facing=1; }
+  if(paddling){ if(keys.up)player.y-=1.5; if(keys.down)player.y+=1.5; }
   player.x=clamp(player.x,14,W-14);
-  player.y=clamp(player.y,SEATOP+8,SEABOT);
+  player.y=clamp(player.y,SEATOP+6,SEABOT);
 
-  // ---- go back to shore ----
-  if(consume('down') && player.y>=SEABOT-2){
-    if(w.surfing){} else { enterBeach(player.injured?"Limp back fo' heal, braddah":"Back on da sand."); return; }
-  }
-  if(player.y>=SEABOT && keys.down){ enterBeach(player.injured?"Go see Chandler, cuz":"Pau surf fo' now."); return; }
+  // go to beach from the inside
+  if(!w.surfing && keys.down && player.y>=SEABOT-1){ enterBeach(player.injured?"Limp in fo' heal, braddah":"Pau surf. Back on da sand."); return; }
 
-  // ---- drop in on a wave ----
+  // drop-in: must be close to a clean swell line
   if(!w.surfing && consume('space')){
-    const wv = w.waves.find(wv=>!wv.rode && Math.abs(wv.x-player.x)<26 && Math.abs(wv.y-player.y)<16);
-    if(wv){
-      if(wv.messy){ wipeout("Messy closeout wen' buss you up!"); }
-      else { w.surfing=true; w.ride=0; w.rideClean=true; wv.rode=true; w.combo=0; beep(600,.1,'sawtooth');
-             setMsg("DROP IN! ← → trim · Z cutback · X off-da-lip · Z+X barrel",120); }
-    } else setMsg("No wave right dea — paddle to one, cuz",60);
+    const wv=w.waves.find(v=>!v.rode && Math.abs(v.y-player.y)<14 && Math.abs(v.x-player.x)<v.len/2+10);
+    if(wv){ if(wv.messy){ wipeout("Messy closeout wen' buss you up!"); }
+      else { w.surfing=true; w.cur=wv; wv.rode=true; w.ride=0; w.combo=0; w.style=0; beep(600,.1,'sawtooth');
+        setMsg("DROP IN! ← → carve · Z cutback · X off-da-lip · Z+X barrel",120); } }
+    else setMsg("No swell right dea — paddle onto a wave line, cuz",60);
   }
 
-  // ---- surfing ----
   if(w.surfing){
-    w.ride++;
-    score += 1;                       // reading the wave = points
-    player.x -= 0.6;                  // drifting down the line toward shore
-    if(frame%6===0) beep(300+Math.min(w.ride,200),0.02,'sine',0.015);
-
+    w.ride++; score+=1;
+    // follow the wave toward shore
+    player.y=w.cur.y;
+    if(frame%5===0) beep(280+Math.min(w.ride,220),.02,'sine',.012);
     // tricks
-    if(consume('z') && consume('x')){ trick('BARREL!!',120,'#9ad'); }
+    if(consume('z')&&consume('x')) trick('BARREL!!',120,C.purp);
     else { if(consume('z')) trick('Cutback!',30,C.good); if(consume('x')) trick('Off-da-lip!',45,C.gold); }
-
-    // photographer bonus (he's on the beach)
-    // end of ride when reach inside / kick out
-    if(player.x< W*0.14 || consume('space') || player.y>=SEABOT-2){
-      endRide();
-    }
+    // end the ride: reach inside, kick out, or wave fizzles
+    if(player.y>=SEABOT-6 || consume('space') || w.cur.y>=SEABOT+4){ endRide(); }
   }
 
-  // ---- HUI ----
-  if(w.huiT>0) w.huiT--; else if(w.huis.length<2){
-    w.huis.push({ x:rnd(W*0.5,W-30), y:ri(SEATOP+12,SEABOT-12), vx:rnd(-0.5,-0.2), vy:rnd(-0.4,0.4) });
-    w.huiT=rnd(300,560);
-    setMsg("⚠️ Da HUI stay in da water — keep your distance!",130);
-  }
-  for(const h of w.huis){
-    h.x+=h.vx; h.y+=h.vy;
-    if(h.y<SEATOP+10||h.y>SEABOT-6) h.vy*=-1;
-    if(h.x<-20) h.x=W+20;
-    if(hit(player.x,player.y,h.x,h.y,16)){ wipeout("Da Hui wen' knock you off! Respect da lineup."); }
-  }
+  // HUI
+  if(w.huiT>0)w.huiT--; else if(w.huis.length<2){
+    w.huis.push({ x:rnd(W*0.45,W-30), y:ri(SEATOP+14,SEABOT-16), vx:rnd(-0.4,0.4), vy:rnd(0.15,0.4) });
+    w.huiT=ri(320,560); setMsg("⚠️ Da HUI stay in da water — keep your distance!",130); beep(160,.2,'sawtooth'); }
+  for(const h of w.huis){ h.x+=h.vx; h.y+=h.vy;
+    if(h.x<16||h.x>W-16)h.vx*=-1; if(h.y>SEABOT-6){ h.y=SEATOP+12; h.x=rnd(40,W-40); }
+    if(near(player.x,player.y,h.x,h.y,15)) wipeout("Da Hui wen' knock you off! Respect da lineup, haole."); }
 
-  // ---- LAIRD (cocky, blocks you, no damage) ----
-  if(w.lairdT>0) w.lairdT--; else if(!w.laird){ w.laird={x:W+20,y:ri(SEATOP+14,SEABOT-12),t:rnd(300,500)};
+  // LAIRD — cocky, blocks/snakes, no damage
+  if(w.lairdT>0)w.lairdT--; else if(!w.laird){ w.laird={x:rnd(60,W-60),y:SEATOP+12,t:ri(360,560)};
     setMsg("Laird paddling out... Mr. Big Wave, so humble 🙄",130); }
-  if(w.laird){ w.laird.x-=0.8; w.laird.t--;
-    if(hit(player.x,player.y,w.laird.x,w.laird.y,15) && w.surfing){
-      setMsg("Laird snaked your wave! 'Did you see that?' — ugh.",120);
-      player.x+=10; // shoved down the line, ride continues
-    }
-    if(w.laird.t<0||w.laird.x<-30) w.laird=null;
-  }
+  if(w.laird){ w.laird.y+=0.35; w.laird.t--;
+    if(near(player.x,player.y,w.laird.x,w.laird.y,15)&&w.surfing){
+      setMsg("Laird SNAKED your wave! 'Did you see that one?!' — ugh.",110);
+      player.x=clamp(player.x+(player.x<w.laird.x?-22:22),20,W-20); }
+    if(w.laird.t<0||w.laird.y>SEABOT){ w.laird=null; } }
 
-  // ---- SHARK ----
-  if(w.sharkT>0) w.sharkT--; else if(!w.shark){ w.shark={x:-20,y:ri(SEATOP+20,SEABOT-10),vx:rnd(0.6,1.1)};
-    beep(90,.4,'sawtooth',.05); setMsg("🦈 SHARK!! Get to shore, braddah!",150); }
+  // SHARK
+  if(w.sharkT>0)w.sharkT--; else if(!w.shark){ w.shark={x:-24,y:ri(SEATOP+24,SEABOT-16),vx:rnd(0.7,1.2)};
+    beep(80,.5,'sawtooth',.06); setMsg("🦈 SHARK!! Get to shore, braddah!",160); }
   if(w.shark){ w.shark.x+=w.shark.vx;
-    if(hit(player.x,player.y,w.shark.x,w.shark.y,16) && !player.injured){
-      player.injured=1; beep(70,.5,'sawtooth',.06);
-      setMsg("Shark wen' buss you up! Paddle in, find Chandler fo' heal.",180);
-      if(w.surfing){ w.surfing=false; }
-    }
-    if(w.shark.x>W+30) w.shark=null;
-  }
+    if(near(player.x,player.y,w.shark.x,w.shark.y,16)&&!player.injured){
+      player.injured=1; beep(60,.6,'sawtooth',.07);
+      setMsg("Shark wen' buss you up! Paddle in, find Chandler.",180);
+      w.surfing=false; w.cur=null; player.downT=36; }
+    if(w.shark.x>W+30) w.shark=null; }
 }
 
-function trick(name,pts,col){
-  const w=water; w.combo++; score+=pts*w.combo;
-  floatScore((w.combo>1?('x'+w.combo+' '):'')+name, player.x, player.y-14, col);
-  beep(880+w.combo*40,.08,'square'); 
+function trick(name,pts,col){ const w=water; w.combo++; w.style+=pts;
+  score+=pts*w.combo; floatScore((w.combo>1?('x'+w.combo+' '):'')+name,player.x,player.y-16,col);
+  beep(880+w.combo*50,.08,'square'); }
+function endRide(){ const w=water; if(!w.surfing)return;
+  let bonus=Math.floor(w.ride*0.6)+w.style, note="Nice ride! "+w.ride+" frames";
+  if(photographerOut()){ bonus*=2; note="📷 PHOTO SCORE! DOUBLE — "+w.ride+" frames"; beep(990,.14); }
+  score+=bonus; floatScore('+'+bonus,player.x,player.y-18,C.gold);
+  setMsg(note+(w.combo>1?(" · "+w.combo+"x combo!"):""),130);
+  w.surfing=false; w.cur=null; w.ride=0; w.combo=0; w.style=0;
+  if(score>high){ high=score; setHS(high); floatScore('NEW BEST!',W/2,40,C.purp); }
 }
-function endRide(){
-  const w=water; if(!w.surfing) return;
-  let bonus = Math.floor(w.ride*0.5);
-  let note = "Nice ride, "+w.ride+" frames";
-  if(beachPhotographerOut()){ bonus*=2; note="📷 PHOTO SCORE! Double points — "+w.ride+" frames"; beep(990,.14); }
-  score += bonus;
-  floatScore('+'+bonus, player.x, player.y-16, C.gold);
-  setMsg(note+ (w.combo>1?(" · "+w.combo+"x combo!"):""), 130);
-  w.surfing=false; w.ride=0; w.combo=0;
-  if(score>high){ high=score; setHS(high); }
-  // reset position a bit out
-  player.x = clamp(player.x, W*0.25, W*0.6);
-}
-function beachPhotographerOut(){ return beach && beach.photographer; }
-
-function wipeout(reason){
-  const w=water;
-  w.surfing=false; w.ride=0; w.combo=0;
-  player.downT=50;
-  setMsg(reason||"WIPEOUT! Worked in da impact zone.",120);
-  beep(140,.25,'sawtooth');
-  if(score>high){ high=score; setHS(high); }
-}
+function wipeout(reason){ const w=water; w.surfing=false; w.cur=null; w.ride=0; w.combo=0; w.style=0;
+  player.downT=48; setMsg(reason||"WIPEOUT! Worked in da impact zone.",120); beep(130,.28,'sawtooth');
+  if(score>high){ high=score; setHS(high); } }
 
 /* ============================================================
    RENDER
    ============================================================ */
 function render(){
   if(state==='splash') return drawSplash();
-  // common world
-  drawSky(); drawMountains();
-  if(state==='beach'){ drawSea(SEATOP); drawSand(SHORE); drawBeachScene(); }
-  else if(state==='water'){ drawSea(SEATOP); drawSand(SHORE); drawWaterScene(); }
-  drawHUD();
-  drawBanner();
+  if(state==='help') return drawHelp();
+  drawSky(); drawMountains(); drawSeaBands(); drawSand();
+  if(state==='beach') drawBeach(); else if(state==='water') drawWater();
+  drawHUD(); drawBanner();
 }
 
 function drawSplash(){
-  drawSky(); drawMountains(); drawSea(SEATOP); drawSand(SHORE);
-  drawPalm(40,SHORE+80); drawPalm(W-46,SHORE+92);
-  // title
+  drawSky(); drawMountains(); drawSeaBands(); drawSand();
+  drawPalm(40,SHORE+66); drawPalm(W-46,SHORE+70);
   ctx.textAlign='center';
-  ctx.font='bold 30px "Courier New", monospace';
-  ctx.fillStyle='#1a0f26'; ctx.fillText('NORTH SHORE', W/2+2, 70+2);
-  ctx.fillStyle=C.gold; ctx.fillText('NORTH SHORE', W/2, 70);
-  ctx.font='bold 16px "Courier New", monospace';
-  ctx.fillStyle=C.good; ctx.fillText('~ SOUL SURF ~', W/2, 92);
-  // a surfer riding across
-  const sx = (frame*1.4)%(W+40)-20;
-  drawBoard(sx, 150, C.boardY, 1, frame); drawDude(sx, 150-14, C.skin, C.boardR, 1, 'surf', frame);
-  // prompt
-  ctx.font='12px "Courier New", monospace';
-  ctx.fillStyle = (frame%60<40)? C.txt : '#8a7';
-  ctx.fillText('PRESS ENTER TO PADDLE OUT', W/2, 232);
-  ctx.fillStyle=C.gold; ctx.font='11px "Courier New", monospace';
-  ctx.fillText('HIGH SCORE  '+high, W/2, 254);
-  ctx.fillStyle='#8fb'; ctx.font='10px "Courier New", monospace';
-  ctx.fillText("← → move · SPACE surf · Z/X tricks · ↓ go in · M mute", W/2, 300);
+  ctx.font='bold 30px "Courier New",monospace';
+  px(0,0,0,0,'#000'); ctx.fillStyle='#160c22'; ctx.fillText('NORTH SHORE',W/2+2,72);
+  ctx.fillStyle=C.gold; ctx.fillText('NORTH SHORE',W/2,70);
+  ctx.font='bold 15px "Courier New",monospace'; ctx.fillStyle=C.good; ctx.fillText('~ SOUL SURF ~',W/2,92);
+  const sx=(frame*1.5)%(W+60)-30, wy=180+Math.sin(frame*0.08)*4;
+  drawBoard(sx,wy+6,C.gold,1); drawDude(sx,wy-8,C.skin,C.bad,1,'surf',frame);
+  ctx.font='12px "Courier New",monospace';
+  ctx.fillStyle=(frame%60<40)?C.txt:'#8a7'; ctx.fillText('PRESS ENTER',W/2,232);
+  ctx.fillStyle=C.gold; ctx.font='11px "Courier New",monospace'; ctx.fillText('HIGH SCORE  '+high,W/2,254);
+  ctx.fillStyle='#8fb'; ctx.font='10px "Courier New",monospace'; ctx.fillText('a lil homage to NORTH SHORE (1987) · Cheehoo!',W/2,300);
   ctx.textAlign='left';
 }
-
-function drawBeachScene(){
-  drawPalm(30,H-6); drawPalm(W-30,H-6);
-  // hale (lil shack) for Chandler
-  px(38,beach.chandler.y-10,46,18,'#6b4a2a'); px(38,beach.chandler.y-14,46,5,'#8a5a2a');
-  // chandler
-  drawDude(beach.chandler.x, beach.chandler.y, C.skin2, C.boardG, 1, 'stand', frame);
-  // props
-  for(const p of beach.props){ if(p.got) continue; drawProp(p); }
-  // photographer
-  if(beach.photographer){ drawPhotographer(beach.photographer.x, beach.photographer.y); }
-  // buggy
-  if(beach.buggy) drawBuggy(beach.buggy.x, beach.buggy.y);
-  // player
-  drawDude(player.x, player.y, C.skin, player.board, player.facing,
-           (keys.left||keys.right||keys.up||keys.down)?'walk':'stand', frame);
-  if(player.injured){ px(player.x-3,player.y-20,6,3,C.bad); }
+function drawHelp(){
+  drawSky(); drawMountains(); drawSeaBands(); drawSand();
+  ctx.fillStyle='rgba(10,6,24,.72)'; ctx.fillRect(40,40,W-80,H-80);
+  ctx.strokeStyle=C.good; ctx.lineWidth=2; ctx.strokeRect(40,40,W-80,H-80);
+  ctx.textAlign='center'; ctx.fillStyle=C.gold; ctx.font='bold 14px "Courier New",monospace';
+  ctx.fillText('HOW TO SURF, BRADDAH',W/2,66);
+  ctx.textAlign='left'; ctx.font='11px "Courier New",monospace'; ctx.fillStyle=C.txt;
+  const L=[
+    '↑ paddle out  ·  ← → steer  ·  ↓ go back to beach',
+    'SPACE  drop in on a clean swell / kick out',
+    'Z cutback · X off-da-lip · Z + X  BARREL',
+    '',
+    'score = reading waves. longer + tricks = mo betta.',
+    '📷 photographer out? ride = DOUBLE points.',
+    '',
+    'HUI knock you off. messy wave close you out.',
+    'LAIRD snakes your wave (no damage, just annoying).',
+    '🦈 shark messes you up → beach → Chandler heals you.',
+    'walk da beach fo\' random stuff + lil points.' ];
+  let y=92; for(const l of L){ ctx.fillText(l,64,y); y+=16; }
+  ctx.textAlign='center'; ctx.fillStyle=(frame%60<40)?C.good:'#497';
+  ctx.fillText('PRESS ENTER TO PADDLE OUT',W/2,H-58); ctx.textAlign='left';
 }
 
+function drawBeach(){
+  drawPalm(30,H-6); drawPalm(W-30,H-6);
+  px(38,beach.chandler.y-10,46,18,'#6b4a2a'); px(34,beach.chandler.y-15,54,6,'#8a5a2a');
+  drawDude(beach.chandler.x,beach.chandler.y,'#a86a34',C.sea3,1,'stand',frame);
+  px(beach.chandler.x-14,beach.chandler.y-26,30,4,'#111');
+  ctx.fillStyle=C.good; ctx.font='7px monospace'; ctx.textAlign='center';
+  ctx.fillText('CHANDLER',beach.chandler.x,beach.chandler.y-29); ctx.textAlign='left';
+  for(const p of beach.props){ if(!p.got) drawProp(p); }
+  if(beach.photographer) drawPhotog(beach.photographer.x,beach.photographer.y);
+  if(beach.buggy) drawBuggy(beach.buggy.x,SHORE+16);
+  const moving=keys.left||keys.right||keys.up||keys.down;
+  drawDude(player.x,player.y,C.skin,player.board,player.facing,moving?'walk':'stand',frame);
+  if(player.injured) px(player.x-3,player.y-20,6,3,C.bad);
+}
 function drawProp(p){
   if(p.k==='slipper'){ px(p.x-5,p.y,10,4,'#2e6bbf'); px(p.x-1,p.y-2,2,3,'#1a4a8a'); }
-  else if(p.k==='honu'){ px(p.x-7,p.y-3,14,8,'#3f7a3a'); px(p.x-9,p.y,3,3,'#3f7a3a'); px(p.x+6,p.y,3,3,'#3f7a3a'); px(p.x-3,p.y-5,4,3,'#4f8a4a'); }
-  else if(p.k==='cooler'){ px(p.x-6,p.y-5,12,9,'#d13a3a'); px(p.x-6,p.y-7,12,3,'#eee'); }
+  else if(p.k==='honu'){ px(p.x-7,p.y-3,14,8,'#3f7a3a'); px(p.x-9,p.y,3,3,'#3f7a3a'); px(p.x+6,p.y,3,3,'#3f7a3a'); px(p.x-2,p.y-5,4,3,'#4f8a4a'); }
+  else { px(p.x-6,p.y-5,12,9,'#d13a3a'); px(p.x-6,p.y-7,12,3,'#eee'); }
 }
-function drawPhotographer(x,y){
-  // tripod
+function drawPhotog(x,y){
   px(x-6,y,2,16,'#333'); px(x+4,y,2,16,'#333'); px(x-1,y,2,14,'#333');
-  px(x-8,y-8,16,8,'#222'); px(x+6,y-6,5,4,'#4ad'); // camera + lens glint
-  // dude behind
-  drawDude(x-14,y-2,C.skin,'#444',1,'stand',frame);
-  px(x-20,y-14,14,4,'#111'); ctx.fillStyle=C.gold; ctx.font='8px monospace'; ctx.textAlign='left';
+  px(x-9,y-9,18,8,'#222'); px(x+7,y-7,5,4,'#4ad');
+  drawDude(x-16,y-2,C.skin,'#444',1,'stand',frame);
+  px(x-28,y-22,34,4,'#111'); ctx.fillStyle=C.gold; ctx.font='7px monospace'; ctx.textAlign='center';
+  ctx.fillText('📷 2x WAVES',x-11,y-25); ctx.textAlign='left';
 }
 function drawBuggy(x,y){
-  px(x-14,y-8,28,8,'#e33'); px(x-14,y-12,18,5,'#fff'); // body + cab
-  px(x-10,y,5,5,'#222'); px(x+6,y,5,5,'#222');        // wheels
-  ctx.fillStyle='#fff'; ctx.font='7px monospace'; ctx.textAlign='left'; ctx.fillText('LIFEGUARD',x-13,y-13);
+  px(x-16,y-8,32,8,'#e33'); px(x-14,y-13,20,6,'#fff'); px(x-11,y,5,5,'#222'); px(x+7,y,5,5,'#222');
+  ctx.fillStyle='#e33'; ctx.font='7px monospace'; ctx.textAlign='left'; ctx.fillText('LIFEGUARD',x-14,y-15);
 }
 
-function drawWaterScene(){
-  const w=water;
-  drawPalm(30,H-6); drawPalm(W-30,H-6);
-  // waves
+function drawWater(){
+  const w=water; drawPalm(30,H-6); drawPalm(W-30,H-6);
+  // waves (swell lines)
   for(const wv of w.waves){
-    const col = wv.messy? '#cfe9ef' : C.foam;
-    px(wv.x-14,wv.y-6,30,4,col);
-    px(wv.x-10,wv.y-2,22,6, wv.messy?'#7fb4c4':C.sea2);
-    if(wv.messy){ px(wv.x-14,wv.y-9,10,3,'#fff'); px(wv.x+2,wv.y-9,10,3,'#fff'); }
+    const col=wv.messy?'#bfe4ec':C.foam, body=wv.messy?'#7fb4c4':C.sea3;
+    px(wv.x-wv.len/2,wv.y-1,wv.len,5,body);
+    px(wv.x-wv.len/2,wv.y-3,wv.len,2,col);
+    if(wv.messy){ for(let i=-wv.len/2;i<wv.len/2;i+=12) px(wv.x+i,wv.y-6,6,3,'#fff'); }
+    if(w.surfing&&w.cur===wv){ px(wv.x-wv.len/2,wv.y+3,wv.len,2,'#9fe'); } // lit-up face
   }
-  // shark
-  if(w.shark){ drawShark(w.shark.x,w.shark.y); }
-  // huis
-  for(const h of w.huis){ drawHui(h.x,h.y); }
-  // laird
-  if(w.laird){ drawBoard(w.laird.x,w.laird.y,C.boardB,-1,frame); drawDude(w.laird.x,w.laird.y-14,C.skin,'#111',-1,'paddle',frame);
-    px(w.laird.x-10,w.laird.y-30,22,4,'#111'); }
+  if(w.shark) drawShark(w.shark.x,w.shark.y);
+  for(const h of w.huis) drawHui(h.x,h.y);
+  if(w.laird){ drawBoard(w.laird.x,w.laird.y+6,C.sea1,-1); drawDude(w.laird.x,w.laird.y-8,C.skin,'#111',-1,'paddle',frame);
+    px(w.laird.x-12,w.laird.y-26,26,4,'#111'); ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
+    ctx.fillText('LAIRD',w.laird.x,w.laird.y-29); ctx.textAlign='left'; }
   // player
-  if(player.downT>0){ player.downT--; drawDude(player.x,player.y,C.skin,player.board,player.facing,'down',frame); }
-  else {
-    drawBoard(player.x,player.y+6,player.board,player.facing,frame);
-    drawDude(player.x,player.y-8,C.skin,player.board, player.facing, w.surfing?'surf':'paddle', frame);
-    if(w.surfing){ px(player.x-16,player.y-26,32,4,'#003'); ctx.fillStyle=C.good; ctx.font='8px monospace'; ctx.textAlign='center'; ctx.fillText('SHREDDIN',player.x,player.y-27); ctx.textAlign='left'; }
-  }
-  if(player.injured){ px(player.x-3,player.y-26,6,3,C.bad); }
+  if(player.downT>0){ drawDude(player.x,player.y,C.skin,player.board,player.facing,'down',frame); }
+  else { drawBoard(player.x,player.y+7,player.board,player.facing);
+    drawDude(player.x,player.y-8,C.skin,player.board,player.facing,w.surfing?'surf':'paddle',frame);
+    if(w.surfing){ px(player.x-18,player.y-30,36,4,'#003'); ctx.fillStyle=C.good; ctx.font='8px monospace'; ctx.textAlign='center';
+      ctx.fillText('SHREDDIN',player.x,player.y-31); ctx.textAlign='left'; } }
+  if(player.injured) px(player.x-3,player.y-28,6,3,C.bad);
 }
-function drawShark(x,y){
-  px(x-14,y-3,26,7,C.shark); px(x-16,y,4,4,C.shark); // body+tail
-  px(x-14,y+2,22,3,C.sharkBelly);
-  px(x-2,y-9,5,6,C.shark);                           // fin
-  px(x+10,y-2,4,2,'#222');                           // snout
-}
-function drawHui(x,y){
-  drawBoard(x,y+6,'#222',-1,frame);
-  drawDude(x,y-8,C.huiSkin,C.hui,-1,'paddle',frame);
-  px(x-8,y-24,16,4,'#111'); ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
-  ctx.fillText('HUI',x,y-21); ctx.textAlign='left';
-}
+function drawShark(x,y){ px(x-14,y-3,26,7,C.shark); px(x-17,y-1,4,4,C.shark); px(x-14,y+2,22,3,C.sharkBelly);
+  px(x-2,y-10,5,7,C.shark); px(x+10,y-2,4,2,'#222'); }
+function drawHui(x,y){ drawBoard(x,y+6,'#222',-1); drawDude(x,y-8,C.huiSkin,C.hui,-1,'paddle',frame);
+  px(x-9,y-26,18,4,'#111'); ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
+  ctx.fillText('HUI',x,y-29); ctx.textAlign='left'; }
 
-/* HUD */
 function drawHUD(){
-  ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fillRect(0,0,W,16);
-  ctx.font='bold 11px "Courier New", monospace'; ctx.textAlign='left';
-  ctx.fillStyle=C.gold; ctx.fillText('SCORE '+score, 6, 12);
-  ctx.textAlign='right'; ctx.fillStyle=C.good; ctx.fillText('BEST '+high, W-6, 12);
-  ctx.textAlign='center'; ctx.fillStyle=C.txt;
-  ctx.fillText(state==='beach'?'🏖 BEACH':'🌊 LINEUP', W/2, 12);
-  // injured indicator
-  if(player.injured){ ctx.fillStyle=C.bad; ctx.textAlign='center'; ctx.fillText('🩹 HURT — heal at Chandler', W/2, 28); }
-  // floating score
-  if(flashT>0 && flash){ ctx.fillStyle=flash.col; ctx.font='bold 11px monospace'; ctx.textAlign='center';
-    ctx.fillText(flash.txt, flash.x, flash.y); }
+  px(0,0,W,16,'#00000059');
+  ctx.font='bold 11px "Courier New",monospace'; ctx.textAlign='left';
+  ctx.fillStyle=C.gold; ctx.fillText('SCORE '+score,6,12);
+  ctx.textAlign='right'; ctx.fillStyle=C.good; ctx.fillText('BEST '+high,W-6,12);
+  ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText(state==='beach'?'🏖 BEACH':'🌊 LINEUP',W/2,12);
+  if(state==='water'&&water.surfing){ ctx.fillStyle=C.purp; ctx.fillText('RIDE '+water.ride+(water.combo>1?('  x'+water.combo):''),W/2,28); }
+  if(player.injured){ ctx.fillStyle=C.bad; ctx.textAlign='center'; ctx.fillText('🩹 HURT — heal at Chandler on da beach',W/2, state==='water'?44:28); }
+  if(flashT>0&&flash){ ctx.fillStyle=flash.col; ctx.font='bold 11px monospace'; ctx.textAlign='center'; ctx.fillText(flash.txt,flash.x,flash.y); }
   ctx.textAlign='left';
 }
 function drawBanner(){
-  if(msgT<=0||!msg) return;
-  ctx.font='10px "Courier New", monospace'; ctx.textAlign='center';
-  const w = ctx.measureText(msg).width+16;
-  const a = Math.min(1, msgT/20);
-  ctx.globalAlpha=0.8*a; ctx.fillStyle='#0a0618'; ctx.fillRect(W/2-w/2, H-22, w, 15);
-  ctx.globalAlpha=a; ctx.fillStyle=C.good; ctx.fillText(msg, W/2, H-11);
+  if(msgT<=0||!msg)return;
+  ctx.font='10px "Courier New",monospace'; ctx.textAlign='center';
+  const w=ctx.measureText(msg).width+16, a=Math.min(1,msgT/20);
+  ctx.globalAlpha=.82*a; px(W/2-w/2,H-22,w,15,'#0a0618');
+  ctx.globalAlpha=a; ctx.fillStyle=C.good; ctx.fillText(msg,W/2,H-11);
   ctx.globalAlpha=1; ctx.textAlign='left';
 }
 
-/* ============================================================
-   LOOP
-   ============================================================ */
+/* ---- loop ---- */
 function loop(){ update(); ctx.clearRect(0,0,W,H); render(); requestAnimationFrame(loop); }
-player.downT=0;
 loop();
 </script>
 </body>
