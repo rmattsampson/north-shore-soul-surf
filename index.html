@@ -329,6 +329,7 @@ function update(){
   if(msgT>0)msgT--; if(flashT>0){ flashT--; flash.y-=0.4; }
   if(consume('mute')){ muted=!muted; setMsg(muted?"🔇 muted":"🔊 sound on",60); }
   if(beachBuilt||state==='beach'||state==='water') tickWaves();  // swell keeps rolling in every scene
+  if(beachBuilt) tickBuggy();  // lifeguard ATV keeps driving even while you surf
   if(state==='splash'){ if(consume('enter')){ state='help'; beep(660,.1);} else if(consume('space')){ enterBeach(); } return; }
   if(state==='help'){ if(consume('enter')||consume('space')){ enterBeach(); } return; }
   if(state==='gameover'){ if(consume('enter')||consume('space')){ score=0; state='splash'; } return; }
@@ -337,9 +338,8 @@ function update(){
 
 function updBeach(){
   const b=beach, sp=1.5;
-  if(player.knockT>0){            // knocked out by the ATV — no control, but the beach keeps going
+  if(player.knockT>0){            // knocked out by the ATV — no control (buggy still rolls via tickBuggy)
     player.knockT--;
-    if(b.buggy){ b.buggy.x+=1.4; if(b.buggy.x>W+30){ b.buggy=null; b.buggyT=ri(380,760); } }
     return;
   }
   if(keys.left){ player.x-=sp; player.facing=-1; }
@@ -371,10 +371,16 @@ function updBeach(){
     else b.photoT=ri(260,520);   // keep him off the beach, try again later
   }
   if(b.photographer){ b.photographer.t--; if(b.photographer.t<0){ b.photographer=null; b.photoT=ri(300,560); } }
+}
+
+// the lifeguard ATV drives the beach independent of the scene, so it keeps
+// rolling even while you're out in the water.
+function tickBuggy(){
+  const b=beach; if(!beachBuilt) return;
   if(b.buggyT>0)b.buggyT--; else if(!b.buggy){ b.buggy={x:-30}; }
   if(b.buggy){ b.buggy.x+=1.4; if(b.buggy.x>W+30){ b.buggy=null; b.buggyT=ri(380,760); }
-    // ATV hits you -> knocked out cold for ~3 seconds (just like real life, braddah)
-    else if(player.knockT===0 && near(player.x,player.y,b.buggy.x,SHORE+16,16)){
+    // ATV hits you -> knocked out ~3s, but only while you're ON the beach
+    else if(state==='beach' && player.knockT===0 && near(player.x,player.y,b.buggy.x,SHORE+16,16)){
       player.knockT=180; beep(90,.4,'sawtooth',.06);
       setMsg("💥 LIFEGUARD ATV wen' run you ovah! Out cold fo' 3 seconds...",180); } }
 }
