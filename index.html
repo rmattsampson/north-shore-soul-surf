@@ -283,7 +283,8 @@ function floatScore(txt,x,y,col){ flash={txt,x,y,col:col||C.gold}; flashT=70; }
 
 const player={ x:W/2, y:0, facing:1, board:C.good, injured:0, recover:0, downT:0, invuln:0, trickT:0, trickKind:'', knockT:0 };
 
-let beach={}, water={};
+let beach={}, water={ waves:[], huis:[], laird:null, shark:null, surfing:false, cur:null, spray:[],
+  ride:0, combo:0, waveT:30, sharkT:9999, huiT:9999, lairdT:9999, style:0 };
 let beachBuilt=false;
 
 function buildBeach(){
@@ -302,9 +303,22 @@ function enterBeach(reason){
 function enterWater(){
   if(player.injured){ setMsg("You stay hurt, cuz — go find Chandler fo' heal!",150); return; }
   state='water'; player.x=W*0.28; player.y=SEABOT-14; player.facing=1; player.downT=0;
-  water={ waves:[], huis:[], laird:null, shark:null, surfing:false, cur:null, spray:[],
-    ride:0, combo:0, waveT:30, sharkT:ri(620,1100), huiT:ri(260,480), lairdT:ri(360,700), style:0 };
+  water.surfing=false; water.cur=null; water.ride=0; water.combo=0; water.style=0; water.spray=[];
+  water.huis=[]; water.laird=null; water.shark=null;
+  water.sharkT=ri(620,1100); water.huiT=ri(260,480); water.lairdT=ri(360,700);
   setMsg("Paddle out (↑). Line up wit' a swell → SPACE drop-in",160);
+}
+
+// waves live independent of the scene so the swell keeps rolling even on the beach
+function tickWaves(){
+  const w=water;
+  if(w.waveT>0)w.waveT--; else {
+    const messy=Math.random()<0.26;
+    w.waves.push({ y:SEATOP+10, x:rnd(60,W-60), len:rnd(70,150), spd:rnd(0.16,0.32), messy, rode:false });
+    w.waveT=ri(90,180);
+  }
+  for(const wv of w.waves) wv.y+=wv.spd*(w.surfing&&w.cur===wv?1.4:1);
+  w.waves=w.waves.filter(wv=>wv.y<SEABOT+8);
 }
 
 /* ============================================================
@@ -314,6 +328,7 @@ function update(){
   frame++; seaPhase++; music();
   if(msgT>0)msgT--; if(flashT>0){ flashT--; flash.y-=0.4; }
   if(consume('mute')){ muted=!muted; setMsg(muted?"🔇 muted":"🔊 sound on",60); }
+  if(beachBuilt||state==='beach'||state==='water') tickWaves();  // swell keeps rolling in every scene
   if(state==='splash'){ if(consume('enter')){ state='help'; beep(660,.1);} else if(consume('space')){ enterBeach(); } return; }
   if(state==='help'){ if(consume('enter')||consume('space')){ enterBeach(); } return; }
   if(state==='gameover'){ if(consume('enter')||consume('space')){ score=0; state='splash'; } return; }
@@ -369,14 +384,6 @@ function photographerOut(){ return beach && beach.photographer; }
 function updWater(){
   const w=water;
   // spawn swell lines moving toward shore (y grows downward = toward beach)
-  if(w.waveT>0)w.waveT--; else {
-    const messy=Math.random()<0.26;
-    w.waves.push({ y:SEATOP+10, x:rnd(60,W-60), len:rnd(70,150), spd:rnd(0.16,0.32), messy, rode:false });
-    w.waveT=ri(90,180);
-  }
-  for(const wv of w.waves) wv.y+=wv.spd*(w.surfing&&w.cur===wv?1.4:1);
-  w.waves=w.waves.filter(wv=>wv.y<SEABOT+8);
-
   if(player.invuln>0) player.invuln--;
   if(player.trickT>0) player.trickT--;
   for(const s of w.spray){ s.x+=s.vx; s.y+=s.vy; s.vy+=0.22; s.life--; }
@@ -539,7 +546,8 @@ function drawHelp(){
     'HUI knock you off. messy wave close you out.',
     'LAIRD snakes your wave (no damage, just annoying).',
     '🦈 shark messes you up → beach → Chandler heals you.',
-    'walk da beach fo\' random stuff + lil points.' ];
+    'walk da beach fo\' random stuff + lil points.',
+    'your board plants in da sand when you STOP walking.' ];
   let y=92; for(const l of L){ ctx.fillText(l,64,y); y+=16; }
   ctx.textAlign='center'; ctx.fillStyle=(frame%60<40)?C.good:'#497';
   ctx.fillText('PRESS ENTER TO PADDLE OUT',W/2,H-58); ctx.textAlign='left';
@@ -563,18 +571,19 @@ function drawBeachBoard(x,y,facing,moving){
   if(moving){
     // carried upright, tucked under the arm, leaning with you
     const bx=x+fx*9;
-    px(bx-2,y-26,4,30,player.board); px(bx-2,y-26,4,1,'#fff');
-    px(bx-2,y-26,4,3,shade(player.board,30)); // nose
+    px(bx-2,y-20,4,30,player.board); px(bx-2,y-20,4,1,'#fff');
+    px(bx-2,y-20,4,3,shade(player.board,30)); // nose
   } else {
     // planted in the sand, nose up, beside you
     const bx=x+fx*12;
-    px(bx-2,y-30,4,34,player.board); px(bx-1,y-30,1,34,'#fff');
-    px(bx-3,y-31,6,4,shade(player.board,30));   // rounded nose
-    px(bx-3,y+2,6,3,C.sandWet);                 // little sand divot at the tail
+    px(bx-2,y-24,4,34,player.board); px(bx-1,y-24,1,34,'#fff');
+    px(bx-3,y-25,6,4,shade(player.board,30));   // rounded nose
+    px(bx-3,y+8,6,3,C.sandWet);                 // little sand divot at the tail
   }
 }
 function drawBeach(){
   drawBeachProps();
+  drawWaves();   // swell keeps rolling in while you're on the sand
   drawPalm(30,H-6); drawPalm(W-30,H-6);
   if(player.knockT>0){
     drawBeachBoard(player.x,player.y,player.facing,false);
@@ -628,13 +637,8 @@ function drawBuggy(x,y){
   ctx.fillText('LIFEGUARD',x,y-23); ctx.textAlign='left';
 }
 
-function drawWater(){
+function drawWaves(){
   const w=water;
-  // the beach strip stays alive while you surf: Chandler + props + photographer + buggy
-  // are the SAME persistent beach, drawn on the shore at the bottom of the water view.
-  drawBeachProps();
-  drawPalm(30,H-6); drawPalm(W-30,H-6);
-  // waves — curved crest with a breaking foam lip + shaded face
   for(const wv of w.waves){
     const half=wv.len/2, x0=wv.x-half;
     const riding=w.surfing&&w.cur===wv;
@@ -657,6 +661,15 @@ function drawWater(){
       px(x0,wv.y+5,wv.len,2,'#aef'); px(x0,wv.y+7,wv.len,1,'#6cf');
     }
   }
+}
+function drawWater(){
+  const w=water;
+  // the beach strip stays alive while you surf: Chandler + props + photographer + buggy
+  // are the SAME persistent beach, drawn on the shore at the bottom of the water view.
+  drawBeachProps();
+  drawPalm(30,H-6); drawPalm(W-30,H-6);
+  // waves — curved crest with a breaking foam lip + shaded face
+  drawWaves();
   if(w.shark) drawShark(w.shark.x,w.shark.y);
   for(const h of w.huis) drawHui(h.x,h.y,h.surf);
   if(w.laird){ const L=w.laird; drawBoard(L.x,L.y+6,C.sea1,-1); drawDude(L.x,L.y-8,C.skin,'#111',-1,L.surf?'surf':'paddle',frame);
