@@ -372,7 +372,7 @@ let beachBuilt=false;
 
 function buildBeach(){
   beach={ photographer:null, buggy:null, chandler:{x:58,y:H-54}, local:null, tourist:null,
-    props:[], photoT:ri(160,340), buggyT:ri(260,560), chatCool:60, localT:ri(2400,3600), touristT:ri(300,700) };
+    props:[], photoT:ri(160,340), buggyT:ri(260,560), chatCool:60, localT:ri(2400,3600), touristT:ri(400,900) };
   const kinds=['slipper','honu','cooler'];
   for(let i=0;i<3;i++) beach.props.push({k:kinds[i],x:rnd(90,W-90),y:rnd(H-70,H-24)});
   beachBuilt=true;
@@ -438,7 +438,7 @@ function update(){
   if(beachBuilt||state==='beach'||state==='water') tickWaves();  // swell keeps rolling in every scene
   if(beachBuilt) tickBuggy();  // lifeguard ATV keeps driving even while you surf
   if(beachBuilt) tickLocal();  // a local strolls the beach ~1/min and drops stuff
-  if(beachBuilt) tickTourist();  // rare lost-tourist parody walk-on
+  if(beachBuilt) tickTourist();  // a lone original tourist wanders by
   if(state==='splash'){ if(consume('enter')){ state='help'; beep(660,.1);} else if(consume('space')){ enterBeach(); } return; }
   if(state==='help'){ if(consume('enter')||consume('space')){ enterBeach(); } return; }
   if(state==='gameover'){ if(consume('enter')||consume('space')){ score=0; state='splash'; } return; }
@@ -501,26 +501,18 @@ function tickBuggy(){
 
 function photographerOut(){ return beach && beach.photographer; }
 
-// Original parody walk-ons (NOT the real copyrighted characters): a leisure-suit guy,
-// a space-janitor in a jumpsuit, a cartoon knight. One at a time, rare & intermittent.
-const TOURISTS = [
-  { kind:'suit',   line:"'I musta took one wrong turn, brah.'" },
-  { kind:'space',  line:"'This is NOT the space station...'" },
-  { kind:'knight', line:"'Hark! Wrong quest entirely.'" }
-];
+// a lone beach tourist (original character) occasionally strolls across
 function tickTourist(){
   const b=beach; if(!beachBuilt) return;
   if(!b.tourist){
     if(b.touristT>0){ b.touristT--; return; }
-    // timer elapsed → a walk-on definitely appears (no rare dice roll)
-    const t=TOURISTS[ri(0,TOURISTS.length-1)];
     const fromLeft=Math.random()<0.5;
-    b.tourist={ kind:t.kind, line:t.line, x:fromLeft?-20:W+20, dir:fromLeft?1:-1,
+    b.tourist={ line:"'I musta took one wrong turn, brah.'", x:fromLeft?-20:W+20, dir:fromLeft?1:-1,
       y:SHORE+ri(20,H-SHORE-18), said:false };
   } else {
     const T=b.tourist; T.x+=0.8*T.dir;
     if(!T.said && T.x>W*0.35 && T.x<W*0.65){ T.said=true; if(state==='beach') setMsg(T.line,140); beep(440,.07,'square'); }
-    if(T.x<-30||T.x>W+30){ b.tourist=null; b.touristT=ri(1200,2400); }  // next in ~20-40s
+    if(T.x<-30||T.x>W+30){ b.tourist=null; b.touristT=ri(1200,2400); }
   }
 }
 function drawTourist(T){
@@ -528,34 +520,14 @@ function drawTourist(T){
   const fx=T.dir<0?-1:1;
   ctx.save(); ctx.translate(T.x|0,T.y|0); ctx.scale(fx,1);
   const step=(frame>>2)%2?2:0;
-  if(T.kind==='suit'){
-    // lounge guy: open pastel jacket, bare chest, gold chain, shades — my own look
-    px(-4,7,3,6-step,'#2a2a3a'); px(1,7,3,6+step,'#2a2a3a'); px(-5,13,5,2,'#111'); px(1,13,5,2,'#111'); // slacks + loafers
-    px(-6,-4,12,11,'#e8e0c8'); px(-6,-4,4,11,'#fff'); px(2,-4,4,11,'#cfc8b0');  // jacket w/ hi+shadow
-    px(-2,-3,4,9,'#c88a4e'); px(-2,-3,4,2,shade('#c88a4e',24));                 // open chest
-    px(-1,1,2,2,'#ffd23f'); px(-1,3,2,1,'#ffe88a');                             // gold chain
-    px(-8,-2,3,7,'#e8e0c8'); px(5,-2,3,7,'#e8e0c8');                            // arms
-    px(-3,-12,7,8,'#c88a4e'); px(-3,-12,3,8,shade('#c88a4e',22)); px(2,-12,2,8,shade('#c88a4e',-26));
-    px(-3,-13,7,3,'#4a3418'); px(-4,-9,9,2,'#111'); px(5,-9,2,2,'#222');        // hair + shades
-  } else if(T.kind==='space'){
-    // lost spaceman: magenta-shouldered grey jumpsuit, collar, belt, laser-pointer
-    px(-4,7,3,6-step,'#b8bcc4'); px(1,7,3,6+step,'#b8bcc4'); px(-5,13,5,2,'#111'); px(1,13,5,2,'#111'); // legs + boots
-    px(-6,-4,12,11,'#aeb3bb'); px(-6,-4,12,2,'#d6dadf');                        // torso + lit collar
-    px(-7,-4,4,7,'#c23bd0'); px(-7,-4,4,2,'#e87cf0');                           // magenta shoulder/arm (hi)
-    px(5,-4,3,7,'#aeb3bb');                                                     // other arm
-    px(-6,3,12,2,'#c23bd0'); px(-1,3,2,2,'#ffd23f');                            // belt + buckle
-    px(-3,-12,7,8,'#e07a5a'); px(-3,-12,3,8,shade('#e07a5a',22)); px(2,-12,2,8,shade('#e07a5a',-24));
-    px(-3,-13,7,3,'#7a3a1a');                                                   // hair
-    px(8,-12,2,12,'#ccc'); px(7,-13,4,2,'#ff5a5a');                             // little laser-pointer, held up
-  } else { // cartoon knight in plate, visor, lance + pennant
-    px(-4,7,3,6-step,'#8890a0'); px(1,7,3,6+step,'#8890a0'); px(-5,13,5,2,'#444'); px(1,13,5,2,'#444'); // greaves + sabatons
-    px(-6,-4,12,11,'#aab2c2'); px(-6,-4,4,11,'#d2d8e4'); px(2,-4,4,11,'#8890a0'); // breastplate hi+shadow
-    px(-6,-5,12,2,'#c9d0dc');                                                   // gorget
-    px(-8,-3,3,7,'#9aa2b2'); px(5,-3,3,7,'#9aa2b2');                            // pauldrons/arms
-    px(-3,-13,7,8,'#b6bece'); px(-3,-13,3,8,'#d2d8e4'); px(2,-13,2,8,'#8890a0'); // helm hi+shadow
-    px(-3,-10,7,2,'#1a2030');                                                   // visor slit
-    px(7,-22,2,22,'#7a4a22'); px(6,-24,6,5,'#c33'); px(6,-24,6,2,'#e85a5a');    // lance + pennant hi
-  }
+  // lounge tourist: loud aloha shirt, shorts, sun hat, camera round the neck — all original
+  px(-4,7,3,6-step,'#c8bfa0'); px(1,7,3,6+step,'#c8bfa0'); px(-5,13,5,2,'#6a4a2a'); px(1,13,5,2,'#6a4a2a'); // shorts + sandals
+  px(-6,-4,12,11,'#1f9e6a'); px(-6,-4,4,11,'#2fc488'); px(2,-4,4,11,'#157a50');  // aloha shirt hi+shadow
+  px(-5,-2,3,2,'#ffd23f'); px(1,0,3,2,'#ff6b6b'); px(-2,2,3,2,'#ffd23f');        // loud shirt pattern
+  px(-8,-2,3,7,'#1f9e6a'); px(5,-2,3,7,'#1f9e6a');                               // sleeves/arms
+  px(-2,-1,4,2,'#111'); px(-1,0,2,3,'#333');                                     // camera on the chest
+  px(-3,-12,7,8,'#d49a5e'); px(-3,-12,3,8,shade('#d49a5e',22)); px(2,-12,2,8,shade('#d49a5e',-24)); // head 3-tone
+  px(-5,-13,11,3,'#efe4c0'); px(-5,-13,11,1,'#fff');                             // sun hat brim + lit top
   ctx.restore();
 }
 
@@ -840,7 +812,11 @@ function drawProp(p){
 function drawPhotog(x,y){
   px(x-6,y,2,16,'#333'); px(x+4,y,2,16,'#333'); px(x-1,y,2,14,'#333');
   px(x-9,y-9,18,8,'#222'); px(x+7,y-7,5,4,'#4ad');
-  drawDude(x-16,y-2,C.skin,'#444',1,'stand',frame);
+  drawDude(x-16,y-2,C.skin,'#2a3a6a',1,'stand',frame);   // blue board shorts
+  // give da camera guy a photographer's vest over his torso
+  const tx=x-16;
+  px(tx-5,y-6,10,8,'#3a7a4a'); px(tx-5,y-6,3,8,'#4a9a5c'); px(tx+2,y-6,3,8,'#2a5a38'); // vest 3-tone
+  px(tx-3,y-4,2,2,'#1a3a24'); px(tx+1,y-1,2,2,'#1a3a24');  // vest pockets
   px(x-28,y-22,34,4,'#111'); ctx.fillStyle=C.gold; ctx.font='7px monospace'; ctx.textAlign='center';
   ctx.fillText('📷 2x WAVES',x-11,y-25); ctx.textAlign='left';
 }
