@@ -507,11 +507,9 @@ function tickTourist(){
   if(!b.tourist){
     if(b.touristT>0){ b.touristT--; return; }
     const fromLeft=Math.random()<0.5;
-    b.tourist={ line:"'I musta took one wrong turn, brah.'", x:fromLeft?-20:W+20, dir:fromLeft?1:-1,
-      y:SHORE+ri(20,H-SHORE-18), said:false };
+    b.tourist={ x:fromLeft?-20:W+20, dir:fromLeft?1:-1, y:SHORE+ri(20,H-SHORE-18) };
   } else {
-    const T=b.tourist; T.x+=0.8*T.dir;
-    if(!T.said && T.x>W*0.35 && T.x<W*0.65){ T.said=true; if(state==='beach') setMsg(T.line,140); beep(440,.07,'square'); }
+    const T=b.tourist; T.x+=0.8*T.dir;   // just strolls across, no banner
     if(T.x<-30||T.x>W+30){ b.tourist=null; b.touristT=ri(1200,2400); }
   }
 }
@@ -541,7 +539,6 @@ function tickLocal(){
     b.local={ x: fromLeft?-20:W+20, dir: fromLeft?1:-1,
       y: SHORE + ri(24, H-SHORE-20),
       drops: ri(1,2), nextDrop: ri(40,110) };
-    if(state==='beach') setMsg("One local strolling down da beach...",110);
   } else {
     const L=b.local; L.x += 0.9*L.dir;
     // drop a thing as they walk (sandal or cooler), becomes a pickup — max 3 of each kind
