@@ -129,25 +129,28 @@ function drawDude(x,y,skin,trunks,facing,pose,t){
   const stride=pose==='walk'?Math.sin(t*0.35)*2:0;
 
   if(pose==='surf'||pose==='cut'||pose==='lip'||pose==='barrel'){
+    const skinH=shade(skin,22), rim='#ffcf8a';   // highlight tone + sunset rim-light
     // crouch amount + lean per trick
     let crouch=2, leanArmUp=false, tuck=false, lean=0;
     if(pose==='cut'){ crouch=4; lean=-3; }          // low carve, leaning back
     else if(pose==='lip'){ crouch=0; leanArmUp=true; } // standing tall, arm to the sky
     else if(pose==='barrel'){ crouch=6; tuck=true; }   // deep tuck
-    // legs (bent, wide stance)
-    px(-6,6,4,6,skin); px(-6,9,4,3,skinD);
-    px(2,6,4,6,skin);  px(2,9,4,3,skinD);
+    // legs (bent, wide stance) — 3-tone
+    px(-6,6,4,6,skin); px(-6,6,2,6,skinH); px(-6,9,4,3,skinD);
+    px(2,6,4,6,skin);  px(2,6,2,6,skinH);  px(2,9,4,3,skinD);
     px(-8,11,7,3,'#1b2a33'); px(2,11,7,3,'#1b2a33');   // feet planted
-    // trunks w/ waistband + side stripe
-    px(-4+lean,3-crouch,9,4,trunks); px(-4+lean,3-crouch,9,1,shade(trunks,30)); px(3+lean,3-crouch,1,4,shade(trunks,-30));
-    // torso + chest shade
-    px(-4+lean,-4-crouch,9,8,skin); px(1+lean,-4-crouch,4,8,skinD);
-    // arms per pose
-    if(tuck){ px(-9+lean,-1-crouch,5,3,skin); px(5+lean,-1-crouch,5,3,skin); }     // tucked in tight
-    else if(leanArmUp){ px(-10+lean,-10-crouch,4,8,skin); px(5+lean,-3-crouch,5,3,skin); } // one arm up
-    else { px(-11+lean,-3-crouch,6,3,skin); px(5+lean,-6-crouch,6,3,skin); }       // arms out, styling
-    // head + hair + face
-    px(-3+lean,-11-crouch,7,7,skin); px(1+lean,-11-crouch,3,7,skinD);
+    // trunks w/ waistband highlight + shadow stripe
+    px(-4+lean,3-crouch,9,4,trunks); px(-4+lean,3-crouch,9,1,shade(trunks,36)); px(3+lean,3-crouch,1,4,shade(trunks,-34));
+    // torso: shadow core, lit left, sunset rim on the sun side (right in local space)
+    px(-4+lean,-4-crouch,9,8,skin); px(-4+lean,-4-crouch,3,8,skinH); px(1+lean,-4-crouch,4,8,skinD);
+    px(5+lean,-4-crouch,1,8,rim);
+    // arms per pose (3-tone)
+    if(tuck){ px(-9+lean,-1-crouch,5,3,skin); px(5+lean,-1-crouch,5,3,skin); px(5+lean,-1-crouch,5,1,rim); }
+    else if(leanArmUp){ px(-10+lean,-10-crouch,4,8,skin); px(-10+lean,-10-crouch,2,8,skinH); px(5+lean,-3-crouch,5,3,skin); }
+    else { px(-11+lean,-3-crouch,6,3,skin); px(-11+lean,-3-crouch,6,1,skinH); px(5+lean,-6-crouch,6,3,skin); px(5+lean,-6-crouch,6,1,rim); }
+    // head: lit crown, shadow jaw, rim on the sun side
+    px(-3+lean,-11-crouch,7,7,skin); px(-3+lean,-11-crouch,3,7,skinH); px(1+lean,-11-crouch,3,7,skinD);
+    px(4+lean,-11-crouch,1,7,rim);
     px(-3+lean,-12-crouch,7,3,C.hair); px(-3+lean,-12-crouch,2,4,C.hair);
     ctx.restore(); return;
   }
@@ -169,13 +172,14 @@ function drawDude(x,y,skin,trunks,facing,pose,t){
     if(strokeF>0.6) px(13,2,3,2,C.foam);
     ctx.restore(); return;
   }
-  // stand / walk
+  // stand / walk — 3-tone with sunset rim
+  const skinH2=shade(skin,22), rim2='#ffcf8a';
   px(-3,6,3,7+stride,skin); px(1,6,3,7-stride,skin);
   px(-3,13,4,2,'#1b2a33'); px(1,13,4,2,'#1b2a33');
-  px(-4,3,9,4,trunks); px(-4,3,9,1,shade(trunks,30));
-  px(-4,-4,9,8,skin); px(1,-4,4,8,skinD);
-  px(-6,-3,3,6,skin); px(4,-3,3,6,skin);
-  px(-3,-11,7,7,skin); px(1,-11,3,7,skinD); px(-3,-12,7,3,C.hair);
+  px(-4,3,9,4,trunks); px(-4,3,9,1,shade(trunks,36));
+  px(-4,-4,9,8,skin); px(-4,-4,3,8,skinH2); px(1,-4,4,8,skinD); px(5,-4,1,8,rim2);
+  px(-6,-3,3,6,skin); px(4,-3,3,6,skin); px(5,-3,2,6,rim2);
+  px(-3,-11,7,7,skin); px(-3,-11,3,7,skinH2); px(1,-11,3,7,skinD); px(4,-11,1,7,rim2); px(-3,-12,7,3,C.hair);
   ctx.restore();
 }
 function shade(hex,amt){ // lighten(+)/darken(-) a #rrggbb
@@ -186,7 +190,8 @@ function shade(hex,amt){ // lighten(+)/darken(-) a #rrggbb
 }
 function drawBoard(x,y,col,facing){
   const fx=facing<0?-1:1; ctx.save(); ctx.translate(x|0,y|0); ctx.scale(fx,1);
-  px(-12,0,26,4,col); px(-12,0,26,1,'#fff'); px(11,1,5,3,col); ctx.restore();
+  px(-12,0,26,4,col); px(-12,0,26,1,shade(col,34)); px(-12,3,26,1,shade(col,-34)); // deck hi + rail shadow
+  px(-12,1,26,1,'#fff'); px(11,1,5,3,col); px(13,1,2,2,shade(col,34)); ctx.restore();
 }
 
 /* ============================================================
@@ -274,13 +279,17 @@ function drawSeaBands(){
     for(let x=(i*47)%90; x<W; x+=90){ px(x, yy+bob, 16, 1, lerpCol(C.sea3,C.foam,0.6)); }
   }
   ctx.restore();
-  // sun glitter ladder — brighter core with a soft translucent halo
+  // sun glitter path — scattered sparkles that fan WIDER toward shore (no solid tube)
   const sx=W*0.62;
-  ctx.save(); ctx.globalAlpha=0.35; px(sx-7,SEATOP,14,SEABOT-SEATOP,'#ffd98a'); ctx.restore();
-  for(let yy=SEATOP+2; yy<SEABOT; yy+=5){
-    const wob=Math.sin(yy*0.4 + frame*0.02)*3;
-    px(sx-4+wob, yy, 9, 2, '#ffd98a');
-    px(sx-1+wob, yy, 3, 2, C.sunCore);
+  for(let yy=SEATOP+2; yy<SEABOT; yy+=4){
+    const depth=(yy-SEATOP)/(SEABOT-SEATOP);     // 0 at horizon, 1 at shore
+    const spread=3 + depth*22;                   // fan out as it nears the beach
+    const n=1+Math.round(depth*3);
+    for(let k=0;k<n;k++){
+      const jx = (Math.sin(yy*0.7 + k*2.3 + frame*0.03)* spread);
+      const bright = (Math.sin(yy*1.3 + k + frame*0.08) > 0.1);
+      if(bright) px(sx + jx - 2, yy, 4, 2, k%2? C.sunCore : '#ffd98a');
+    }
   }
 }
 function drawSand(){
