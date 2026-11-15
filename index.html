@@ -298,7 +298,7 @@ function buildBeach(){
 function enterBeach(reason){
   if(!beachBuilt) buildBeach();          // beach persists; built once, never wiped
   state='beach'; player.x=W/2; player.y=H-40; player.facing=1; player.downT=0;
-  setMsg(reason||"PAU HANA — walk da beach. ↑ at da shoreline fo' paddle out",160);
+  setMsg(reason||"PAU HANA — walk da beach. STOP walking to plant your board. ↑ at da shoreline fo' paddle out",180);
 }
 function enterWater(){
   if(player.injured){ setMsg("You stay hurt, cuz — go find Chandler fo' heal!",150); return; }
@@ -437,8 +437,9 @@ function updWater(){
     } else {
       h.x+=h.vx; h.y+=h.vy;
       if(h.x<16||h.x>W-16)h.vx*=-1; if(h.y>SEABOT-6){ h.y=SEATOP+12; h.x=rnd(40,W-40); }
-      // sometimes da Hui catch a wave and surf it in
-      if(Math.random()<0.004){ const wv=w.waves.find(v=>!v.messy&&v!==w.cur&&Math.abs(v.y-h.y)<16&&Math.abs(v.x-h.x)<v.len/2); if(wv){ h.surf=true; h.wave=wv; } }
+      // reliably catch a clean wave whose crest is passing through the Hui's zone
+      const wv=w.waves.find(v=>!v.messy && v!==w.cur && Math.abs(v.y-h.y)<10 && h.x>v.x-v.len/2 && h.x<v.x+v.len/2);
+      if(wv && Math.random()<0.5){ h.surf=true; h.wave=wv; }
     }
     if(player.downT===0 && player.invuln===0 && near(player.x,player.y,h.x,h.y,15)){
       wipeout("Da Hui wen' knock you off! Respect da lineup.");
@@ -460,7 +461,8 @@ function updWater(){
       if(L.y>=SEABOT-6){ L.surf=false; L.wave=null; }
     } else {
       L.y+=0.22;
-      if(Math.random()<0.006){ const wv=w.waves.find(v=>!v.messy&&v!==w.cur&&Math.abs(v.y-L.y)<16&&Math.abs(v.x-L.x)<v.len/2); if(wv){ L.surf=true; L.wave=wv; setMsg("Laird droppin' in — 'Watch THIS!' 🙄",110); } }
+      const wv=w.waves.find(v=>!v.messy && v!==w.cur && Math.abs(v.y-L.y)<10 && L.x>v.x-v.len/2 && L.x<v.x+v.len/2);
+      if(wv && Math.random()<0.6){ L.surf=true; L.wave=wv; setMsg("Laird droppin' in — 'Watch THIS!' 🙄",110); }
     }
     if(near(player.x,player.y,L.x,L.y,15)&&w.surfing){
       setMsg("Laird SNAKED your wave! 'Did you see that one?!' — ugh.",110);
