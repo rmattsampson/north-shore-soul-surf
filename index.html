@@ -159,41 +159,80 @@ let seaPhase=0;
 function drawSky(){
   const b=[C.skyTop,C.s1,C.s2,C.s3,C.s4,C.s5], bh=18;
   for(let i=0;i<b.length;i++) px(0,i*bh,W,bh,b[i]);
-  const sx=W*0.62, sy=96;
-  px(sx-22,sy-22,44,44,C.sun); px(sx-14,sy-14,28,28,C.sunCore);
-  px(380,34,42,6,'#f3a6c0'); px(372,40,56,6,'#f3a6c0'); px(60,22,30,5,'#caa9d8');
-  const bw=(seaPhase*0.3)%40;
+  // sun — layered disc with a soft rim, sitting on the horizon
+  const sx=W*0.62, sy=100;
+  for(let r=24;r>=0;r-=4){
+    const shade = r>18?'#f7b25a' : r>12?C.sun : r>6?'#ffe6a0' : C.sunCore;
+    px(sx-r,sy-r,r*2,r*2,shade);
+  }
+  // soft stacked clouds (no hard edges)
+  cloud(392,34); cloud(60,24); cloud(300,30);
+  // birds, slow drift
+  const bw=(frame*0.12)%40;
   px(150-bw,54,4,2,'#2a1a2a'); px(154-bw,53,3,2,'#2a1a2a');
   px(300-bw*0.6,46,4,2,'#2a1a2a'); px(304-bw*0.6,47,3,2,'#2a1a2a');
 }
+function cloud(x,y){
+  px(x,y+4,46,5,'#f3a6c0'); px(x+6,y,34,5,'#f6b8cd'); px(x+2,y+8,42,3,'#e894b4');
+}
+function ridge(pts,col){ ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(pts[0][0],118);
+  for(const p of pts) ctx.lineTo(p[0],p[1]); ctx.lineTo(pts[pts.length-1][0],118); ctx.closePath(); ctx.fill(); }
 function drawMountains(){
-  ctx.fillStyle=C.mtnA; ctx.beginPath(); ctx.moveTo(0,118); ctx.lineTo(120,52); ctx.lineTo(210,118); ctx.closePath(); ctx.fill();
-  ctx.fillStyle=C.mtnB; ctx.beginPath(); ctx.moveTo(150,118); ctx.lineTo(250,70); ctx.lineTo(330,118); ctx.closePath(); ctx.fill();
+  // back ridge (purple), ragged stepped peaks
+  ridge([[0,96],[30,78],[55,88],[90,58],[130,80],[175,66],[220,92],[260,74],[300,96],[330,88]], C.mtnB);
+  // front ridge (green), taller on the left like the reference
+  ridge([[0,112],[26,86],[48,98],[78,60],[96,74],[120,52],[150,84],[200,104]], C.mtnA);
+  // a couple of ridge-shadow facets for depth
+  ctx.fillStyle='#24482f';
+  ctx.beginPath(); ctx.moveTo(120,52); ctx.lineTo(150,84); ctx.lineTo(120,84); ctx.closePath(); ctx.fill();
 }
 const SEATOP=118, SEABOT=250, SHORE=250;
 function drawSeaBands(){
-  px(0,SEATOP,W,SEABOT-SEATOP,C.seaDeep);
-  for(let i=0;i<13;i++){
-    const yy=SEATOP+6+i*10, off=((seaPhase*(0.5+i*0.09))%40);
-    const base=[C.sea1,C.sea2,C.sea3][i%3];
-    px(0,yy-3,W,7,base);
-    for(let x=-40+off;x<W;x+=40) px(x,yy,20,2,C.foam);
+  // still water: deep at the horizon, lighter toward shore (no sideways scroll)
+  const rows=Math.ceil((SEABOT-SEATOP)/4);
+  for(let i=0;i<rows;i++){
+    const yy=SEATOP+i*4, f=i/rows;
+    const col = f<0.33?C.seaDeep : f<0.6?C.sea1 : f<0.82?C.sea2 : C.sea3;
+    px(0,yy,W,4,col);
   }
+  // a few gentle, near-static chop glints that bob in place (no horizontal drift)
+  for(let i=0;i<10;i++){
+    const yy=SEATOP+12+i*12;
+    const bob=Math.sin(frame*0.03 + i)*1;
+    for(let x=(i*53)%80; x<W; x+=80){
+      px(x, yy+bob, 14, 1, C.foam);
+    }
+  }
+  // sun glitter ladder on the water (vertical, under the sun)
   const sx=W*0.62;
-  for(let yy=SEATOP+4;yy<SEABOT;yy+=6) px(sx-3+Math.sin(yy*0.5+seaPhase*0.1)*4,yy,6,2,'#ffd98a');
+  for(let yy=SEATOP+2; yy<SEABOT; yy+=5){
+    const wob=Math.sin(yy*0.4 + frame*0.02)*3;
+    px(sx-4+wob, yy, 9, 2, '#ffd98a');
+    px(sx-1+wob, yy, 3, 2, C.sunCore);
+  }
 }
 function drawSand(){
   px(0,SHORE,W,H-SHORE,C.sand);
-  px(0,SHORE-2,W,3,C.foam); px(0,SHORE+1,W,3,C.sandWet);
+  // beveled shoreline: bright foam lip, then a wet-sand band, then dry sand
+  px(0,SHORE-3,W,3,C.foam);
+  px(0,SHORE,W,2,'#fff');
+  px(0,SHORE+2,W,4,C.sandWet);
+  // scalloped foam edge
+  for(let x=0;x<W;x+=14) px(x+3,SHORE-4,8,2,C.foam);
   ctx.fillStyle=C.sandDot;
-  for(let i=0;i<150;i++){ const x=(i*53)%W, y=SHORE+8+((i*31)%(H-SHORE-10)); ctx.fillRect(x,y,2,2); }
+  for(let i=0;i<150;i++){ const x=(i*53)%W, y=SHORE+10+((i*31)%(H-SHORE-12)); ctx.fillRect(x,y,2,2); }
 }
 function drawPalm(x,by){
-  px(x,by-46,6,46,'#7a4a22'); for(let i=0;i<46;i+=6) px(x+(i%12?1:-1),by-46+i,6,3,'#6a3f1d');
-  const g='#2f9e52',g2='#277f43';
-  px(x-20,by-52,22,5,g); px(x-18,by-48,18,5,g2);
-  px(x+4,by-52,22,5,g);  px(x+8,by-48,18,5,g2);
-  px(x-12,by-58,30,5,g); px(x-10,by-62,24,5,g2);
+  // curved trunk
+  for(let i=0;i<46;i+=4){ const sway=Math.sin(i*0.12)*3; px(x+sway,by-46+i,6,4,'#7a4a22'); px(x+sway,by-46+i,2,4,'#8a5a2a'); }
+  const tx=x+Math.sin(0)*3; // top
+  const g='#2f9e52',g2='#277f43',g3='#39b863';
+  // drooping fronds
+  px(tx-22,by-50,24,5,g2); px(tx-20,by-46,18,4,g);
+  px(tx+4,by-50,24,5,g2);  px(tx+8,by-46,18,4,g);
+  px(tx-14,by-57,32,5,g3); px(tx-11,by-62,26,5,g);
+  px(tx-4,by-66,12,5,g3);
+  px(tx-2,by-50,8,6,'#6a4a2a'); // coconuts
 }
 
 /* ============================================================
@@ -208,13 +247,19 @@ function floatScore(txt,x,y,col){ flash={txt,x,y,col:col||C.gold}; flashT=70; }
 const player={ x:W/2, y:0, facing:1, board:C.good, injured:0, recover:0, downT:0 };
 
 let beach={}, water={};
+let beachBuilt=false;
 
-function enterBeach(reason){
-  state='beach'; player.x=W/2; player.y=H-40; player.facing=1; player.downT=0;
+function buildBeach(){
   beach={ photographer:null, buggy:null, chandler:{x:58,y:H-54},
     props:[], photoT:ri(160,340), buggyT:ri(260,560) };
   const kinds=['slipper','honu','cooler'];
   for(let i=0;i<3;i++) beach.props.push({k:kinds[i],x:rnd(90,W-90),y:rnd(H-70,H-24)});
+  beachBuilt=true;
+}
+
+function enterBeach(reason){
+  if(!beachBuilt) buildBeach();          // beach persists; built once, never wiped
+  state='beach'; player.x=W/2; player.y=H-40; player.facing=1; player.downT=0;
   setMsg(reason||"PAU HANA — walk da beach. ↑ at da shoreline fo' paddle out",160);
 }
 function enterWater(){
@@ -273,10 +318,10 @@ function updWater(){
   // spawn swell lines moving toward shore (y grows downward = toward beach)
   if(w.waveT>0)w.waveT--; else {
     const messy=Math.random()<0.26;
-    w.waves.push({ y:SEATOP+10, x:rnd(60,W-60), len:rnd(70,150), spd:rnd(0.25,0.5), messy, rode:false });
-    w.waveT=ri(70,150);
+    w.waves.push({ y:SEATOP+10, x:rnd(60,W-60), len:rnd(70,150), spd:rnd(0.16,0.32), messy, rode:false });
+    w.waveT=ri(90,180);
   }
-  for(const wv of w.waves) wv.y+=wv.spd*(w.surfing&&w.cur===wv?1.6:1);
+  for(const wv of w.waves) wv.y+=wv.spd*(w.surfing&&w.cur===wv?1.4:1);
   w.waves=w.waves.filter(wv=>wv.y<SEABOT+8);
 
   if(player.downT>0){ player.downT--; if(player.downT===0 && player.y>SEABOT-4) { } return; }
@@ -315,7 +360,7 @@ function updWater(){
 
   // HUI
   if(w.huiT>0)w.huiT--; else if(w.huis.length<2){
-    w.huis.push({ x:rnd(W*0.45,W-30), y:ri(SEATOP+14,SEABOT-16), vx:rnd(-0.4,0.4), vy:rnd(0.15,0.4) });
+    w.huis.push({ x:rnd(W*0.45,W-30), y:ri(SEATOP+14,SEABOT-16), vx:rnd(-0.25,0.25), vy:rnd(0.08,0.22) });
     w.huiT=ri(320,560); setMsg("⚠️ Da HUI stay in da water — keep your distance!",130); beep(160,.2,'sawtooth'); }
   for(const h of w.huis){ h.x+=h.vx; h.y+=h.vy;
     if(h.x<16||h.x>W-16)h.vx*=-1; if(h.y>SEABOT-6){ h.y=SEATOP+12; h.x=rnd(40,W-40); }
@@ -324,14 +369,14 @@ function updWater(){
   // LAIRD — cocky, blocks/snakes, no damage
   if(w.lairdT>0)w.lairdT--; else if(!w.laird){ w.laird={x:rnd(60,W-60),y:SEATOP+12,t:ri(360,560)};
     setMsg("Laird paddling out... Mr. Big Wave, so humble 🙄",130); }
-  if(w.laird){ w.laird.y+=0.35; w.laird.t--;
+  if(w.laird){ w.laird.y+=0.22; w.laird.t--;
     if(near(player.x,player.y,w.laird.x,w.laird.y,15)&&w.surfing){
       setMsg("Laird SNAKED your wave! 'Did you see that one?!' — ugh.",110);
       player.x=clamp(player.x+(player.x<w.laird.x?-22:22),20,W-20); }
     if(w.laird.t<0||w.laird.y>SEABOT){ w.laird=null; } }
 
   // SHARK
-  if(w.sharkT>0)w.sharkT--; else if(!w.shark){ w.shark={x:-24,y:ri(SEATOP+24,SEABOT-16),vx:rnd(0.7,1.2)};
+  if(w.sharkT>0)w.sharkT--; else if(!w.shark){ w.shark={x:-24,y:ri(SEATOP+24,SEABOT-16),vx:rnd(0.5,0.85)};
     beep(80,.5,'sawtooth',.06); setMsg("🦈 SHARK!! Get to shore, braddah!",160); }
   if(w.shark){ w.shark.x+=w.shark.vx;
     if(near(player.x,player.y,w.shark.x,w.shark.y,16)&&!player.injured){
