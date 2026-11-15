@@ -452,8 +452,8 @@ function drawHelp(){
   ctx.fillText('PRESS ENTER TO PADDLE OUT',W/2,H-58); ctx.textAlign='left';
 }
 
-function drawBeach(){
-  drawPalm(30,H-6); drawPalm(W-30,H-6);
+function drawBeachProps(){
+  // Chandler + his hale (always on the sand, both scenes)
   px(38,beach.chandler.y-10,46,18,'#6b4a2a'); px(34,beach.chandler.y-15,54,6,'#8a5a2a');
   drawDude(beach.chandler.x,beach.chandler.y,'#a86a34',C.sea3,1,'stand',frame);
   px(beach.chandler.x-14,beach.chandler.y-26,30,4,'#111');
@@ -462,6 +462,10 @@ function drawBeach(){
   for(const p of beach.props){ if(!p.got) drawProp(p); }
   if(beach.photographer) drawPhotog(beach.photographer.x,beach.photographer.y);
   if(beach.buggy) drawBuggy(beach.buggy.x,SHORE+16);
+}
+function drawBeach(){
+  drawBeachProps();
+  drawPalm(30,H-6); drawPalm(W-30,H-6);
   const moving=keys.left||keys.right||keys.up||keys.down;
   drawDude(player.x,player.y,C.skin,player.board,player.facing,moving?'walk':'stand',frame);
   if(player.injured) px(player.x-3,player.y-20,6,3,C.bad);
@@ -479,12 +483,38 @@ function drawPhotog(x,y){
   ctx.fillText('📷 2x WAVES',x-11,y-25); ctx.textAlign='left';
 }
 function drawBuggy(x,y){
-  px(x-16,y-8,32,8,'#e33'); px(x-14,y-13,20,6,'#fff'); px(x-11,y,5,5,'#222'); px(x+7,y,5,5,'#222');
-  ctx.fillStyle='#e33'; ctx.font='7px monospace'; ctx.textAlign='left'; ctx.fillText('LIFEGUARD',x-14,y-15);
+  // LIFEGUARD ATV / quad — chunkier detailed sprite (facing right)
+  // big knobby tires
+  px(x-18,y+2,11,11,'#1a1a1a'); px(x-16,y+4,7,7,'#333'); px(x-14,y+6,3,3,'#555');  // rear
+  px(x+9,y+2,11,11,'#1a1a1a');  px(x+11,y+4,7,7,'#333'); px(x+13,y+6,3,3,'#555');   // front
+  // tire tread nubs
+  for(let a=0;a<6;a++){ px(x-18+Math.cos(a+frame*0.1)*5-1,y+7+Math.sin(a+frame*0.1)*5-1,2,2,'#000'); }
+  // chassis / body
+  px(x-16,y-3,34,8,'#d12f2f');       // main body red
+  px(x-16,y-3,34,2,'#ff5a5a');       // highlight
+  px(x-18,y+3,6,3,'#b02020'); px(x+12,y+3,6,3,'#b02020'); // fenders
+  // rescue board rack on back
+  px(x-24,y-6,10,3,'#ffd23f'); px(x-24,y-6,10,1,'#fff');
+  // front rack + headlight
+  px(x+16,y-5,5,4,'#333'); px(x+19,y-4,3,3,'#ffe08a');
+  // handlebars + seat
+  px(x+6,y-9,2,6,'#222'); px(x+2,y-10,10,2,'#222');   // bars
+  px(x-10,y-7,12,4,'#111');                            // seat
+  // rider (lifeguard) — small torso + red cap
+  px(x-6,y-16,8,9,'#c88a4e'); px(x-6,y-18,8,3,'#e33'); // body + cap
+  px(x-7,y-12,3,4,'#c88a4e'); px(x+4,y-13,4,3,'#c88a4e'); // arm reaching bars
+  // RESCUE cross decal
+  px(x-2,y-1,5,2,'#fff'); px(x-0.5,y-2.5,2,5,'#fff');
+  ctx.fillStyle='#fff'; ctx.font='bold 7px monospace'; ctx.textAlign='center';
+  ctx.fillText('LIFEGUARD',x,y-23); ctx.textAlign='left';
 }
 
 function drawWater(){
-  const w=water; drawPalm(30,H-6); drawPalm(W-30,H-6);
+  const w=water;
+  // the beach strip stays alive while you surf: Chandler + props + photographer + buggy
+  // are the SAME persistent beach, drawn on the shore at the bottom of the water view.
+  drawBeachProps();
+  drawPalm(30,H-6); drawPalm(W-30,H-6);
   // waves (swell lines)
   for(const wv of w.waves){
     const col=wv.messy?'#bfe4ec':C.foam, body=wv.messy?'#7fb4c4':C.sea3;
