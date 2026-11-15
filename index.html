@@ -302,7 +302,7 @@ function enterBeach(reason){
 }
 function enterWater(){
   if(player.injured){ setMsg("You stay hurt, cuz — go find Chandler fo' heal!",150); return; }
-  state='water'; player.x=W*0.28; player.y=SEABOT-14; player.facing=1; player.downT=0;
+  state='water'; player.x=clamp(player.x,14,W-14); player.y=SEABOT-14; player.facing=1; player.downT=0;
   water.surfing=false; water.cur=null; water.ride=0; water.combo=0; water.style=0; water.spray=[];
   water.huis=[]; water.laird=null; water.shark=null;
   water.sharkT=ri(620,1100); water.huiT=ri(260,480); water.lairdT=ri(360,700);
