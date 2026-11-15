@@ -436,20 +436,25 @@ function updWater(){
   }
 
   if(w.surfing){
-    // if the wave you're on is gone (reached shore / fizzled), the ride is over — back to paddling
-    if(!w.cur || !w.waves.includes(w.cur)){ endRide(); }
+    // you're only surfing while you're ON your wave. The instant it's gone or you've
+    // slid off its face, the ride ends and you're paddling again — no phantom standing.
+    const onWave = w.cur && w.waves.includes(w.cur)
+                && w.cur.y < SHORE-4
+                && player.x > w.cur.x - w.cur.len/2 - 10
+                && player.x < w.cur.x + w.cur.len/2 + 10;
+    if(!onWave){ endRide(); }
     else {
       w.ride++; score+=1;
-      // follow the wave toward shore
-      player.y=w.cur.y;
-    if(frame%5===0) beep(280+Math.min(w.ride,220),.02,'sine',.012);
-    // tricks — capture each key ONCE, then decide (fixes Z being eaten by &&)
-    const zHit=consume('z'), xHit=consume('x');
-    if(zHit&&xHit) trick('BARREL!!',120,C.purp);
-    else if(zHit) trick('Cutback!',40,C.good);
-    else if(xHit) trick('Off-da-lip!',45,C.gold);
-    // end the ride: reach inside, kick out, or wave fizzles
-    if(player.y>=SEABOT-6 || consume('space') || w.cur.y>=SEABOT+4){ endRide(); }
+      player.y=w.cur.y;                         // ride the face in
+      player.x += (w.cur.x - player.x)*0.04;    // get gently pulled along the wave
+      if(frame%5===0) beep(280+Math.min(w.ride,220),.02,'sine',.012);
+      // tricks — capture each key ONCE, then decide (fixes Z being eaten by &&)
+      const zHit=consume('z'), xHit=consume('x');
+      if(zHit&&xHit) trick('BARREL!!',120,C.purp);
+      else if(zHit) trick('Cutback!',40,C.good);
+      else if(xHit) trick('Off-da-lip!',45,C.gold);
+      // kick out on purpose, or ride into the shorebreak
+      if(player.y>=SHORE-8 || consume('space')){ endRide(); }
     }
   }
 
