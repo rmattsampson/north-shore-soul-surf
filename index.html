@@ -423,6 +423,7 @@ function buildBeach(){
     shack:{x:118, y:SHORE+20},        // surf shack / home (town screen)
     folks:[ {x:W*0.42, y:H-30, cool:0}, {x:W*0.72, y:H-22, cool:0} ],  // locals (town)
     house:{x:W/2, y:SHORE+40},        // RCVA surf house (house screen, below surf)
+    cars:[], road:[], scrLock:0,      // road traffic behind the house
     screen:1 };                       // 0=TOWN  1=SURF  2=COVE  3=RCVA HOUSE  (start on surf)
   const kinds=['slipper','honu','cooler'];
   for(let i=0;i<3;i++) beach.props.push({k:kinds[i],x:rnd(90,W-90),y:rnd(H-70,H-24)});
@@ -500,6 +501,7 @@ function update(){
   if(beachBuilt) tickBuggy();  // lifeguard ATV keeps driving even while you surf
   if(beachBuilt) tickLocal();  // a local strolls the beach ~1/min and drops stuff
   if(beachBuilt) tickTourist();  // a lone original tourist wanders by
+  if(beachBuilt) tickRoad();     // cars + cyclists on the road behind the RCVA house
   if(state==='splash'){ if(consume('enter')){ state='help'; beep(660,.1);} else if(consume('space')){ enterBeach(); } return; }
   if(state==='help'){ if(consume('enter')||consume('space')){ enterBeach(); } return; }
   if(state==='gameover'){ if(consume('enter')||consume('space')){ score=0; state='splash'; } return; }
@@ -547,14 +549,17 @@ function updBeach(){
 
   // ----- screen transitions (walk off an edge) -----
   if(b.screen===SCR.HOUSE){
-    // RCVA house screen. House + hillside up top, open sand you can roam below. You enter at
-    // the bottom sand (continued down the beach); walk back DOWN off the bottom to return to surf.
-    player.x=clamp(player.x,10,W-10); player.y=clamp(player.y,SEATOP+14,H-6);
-    if(player.y>=H-8 && keys.down){ b.screen=SCR.SURF; player.x=clamp(player.x,20,W-20); player.y=H-20; setMsg("Back up da beach to da surf.",90); beep(560,.07,'triangle'); return; }
+    // RCVA house screen. House + hillside up top, open sand below. You pop out here from the
+    // beach; press UP to turn around and go straight back to the beach. (Different key from
+    // entry + a one-frame lock so it can't oscillate.)
+    player.x=clamp(player.x,10,W-10); player.y=clamp(player.y,SEATOP+22,H-10);
+    if(b.scrLock>0){ b.scrLock--; }
+    else if(player.y<=SEATOP+24 && keys.up){ b.screen=SCR.SURF; b.scrLock=10; player.x=clamp(player.x,20,W-20); player.y=H-30; setMsg("Back to da surf beach.",90); beep(560,.07,'triangle'); return; }
   } else {
     // beach screens: ↑ at shoreline paddles out
     player.y=clamp(player.y,SHORE+4,H-14);
-    if(player.y<=SHORE+6 && keys.up){ enterWater(); return; }
+    if(b.scrLock>0){ b.scrLock--; }
+    if(player.y<=SHORE+6 && keys.up && b.scrLock===0){ enterWater(); return; }
     // left/right edges move between TOWN(0) ◀ SURF(1) ▶ COVE(2)
     // trigger when you walk INTO the edge (not a pixel-exact test)
     if(player.x<=10 && keys.left){
@@ -566,9 +571,8 @@ function updBeach(){
       player.x=W-10; // eastern-most screen: wall
     }
     player.x=clamp(player.x,10,W-10);
-    // from the SURF beach, walk DOWN off the bottom to continue to the RCVA house screen;
-    // land on the open sand in FRONT of the house (not stuck in the hillside grass).
-    if(b.screen===SCR.SURF && player.y>=H-14 && keys.down){ b.screen=SCR.HOUSE; player.x=clamp(player.x,20,W-20); player.y=H-24; setMsg("⬇ Down da beach to da RCVA house...",110); beep(560,.07,'triangle'); return; }
+    // from the SURF beach, walk DOWN off the bottom → pop out AT the RCVA house (down top).
+    if(b.screen===SCR.SURF && player.y>=H-14 && keys.down && b.scrLock===0){ b.screen=SCR.HOUSE; b.scrLock=10; player.x=clamp(player.x,20,W-20); player.y=SEATOP+40; setMsg("⬇ Down da beach to da RCVA house",110); beep(560,.07,'triangle'); return; }
   }
 
   // ----- per-screen interactions -----
@@ -639,6 +643,18 @@ function tickBuggy(){
 
 function photographerOut(){ return beach && beach.photographer; }
 
+// cars + cyclists on the road behind the RCVA house (original simple vehicles)
+function tickRoad(){
+  const b=beach; if(!beachBuilt) return;
+  if(b.roadT>0)b.roadT--; else {
+    const fromLeft=Math.random()<0.5, kind=Math.random()<0.5?'car':'bike';
+    b.cars.push({ kind, x:fromLeft?-30:W+30, dir:fromLeft?1:-1,
+      col:['#d13a3a','#3a7ad1','#efc13a','#3aa050','#dddddd'][ri(0,4)] });
+    b.roadT=ri(90,220);
+  }
+  for(const c of b.cars) c.x += (c.kind==='car'?2.2:1.2)*c.dir;
+  b.cars=b.cars.filter(c=>c.x>-40 && c.x<W+40);
+}
 // a lone beach tourist (original character) occasionally strolls across
 function tickTourist(){
   const b=beach; if(!beachBuilt) return;
@@ -980,7 +996,9 @@ function drawBeach(){
   if(beach.screen===SCR.HOUSE){ drawHouseScreen(); return; }
   drawBeachProps();
   drawWaves();   // swell keeps rolling in while you're on the sand
+  // lusher palm line along the back of the beach screens (varied sizes)
   drawPalm(30,H-6); drawPalm(W-30,H-6);
+  drawPalm(96,H-10); drawPalm(W-104,H-8); drawPalm(W/2-30,H-12); drawPalm(W/2+60,H-6);
   if(player.knockT>0){
     softShadow(player.x, player.y+12, 11);
     drawBeachBoard(player.x,player.y,player.facing,false);
@@ -997,18 +1015,44 @@ function drawBeach(){
     if(player.injured) px(player.x-3,player.y-20,6,3,C.bad);
   }
 }
-// RCVA surf house — a grassy yard below the surf spot (original house, text sign only)
+function drawVehicle(c,y){
+  const fx=c.dir<0?-1:1; ctx.save(); ctx.translate(c.x|0,y|0); ctx.scale(fx,1);
+  if(c.kind==='car'){
+    px(-14,-6,28,8,c.col); px(-14,-6,28,2,shade(c.col,30));   // body + highlight
+    px(-9,-11,16,6,shade(c.col,-10)); px(-7,-10,5,4,'#bfe'); px(1,-10,5,4,'#bfe'); // cabin + windows
+    px(-10,2,5,5,'#1a1a1a'); px(6,2,5,5,'#1a1a1a');           // wheels
+    px(12,-4,3,3, fx>0?'#ffd23f':'#ffd23f');                  // headlight
+  } else { // cyclist — original rider on a bike
+    px(-9,4,7,4,'#1a1a1a'); px(-10,4,3,4,'#333'); px(5,4,3,4,'#333'); // wheels row
+    px(-9,2,3,3,'#1a1a1a'); px(6,2,3,3,'#1a1a1a');                     // hubs
+    px(-2,-2,2,6,'#888');                                             // frame
+    drawDude(0,-4,'#c88a4e','#2b6cb0',1,'stand',frame);               // rider
+    px(-3,-16,7,3,'#e33');                                           // helmet
+  }
+  ctx.restore();
+}
+// RCVA surf house — inland yard below the surf spot (original house, text sign only)
 function drawHouseScreen(){
-  // lush forested hillside rising behind the house (layered green, 32-bit)
-  gradBand(0,SEATOP,W,(SHORE-SEATOP), '#1c3a26', '#2f6a3c', 8);
-  // treeline silhouettes on the hill
+  // DIFFERENT, inland mountains — steeper + bluer than the beach ridge
+  ctx.fillStyle='#2a3b66';
+  ctx.beginPath(); ctx.moveTo(0,SEATOP+14);
+  ctx.lineTo(60,SEATOP-18); ctx.lineTo(120,SEATOP+6); ctx.lineTo(200,SEATOP-26);
+  ctx.lineTo(300,SEATOP+2); ctx.lineTo(380,SEATOP-20); ctx.lineTo(W,SEATOP+10); ctx.lineTo(W,SEATOP+14); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#35406e';
+  ctx.beginPath(); ctx.moveTo(0,SEATOP+16);
+  ctx.lineTo(100,SEATOP-6); ctx.lineTo(170,SEATOP+8); ctx.lineTo(260,SEATOP-10); ctx.lineTo(340,SEATOP+6);
+  ctx.lineTo(W,SEATOP-4); ctx.lineTo(W,SEATOP+16); ctx.closePath(); ctx.fill();
+  // forested lower hillside
+  gradBand(0,SEATOP+14,W,(SHORE-SEATOP-14), '#1c3a26', '#2f6a3c', 8);
   ctx.fillStyle='#24502f';
-  for(let x=-10;x<W+10;x+=16){ const hh=12+((x*7)%14); ctx.beginPath();
-    ctx.moveTo(x,SEATOP+18); ctx.lineTo(x+8,SEATOP+18-hh); ctx.lineTo(x+16,SEATOP+18); ctx.closePath(); ctx.fill(); }
-  ctx.fillStyle='#2f6a3c';
-  for(let x=0;x<W;x+=22){ const hh=10+((x*5)%12); ctx.beginPath();
-    ctx.moveTo(x,SEATOP+34); ctx.lineTo(x+11,SEATOP+34-hh); ctx.lineTo(x+22,SEATOP+34); ctx.closePath(); ctx.fill(); }
-  // tall palms rising behind the house (like the photo)
+  for(let x=-10;x<W+10;x+=16){ const hh=10+((x*7)%12); ctx.beginPath();
+    ctx.moveTo(x,SEATOP+28); ctx.lineTo(x+8,SEATOP+28-hh); ctx.lineTo(x+16,SEATOP+28); ctx.closePath(); ctx.fill(); }
+  // ROAD running behind the house, with cars + cyclists
+  const roadY=SEATOP+40;
+  px(0,roadY,W,12,'#3a3a40'); px(0,roadY,W,2,'#4a4a52'); px(0,roadY+12,W,2,'#2a2a30');
+  for(let x=(frame*0.0)%24; x<W; x+=24) px(x+4,roadY+5,10,2,'#d8d26a');  // center dashes
+  for(const c of beach.cars) drawVehicle(c, roadY+2);
+  // tall palms behind the house
   drawTallPalm(70, SHORE+6, 92); drawTallPalm(W-90, SHORE+2, 104); drawTallPalm(W-40, SHORE+10, 80);
   // sandy yard foreground
   gradBand(0,SHORE,W,H-SHORE,C.sandWet,C.sand,6);
