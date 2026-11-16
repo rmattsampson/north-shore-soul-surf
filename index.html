@@ -360,7 +360,7 @@ function floatScore(txt,x,y,col){ flash={txt,x,y,col:col||C.gold}; flashT=70; }
 
 /* ---- day/night clock ---- dayT cycles 0..1 (morning→midday→sunset→night→morning) */
 let dayT=0.12;                 // start mid-morning
-const DAY_LEN=5400;            // ~90s per full cycle at 60fps
+const DAY_LEN=16200;           // ~4.5 min per full cycle at 60fps (slower)
 // sky keyframes at phase t: [skyTop, mid, lower] + sun tint + sun alpha
 const SKY_KEYS=[
   { t:0.00, a:'#1a2a5a', b:'#3a6aa0', c:'#8ac0e0', sun:'#fff0c0', sa:0.9, night:false }, // dawn
@@ -676,11 +676,10 @@ function updBeach(){
       if(near(player.x,player.y,f.x,f.y,18) && f.cool===0){
         setMsg("Local: "+GREETS[ri(0,GREETS.length-1)],130); beep(600,.07,'triangle'); f.cool=240; } }
   }
-  consume('b'); // swallow stray B on other screens
-  // MY HOUSE: walk up to the hammock (bottom-front) and press B to sleep until morning
+  // MY HOUSE: walk up to the hammock and press B to sleep until morning
   if(b.screen===SCR.MYHOUSE){
     const HM=myHammock();         // same spot drawMyHouse draws the hammock
-    if(near(player.x,player.y,HM.x,HM.y,34)){
+    if(near(player.x,player.y,HM.x,HM.y,40)){
       if(consume('b')){ sleepTilMorning(); return; }
       else if(!msgT) setMsg("🛏️ Your hammock — press B to sleep till morning",60);
     }
@@ -736,7 +735,7 @@ function tickRoad(){
     const fromLeft=Math.random()<0.5, kind=Math.random()<0.5?'walk':'bike';
     b.cars.push({ kind, x:fromLeft?-30:W+30, dir:fromLeft?1:-1,
       col:['#d13a3a','#3a7ad1','#efc13a','#3aa050','#9a5ad0','#e08a3a'][ri(0,5)] });  // shirt colors
-    b.roadT=ri(120,260);
+    b.roadT=ri(300,620);
   }
   for(const c of b.cars) c.x += (c.kind==='bike'?1.4:0.8)*c.dir;   // pedestrian speeds
   b.cars=b.cars.filter(c=>c.x>-40 && c.x<W+40);
@@ -1113,15 +1112,18 @@ const HOUSE_ROAD_Y = SEATOP+92;   // keep in sync with drawHouseScreen's roadY
 function palmRect(x,by){ return [x-4,by-8,x+9,by+2]; }
 function solidsNow(){
   const b=beach, out=[];
+  // SIMPLE collision: you can walk through everything EXCEPT homes, the ATV, and the sidewalk walls.
   if(IS_DOWN(b.screen)){
-    const ry=HOUSE_ROAD_Y;
-    out.push([W/2-54,100,W/2+54,164]);                          // the RCVA house
-    out.push([64-4,ry-10,64+10,ry+0]);                            // tall palm (left)
-    out.push([W-70-4,ry-8,W-70+10,ry+2]);                         // tall palm (right)
-    out.push([16,ry-12,W/2-22,ry]); out.push([W/2+16,ry-12,W-16,ry]); // stone wall (gate gap in the middle)
-  } else if(b.screen===SCR.SURF){ out.push(palmRect(30,H-6),palmRect(W-30,H-6)); }
-  else if(b.screen===SCR.TOWN){ out.push(palmRect(28,H-6),palmRect(92,H-12),palmRect(W/2+10,H-8),palmRect(W-30,H-6)); }
-  else { out.push(palmRect(26,H-8),palmRect(84,H-14),palmRect(W/2-40,H-6),palmRect(W/2+70,H-12),palmRect(W-28,H-6)); }
+    const houseBand=SEATOP+10, roadY=SEATOP+140;
+    // the home on this land screen (matches drawHouseScreen's building x per screen)
+    if(b.screen===SCR.HOUSE)      out.push([W/2-52, houseBand+18, W/2+52, houseBand+70]);   // RCVA (centered)
+    else if(b.screen===SCR.MYHOUSE) out.push([W*0.60-52, houseBand+20, W*0.60+52, houseBand+92]);   // house + porch
+    else /* COVEDOWN */            out.push([W*0.38-35, houseBand+36, W*0.38+35, houseBand+70]);
+    // the two sidewalk/stone walls (gate gap in the middle) — only on RCVA which has the wall
+    if(b.screen===SCR.HOUSE){ const wy=roadY-12; out.push([16,wy,W/2-22,wy+12], [W/2+16,wy,W-16,wy+12]); }
+  }
+  // ATV on the beach screens blocks you (it's solid); everything else is walk-through
+  if(!IS_DOWN(b.screen) && b.buggy) out.push([b.buggy.x-16, SHORE+8, b.buggy.x+16, SHORE+24]);
   return out;
 }
 function feetHit(x,y,rs){
@@ -1321,33 +1323,33 @@ function drawMyHouse(x,y){
   // low-pitch HIP roof with wide eaves (red tin) — different from RCVA's tall gable
   ctx.fillStyle=roof; ctx.beginPath(); ctx.moveTo(x-wW/2-10,topY+2); ctx.lineTo(x-22,topY-16); ctx.lineTo(x+22,topY-16); ctx.lineTo(x+wW/2+10,topY+2); ctx.closePath(); ctx.fill();
   px(x-22,topY-16,44,3,roofHi); px(x-wW/2-10,topY+1,wW+20,2,'#7a2424');          // ridge hi + eave shadow
-  // covered front porch posts + rail
-  px(x-wW/2+2,topY+floorH-18,3,18,trim); px(x+wW/2-5,topY+floorH-18,3,18,trim);
-  px(x-wW/2+2,topY+floorH-18,wW-4,2,trim);
+  // --- covered front PORCH: a shade roof on posts across the front, with a deck + rail ---
+  const porchTop=topY+floorH-4, porchY=porchTop+14;
+  px(x-wW/2-6,porchTop,wW+12,4,roof); px(x-wW/2-6,porchTop,wW+12,2,roofHi);   // porch shade roof + lit edge
+  px(x-wW/2-6,porchY+10,wW+12,4,'#6a4a28'); px(x-wW/2-6,porchY+10,wW+12,1,'#8a6a3a'); // porch deck
+  for(const pxp of [x-wW/2-2, x-16, x+16, x+wW/2-2]){ px(pxp,porchTop+4,3,porchY-porchTop+6,trim); } // posts
+  px(x-wW/2-2,porchY+2,wW+4,2,trim);                                          // porch rail
   // dutch door + shuttered windows (warm glow at night)
   px(x-6,topY+26,12,24,'#2a3a2a'); px(x+3,topY+36,2,2,'#ffd23f');
   const g=lit?'#ffd98a':'#bfe0e0';
   px(x-30,topY+14,16,14,g); px(x+14,topY+14,16,14,g);
   px(x-32,topY+14,2,14,trim); px(x-14,topY+14,2,14,trim); px(x+12,topY+14,2,14,trim); px(x+30,topY+14,2,14,trim); // shutters
   px(x-30,topY+14,16,2,trim); px(x+14,topY+14,16,2,trim);
-  // --- BIG hammock in the yard, left of the house (where you sleep) ---
-  const HM=myHammock(), hy=HM.y, px0=HM.x-20, px1=HM.x+20;
-  // two posts with a crossbar
-  px(px0,hy-32,4,36,'#6a4a28'); px(px0,hy-32,2,36,'#8a6a3a');
-  px(px1,hy-32,4,36,'#6a4a28'); px(px1,hy-32,2,36,'#8a6a3a');
-  // suspension ropes from each post down to the hammock ends
-  for(let i=0;i<6;i++){ px(px0+3+i, hy-28+i*2, 1, 2, '#c8b89a'); px(px1-2-i, hy-28+i*2, 1, 2, '#c8b89a'); }
-  // the hammock bed: a filled banana curve (deep sag), with a lighter top edge and rope-net lines
-  const span=px1-px0, midSag=14;
-  for(let i=0;i<=span;i++){ const t=i/span, hx=px0+i, sag=Math.sin(t*Math.PI)*midSag;
-    const top=hy-6+sag, h=10;                 // canopy thickness
-    px(hx, top, 1, h, '#e0a86a');             // canvas body
-    px(hx, top, 1, 2, '#f2c892');             // lit top lip
-    px(hx, top+h-1, 1, 1, '#b07a44');         // underside shadow
+  // --- hammock in the yard, left of the house (where you sleep) ---
+  const HM=myHammock(), hy=HM.y, px0=HM.x-24, px1=HM.x+24;
+  // two wooden posts
+  px(px0-2,hy-26,4,32,'#6a4a28'); px(px0-2,hy-26,1,32,'#8a6a3a');
+  px(px1-2,hy-26,4,32,'#6a4a28'); px(px1-2,hy-26,1,32,'#8a6a3a');
+  // ropes: post top → hammock end
+  pxLine(px0,hy-24,px0+6,hy-6,'#d8c8a0',1); pxLine(px1,hy-24,px1-6,hy-6,'#d8c8a0',1);
+  // canvas: a crescent bowl (bottom edge sags deeper than the top) with colored stripes
+  const a0=px0+6, a1=px1-6, span=a1-a0, stripes=['#e0563a','#f2c27a','#3f9ac0','#f2c27a'];
+  for(let i=0;i<=span;i++){ const t=i/span, s=Math.sin(t*Math.PI);
+    const top=hy-6+s*6, bot=hy-4+s*12;                       // thin at the ends, deep in the middle
+    px(a0+i, top, 1, Math.max(1,bot-top), stripes[((i/4)|0)%stripes.length]);
+    px(a0+i, top, 1, 1, '#fff2d0');                            // lit rim
+    if(i%3===0) px(a0+i, bot, 1, 2, '#d8c8a0');               // fringe
   }
-  for(let i=6;i<span;i+=8){ const t=i/span, hx=px0+i, sag=Math.sin(t*Math.PI)*midSag; px(hx, hy-6+sag, 1, 10, '#c8945a'); } // weave lines
-  // end gathers tied to the ropes
-  px(px0+2,hy-8,4,6,'#8a5a34'); px(px1-6,hy-8,4,6,'#8a5a34');
   // sign + prompt
   px(x-30, topY-28, 60, 12, '#1a3a3a'); px(x-30,topY-28,60,2,'#2a5a5a');
   ctx.fillStyle=C.gold; ctx.font='bold 9px "Courier New",monospace'; ctx.textAlign='center';
