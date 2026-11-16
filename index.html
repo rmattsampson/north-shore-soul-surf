@@ -1097,6 +1097,45 @@ function drawVehicle(c,y){
   } else drawBike();
   ctx.restore();
 }
+// RCVA house — a vertical street scene. Top-to-bottom: beach-sand edge → house →
+// road (cars/cyclists) → sidewalk + lawn. Original house, plain text sign only.
+function drawHouseScreen(){
+  // band heights down the screen
+  const sandTop = SEATOP;            // sandy beach edge you walked down from (up top)
+  const houseBand = SEATOP+10;       // house + yard sits here
+  const roadY = SEATOP+92;           // the road
+  // --- beach-sand edge at the very top ---
+  gradBand(0,sandTop,W,houseBand-sandTop, C.sand, C.sandWet, 4);
+  // --- grassy yard the house sits on ---
+  gradBand(0,houseBand,W,roadY-houseBand, '#3f8a4a', '#2f7a3c', 6);
+  for(let i=0;i<70;i++){ const x=(i*71)%W, yy=houseBand+4+((i*37)%(roadY-houseBand-6)); px(x,yy,1,2,'#246a30'); }
+  // tall palms flanking the house
+  drawTallPalm(64, roadY-4, 70); drawTallPalm(W-70, roadY-2, 78);
+  // the house itself
+  drawRCVAHouse(W/2, houseBand+70);
+  // low hedge in front of the yard
+  for(let x=16;x<W-16;x+=10){ if(x+12>W/2-16 && x<W/2+16) continue; px(x,roadY-10,12,10,'#2f7a3c'); px(x,roadY-10,12,2,'#3f9a4c'); }  // gate gap in the middle
+  // --- the ROAD (cars + cyclists go by) ---
+  px(0,roadY,W,14,'#3a3a40'); px(0,roadY,W,2,'#4a4a52'); px(0,roadY+14,W,2,'#2a2a30');
+  for(let x=0; x<W; x+=24) px(x+6,roadY+6,10,2,'#d8d26a');   // center dashes
+  for(const c of beach.cars) drawVehicle(c, roadY+3);
+  // --- walkable ground south of the road: sidewalk, then open grass (no mountains) ---
+  const walkTop = roadY+16;
+  px(0,walkTop,W,8,'#b9b2a0'); px(0,walkTop,W,2,'#d2cbb8'); px(0,walkTop+8,W,2,'#8f897a');   // sidewalk
+  for(let x=0;x<W;x+=22) px(x,walkTop+2,1,6,'#9d9788');                                       // paving seams
+  gradBand(0,walkTop+10,W,H-walkTop-10, '#3f8a4a', '#2f7a3c', 6);                              // lawn
+  for(let i=0;i<140;i++){ const x=(i*67)%W, yy=walkTop+14+((i*41)%(H-walkTop-16)); px(x,yy,1,2,'#246a30'); }
+  for(let i=0;i<14;i++){ const x=(i*97+23)%W, yy=walkTop+20+((i*53)%(H-walkTop-26)); px(x,yy,2,2,i%2?'#f4e27a':'#f2f2f2'); } // little flowers
+  // player
+  const moving=keys.left||keys.right||keys.up||keys.down;
+  softShadow(player.x, player.y+13, 10);
+  drawBeachBoard(player.x,player.y,player.facing,moving);
+  drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
+  if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
+  // prompt at the TOP now (up = back to the beach)
+  ctx.fillStyle=C.txt; ctx.font='10px monospace'; ctx.textAlign='center'; ctx.fillText('▲ up to da surf beach',W/2,SEATOP+4); ctx.textAlign='left';
+
+}
 function drawTallPalm(x,by,h){
   // slender curved trunk rising high, drooping fronds — original
   for(let i=0;i<h;i+=4){ const sway=Math.sin(i*0.05)*6; px(x+sway,by-h+i,4,4,'#6a4a28'); px(x+sway,by-h+i,1,4,'#8a6a3a'); }
