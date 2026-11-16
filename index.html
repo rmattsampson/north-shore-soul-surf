@@ -77,6 +77,7 @@ function norm(e){ switch(e.key){
   case 'ArrowDown':case 's':case 'S':return 'down';
   case ' ':return 'space'; case 'Enter':return 'enter';
   case 'z':case 'Z':return 'z'; case 'x':case 'X':return 'x';
+  case 'b':case 'B':return 'b';
   case 'm':case 'M':return 'mute'; default:return null; } }
 function consume(k){ if(pressed[k]){ pressed[k]=false; return true; } return false; }
 
@@ -115,6 +116,15 @@ function music(){ if(!actx||muted){ if(musicGain)musicGain.gain.value=0; return;
 const HS='nsss_hi';
 const getHS=()=>parseInt(localStorage.getItem(HS)||'0',10)||0;
 const setHS=v=>{ try{localStorage.setItem(HS,String(v));}catch(e){} };
+
+/* ---- wallet + owned/equipped gear (persisted) ---- */
+const WALLET='nsss_coins', OWNED='nsss_owned', EQUIP='nsss_equip';
+const getCoins=()=>parseInt(localStorage.getItem(WALLET)||'0',10)||0;
+const setCoins=v=>{ try{localStorage.setItem(WALLET,String(v));}catch(e){} };
+function loadOwned(){ try{ return JSON.parse(localStorage.getItem(OWNED)||'["board_teal","shorts_blue"]'); }catch(e){ return ['board_teal','shorts_blue']; } }
+function saveOwned(a){ try{ localStorage.setItem(OWNED,JSON.stringify(a)); }catch(e){} }
+function loadEquip(){ try{ return JSON.parse(localStorage.getItem(EQUIP)||'{"board":"board_teal","shorts":"shorts_blue","shirt":"none"}'); }catch(e){ return {board:'board_teal',shorts:'shorts_blue',shirt:'none'}; } }
+function saveEquip(o){ try{ localStorage.setItem(EQUIP,JSON.stringify(o)); }catch(e){} }
 
 /* ---- utils ---- */
 const rnd=(a,b)=>a+Math.random()*(b-a), ri=(a,b)=>Math.floor(rnd(a,b+1));
@@ -333,7 +343,34 @@ let msg='', msgT=0, flash=null, flashT=0;
 function setMsg(m,d=140){ msg=m; msgT=d; }
 function floatScore(txt,x,y,col){ flash={txt,x,y,col:col||C.gold}; flashT=70; }
 
-const player={ x:W/2, y:0, facing:1, board:C.good, injured:0, recover:0, downT:0, invuln:0, trickT:0, trickKind:'', knockT:0 };
+const player={ x:W/2, y:0, facing:1, board:C.good, shorts:'#2a3a6a', shirt:'none',
+  injured:0, recover:0, downT:0, invuln:0, trickT:0, trickKind:'', knockT:0 };
+
+/* ---- shop catalog: cosmetic gear, a tiny perk here and there ---- */
+const SHOP = [
+  { id:'board_teal',   kind:'board',  name:'Teal Twin',     price:0,   color:'#2fbfae', perk:'' },
+  { id:'board_red',    kind:'board',  name:'Red Fish',      price:150, color:'#ff5d5d', perk:'' },
+  { id:'board_yellow', kind:'board',  name:'Gun (yellow)',  price:300, color:'#ffd23f', perk:'longboard' }, // tiny perk: easier wave-catch
+  { id:'board_purple', kind:'board',  name:'Purple Rail',   price:450, color:'#b06bff', perk:'' },
+  { id:'shorts_blue',  kind:'shorts', name:'Blue Trunks',   price:0,   color:'#2a3a6a', perk:'' },
+  { id:'shorts_red',   kind:'shorts', name:'Red Trunks',    price:80,  color:'#c0392b', perk:'' },
+  { id:'shorts_floral',kind:'shorts', name:'Floral Boardies',price:120,color:'#1f9e6a', perk:'' },
+  { id:'shirt_none',   kind:'shirt',  name:'No Shirt',      price:0,   color:'none',    perk:'' },
+  { id:'shirt_rash',   kind:'shirt',  name:'Rashguard',     price:200, color:'#2b6cb0', perk:'tough' }, // tiny perk: survive 1 extra hit
+  { id:'shirt_aloha',  kind:'shirt',  name:'Aloha Shirt',   price:260, color:'#e0533a', perk:'' },
+  { id:'shaveice',     kind:'treat',  name:'Shave Ice',     price:40,  color:'#7ad9ff', perk:'treat' }  // flavor: +25 pts bump
+];
+let coins=getCoins(), owned=loadOwned(), equip=loadEquip();
+// apply saved equip to the player's look
+function applyEquip(){
+  const b=SHOP.find(s=>s.id===equip.board); if(b) player.board=b.color;
+  const sh=SHOP.find(s=>s.id===equip.shorts); if(sh) player.shorts=sh.color;
+  const sr=SHOP.find(s=>s.id===equip.shirt); player.shirt = (sr && sr.color!=='none') ? sr.color : 'none';
+  const bb=SHOP.find(s=>s.id===equip.board);
+  player.longboard = !!(bb && bb.perk==='longboard');
+  player.tough = (equip.shirt==='shirt_rash');
+}
+applyEquip();
 
 // Famous surfers — real NAMES only (factual). The sprite is a generic original figure
 // with a name label (no likeness), and the lines are short original tags in each one's
@@ -365,6 +402,14 @@ const CHANDLER_LINES = [
   "'Laird going talk big. Let your surfin' do da talking instead.'",
   "'Fear is jus' da ocean asking if you really wanna dance. Say yes.'"
 ];
+// original aloha greetings from North Shore locals
+const GREETS = [
+  "'Howzit, braddah! Waves pumping today, yeah?'",
+  "'Eh, shaka! Good to see you out here, cuz.'",
+  "'Aloha! Stay humble, surf wit' respect.'",
+  "'Rippin' out there today, brah. Keep it up!'",
+  "'Pau hana soon — come grind wit' us later, yeah?'"
+];
 
 let beach={}, water={ waves:[], huis:[], pro:null, shark:null, surfing:false, cur:null, spray:[], crashes:[],
   ride:0, combo:0, waveT:30, sharkT:9999, huiT:9999, proT:9999, style:0 };
@@ -372,7 +417,13 @@ let beachBuilt=false;
 
 function buildBeach(){
   beach={ photographer:null, buggy:null, chandler:{x:58,y:H-54}, local:null, tourist:null,
-    props:[], photoT:ri(160,340), buggyT:ri(260,560), chatCool:60, localT:ri(2400,3600), touristT:ri(400,900) };
+    props:[], photoT:ri(160,340), buggyT:ri(260,560), chatCool:60, localT:ri(2400,3600), touristT:ri(400,900),
+    // fixed Hawaiian-flair buildings along the back of the beach
+    iceShop:{x:W-70, y:SHORE+22},     // shave-ice stand = the SHOP
+    shack:{x:118, y:SHORE+20},        // surf shack / home
+    // a couple of North Shore locals to say hi to
+    folks:[ {x:W*0.42, y:H-30, cool:0}, {x:W*0.72, y:H-22, cool:0} ],
+    shopCool:0 };
   const kinds=['slipper','honu','cooler'];
   for(let i=0;i<3;i++) beach.props.push({k:kinds[i],x:rnd(90,W-90),y:rnd(H-70,H-24)});
   beachBuilt=true;
@@ -391,6 +442,7 @@ function enterBeach(reason){
 function enterWater(){
   if(player.injured){ setMsg("You stay hurt, cuz — go find Chandler fo' heal!",150); return; }
   state='water'; player.x=clamp(player.x,14,W-14); player.y=SEABOT-14; player.facing=1; player.downT=0;
+  player.shieldUsed=false;   // rashguard perk recharges each paddle-out
   water.surfing=false; water.cur=null; water.ride=0; water.combo=0; water.style=0; water.spray=[];
   water.huis=[]; water.laird=null; water.shark=null;
   water.sharkT=ri(620,1100); water.huiT=ri(260,480); water.pro=null; water.proT=ri(360,700);
@@ -442,7 +494,35 @@ function update(){
   if(state==='splash'){ if(consume('enter')){ state='help'; beep(660,.1);} else if(consume('space')){ enterBeach(); } return; }
   if(state==='help'){ if(consume('enter')||consume('space')){ enterBeach(); } return; }
   if(state==='gameover'){ if(consume('enter')||consume('space')){ score=0; state='splash'; } return; }
+  if(state==='shop'){ updShop(); return; }
   if(state==='beach') updBeach(); else if(state==='water') updWater();
+}
+
+/* ---- SHOP: simple buy menu overlaid on the beach ---- */
+let shop={ sel:0 };
+function openShop(){ state='shop'; shop.sel=0; beep(680,.09,'triangle'); }
+function updShop(){
+  if(consume('b')||consume('enter')&&false){}
+  if(consume('up'))   shop.sel=(shop.sel+SHOP.length-1)%SHOP.length;
+  if(consume('down')) shop.sel=(shop.sel+1)%SHOP.length;
+  if(consume('left')) shop.sel=(shop.sel+SHOP.length-1)%SHOP.length;
+  if(consume('right'))shop.sel=(shop.sel+1)%SHOP.length;
+  if(consume('b')||consume('space')){ state='beach'; return; }   // close
+  if(consume('enter')){ buy(SHOP[shop.sel]); }
+}
+function buy(item){
+  if(item.kind==='treat'){
+    if(coins>=item.price){ coins-=item.price; setCoins(coins); score+=25; floatScore('+25 ONO!',W/2,60,C.good); beep(900,.1); }
+    else beep(160,.12,'sawtooth');
+    return;
+  }
+  const have=owned.includes(item.id);
+  if(!have){
+    if(coins>=item.price){ coins-=item.price; setCoins(coins); owned.push(item.id); saveOwned(owned); beep(880,.1); }
+    else { beep(160,.12,'sawtooth'); return; }  // can't afford
+  }
+  // own it → equip it
+  equip[item.kind]=item.id; saveEquip(equip); applyEquip(); beep(760,.08,'triangle');
 }
 
 function updBeach(){
@@ -469,8 +549,17 @@ function updBeach(){
     else { setMsg("Chandler: "+CHANDLER_LINES[ri(0,CHANDLER_LINES.length-1)],150);
       beep(500,.08,'triangle'); b.chatCool=260; }
   }
+  // SHOP: walk up to da shave-ice stand, press B to open the buy menu
+  if(near(player.x,player.y,b.iceShop.x,b.iceShop.y,24)){
+    if(consume('b')){ openShop(); return; }
+    else if(!msgT) setMsg("🍧 Shave Ice & Surf Shop — press B fo' shop",60);
+  } else if(consume('b')){ /* ignore B elsewhere */ }
+  // say HI to the locals when you're close (original aloha lines)
+  for(const f of b.folks){ if(f.cool>0) f.cool--;
+    if(near(player.x,player.y,f.x,f.y,18) && f.cool===0){
+      setMsg("Local: "+GREETS[ri(0,GREETS.length-1)],130); beep(600,.07,'triangle'); f.cool=240; } }
   for(const p of b.props){ if(!p.got && near(player.x,player.y,p.x,p.y,15)){
-    p.got=true; score+=5; beep(760,.06); floatScore('+5',p.x,p.y-10,C.good);
+    p.got=true; score+=5; coins+=2; setCoins(coins); beep(760,.06); floatScore('+5',p.x,p.y-10,C.good);
     if(p.k==='slipper') setMsg("Found one lost slippah. Classic North Shore.",90);
     if(p.k==='honu') setMsg("A honu restin'. Give 'um space, yeah.",90);
     if(p.k==='cooler') setMsg("Cooler stay empty. Somebody wen' drink all da grindz.",90);
@@ -576,7 +665,8 @@ function updWater(){
 
   // drop-in: must be close to a clean swell line
   if(!w.surfing && consume('space')){
-    const wv=w.waves.find(v=>!v.rode && Math.abs(v.y-player.y)<14 && Math.abs(v.x-player.x)<v.len/2+10);
+    const reach = player.longboard ? 22 : 14;   // longboard perk: easier to catch a swell
+    const wv=w.waves.find(v=>!v.rode && Math.abs(v.y-player.y)<reach && Math.abs(v.x-player.x)<v.len/2+10);
     if(wv){ if(wv.messy){ wipeout("Messy closeout wen' buss you up!"); }
       else { w.surfing=true; w.cur=wv; wv.rode=true; w.ride=0; w.combo=0; w.style=0; beep(600,.1,'sawtooth');
         setMsg("DROP IN! ← → carve · Z cutback · X off-da-lip · Z+X barrel",120); } }
@@ -686,14 +776,21 @@ function endRide(){ const w=water; if(!w.surfing)return;
   let bonus=Math.floor(w.ride*0.6)+w.style, note="Nice ride! "+w.ride+" frames";
   if(photographerOut()){ bonus*=2; note="📷 PHOTO SCORE! DOUBLE — "+w.ride+" frames"; beep(990,.14); }
   score+=bonus; floatScore('+'+bonus,player.x,player.y-18,C.gold);
-  setMsg(note+(w.combo>1?(" · "+w.combo+"x combo!"):""),130);
+  // earn shop coins = ~40% of the ride bonus
+  const earn=Math.max(1,Math.floor(bonus*0.4)); coins+=earn; setCoins(coins);
+  setMsg(note+(w.combo>1?(" · "+w.combo+"x combo!"):"")+"  🪙+"+earn,130);
   w.surfing=false; w.cur=null; w.ride=0; w.combo=0; w.style=0;
   // kick back out to the lineup, prone and paddling — no lingering stand
   player.y=clamp(player.y-28, SEATOP+20, SEABOT-20);
   player.trickT=0; player.trickKind='';
   if(score>high){ high=score; setHS(high); floatScore('NEW BEST!',W/2,40,C.purp); }
 }
-function wipeout(reason){ const w=water; w.surfing=false; w.cur=null; w.ride=0; w.combo=0; w.style=0;
+function wipeout(reason){ const w=water;
+  // rashguard perk: shrug off ONE wipeout, then it's spent until you go ashore
+  if(player.tough && !player.shieldUsed){ player.shieldUsed=true; w.combo=0;
+    floatScore('RASHGUARD SAVE!',player.x,player.y-18,C.good); beep(520,.12,'triangle');
+    setMsg("Rashguard saved you — keep ripping!",90); return; }
+  w.surfing=false; w.cur=null; w.ride=0; w.combo=0; w.style=0;
   player.downT=48; setMsg(reason||"WIPEOUT! Worked in da impact zone.",120); beep(130,.28,'sawtooth');
   if(score>high){ high=score; setHS(high); } }
 
@@ -704,6 +801,7 @@ function render(){
   if(state==='splash') return drawSplash();
   if(state==='help') return drawHelp();
   drawSky(); drawMountains(); drawSeaBands(); drawSand();
+  if(state==='shop'){ drawBeach(); drawShop(); drawHUD(); return; }
   if(state==='beach') drawBeach(); else if(state==='water') drawWater();
   drawHUD(); drawBanner();
 }
@@ -750,6 +848,12 @@ function drawHelp(){
 }
 
 function drawBeachProps(){
+  // fixed Hawaiian-flair buildings along the back of the beach (original art)
+  drawShack(beach.shack.x, beach.shack.y);
+  drawIceShop(beach.iceShop.x, beach.iceShop.y);
+  // the two North Shore locals you can say hi to
+  for(const f of beach.folks){ softShadow(f.x,f.y+12,10);
+    drawDude(f.x,f.y,'#a86a34','#2f8a6a',1,'stand',frame); }
   // Chandler + his hale (always on the sand, both scenes)
   softShadow(beach.chandler.x, beach.chandler.y+12, 11);
   px(38,beach.chandler.y-10,46,18,'#6b4a2a'); px(34,beach.chandler.y-15,54,6,'#8a5a2a');
@@ -764,6 +868,31 @@ function drawBeachProps(){
   if(beach.local){ const L=beach.local; softShadow(L.x,L.y+13,9);
     drawDude(L.x,L.y,'#b07a44','#8a4a6a',L.dir,(frame>>2)%2?'walk':'stand',frame); }
   if(beach.tourist) drawTourist(beach.tourist);
+}
+// surf shack / home — original pixel building
+function drawShack(x,y){
+  px(x-22,y-24,44,24,'#8a5a32'); px(x-22,y-24,44,3,'#a56a3a');       // wall + lit top
+  px(x-26,y-30,52,8,'#6a3f20'); px(x-26,y-30,52,2,'#7a4a28');        // thatch roof
+  px(x-6,y-14,12,14,'#3a2412');                                      // doorway
+  px(x-20,y-18,8,7,'#9ad'); px(x+12,y-18,8,7,'#9ad');                // windows
+  px(x-30,y-2,4,-18,'#5a3a1a');                                      // tiki torch post
+  const fl=(frame>>3)%2; px(x-30,y-22,4,5,fl?'#ff9a3a':'#ffd23f');   // flame flicker
+  // a surfboard leaning on the wall
+  px(x+20,y-26,4,26,'#2fbfae'); px(x+20,y-28,4,3,'#6fe');
+  ctx.fillStyle=C.gold; ctx.font='6px monospace'; ctx.textAlign='center'; ctx.fillText('SURF SHACK',x,y-33); ctx.textAlign='left';
+}
+// shave-ice stand = the SHOP — original pixel building
+function drawIceShop(x,y){
+  px(x-24,y-22,48,22,'#2a7a9a'); px(x-24,y-22,48,3,'#3a9aba');       // stand body
+  // striped awning
+  for(let i=0;i<8;i++) px(x-24+i*6,y-28,6,6, i%2?'#ff5a7a':'#fff');
+  px(x-20,y-14,40,3,'#1a4a5a');                                      // counter
+  // shave-ice cups on the counter (rainbow)
+  px(x-16,y-20,5,6,'#7ad9ff'); px(x-4,y-20,5,6,'#ff8cc0'); px(x+8,y-20,5,6,'#ffd23f');
+  px(x-16,y-22,5,2,'#fff'); px(x-4,y-22,5,2,'#fff'); px(x+8,y-22,5,2,'#fff'); // ice tops
+  px(x-12,y-3,24,3,C.gold);                                          // flowers/lei garland
+  ctx.fillStyle=C.gold; ctx.font='6px monospace'; ctx.textAlign='center';
+  ctx.fillText('🍧 SHAVE ICE',x,y-33); ctx.fillText('[B] SHOP',x,y+8); ctx.textAlign='left';
 }
 function drawBeachBoard(x,y,facing,moving){
   // the surfer's board on the sand: carried upright at your side while walking,
@@ -789,7 +918,7 @@ function drawBeach(){
   if(player.knockT>0){
     softShadow(player.x, player.y+12, 11);
     drawBeachBoard(player.x,player.y,player.facing,false);
-    drawDude(player.x,player.y,C.skin,player.board,player.facing,'down',frame);
+    drawDude(player.x,player.y,C.skin,player.shorts,player.facing,'down',frame);
     const secs=Math.ceil(player.knockT/60);
     ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
     ctx.fillText('OUT COLD '+secs+'s',player.x,player.y-14); ctx.textAlign='left';
@@ -797,7 +926,8 @@ function drawBeach(){
     const moving=keys.left||keys.right||keys.up||keys.down;
     softShadow(player.x, player.y+13, 10);
     drawBeachBoard(player.x,player.y,player.facing,moving);
-    drawDude(player.x,player.y,C.skin,player.board,player.facing,moving?'walk':'stand',frame);
+    drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
+    if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
     if(player.injured) px(player.x-3,player.y-20,6,3,C.bad);
   }
 }
@@ -897,7 +1027,7 @@ function drawWater(){
   // spray particles (behind the surfer)
   for(const s of w.spray){ const c = s.kind==='barrel'?C.purp : s.life>12?'#fff':C.foam; px(s.x,s.y,2,2,c); }
   // player
-  if(player.downT>0){ drawDude(player.x,player.y,C.skin,player.board,player.facing,'down',frame); }
+  if(player.downT>0){ drawDude(player.x,player.y,C.skin,player.shorts,player.facing,'down',frame); }
   else {
     softShadow(player.x, player.y+9, 13);
     drawBoard(player.x,player.y+4,player.board,player.facing);
@@ -906,7 +1036,9 @@ function drawWater(){
                : 'surf';
     // board carve tilt during a cutback reads as a little spray arc under the tail
     if(w.surfing&&player.trickT>0){ for(let i=0;i<4;i++) px(player.x-14+i*8, player.y+9+Math.sin(frame*0.4+i)*2, 3,2, C.foam); }
-    drawDude(player.x,player.y-5,C.skin,player.board,player.facing,pose,frame);
+    drawDude(player.x,player.y-5,C.skin,player.shorts,player.facing,pose,frame);
+    if(player.shirt!=='none'){ const ty = w.surfing ? player.y-13 : player.y-7;
+      px(player.x-5,ty,10,7,player.shirt); px(player.x-5,ty,10,2,shade(player.shirt,30)); }
     if(w.surfing){
       const label = player.trickT>0 ? (player.trickKind==='barrel'?'BARREL!':player.trickKind==='lip'?'OFF-DA-LIP':'CUTBACK') : 'SHREDDIN';
       const col = player.trickT>0 ? (player.trickKind==='barrel'?C.purp:C.gold) : C.good;
@@ -922,12 +1054,51 @@ function drawHui(x,y,surfing){ drawBoard(x,y+4,'#222',-1); drawDude(x,y-5,C.huiS
   px(x-9,y-26,18,4,'#111'); ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
   ctx.fillText('HUI',x,y-29); ctx.textAlign='left'; }
 
+function drawShop(){
+  // dim the beach behind the menu
+  ctx.save(); ctx.globalAlpha=0.72; px(0,0,W,H,'#0a0618'); ctx.restore();
+  const bw=320, bh=236, bx=(W-bw)/2, by=(H-bh)/2;
+  px(bx,by,bw,bh,'#14233a'); ctx.strokeStyle=C.good; ctx.lineWidth=2; ctx.strokeRect(bx+1,by+1,bw-2,bh-2);
+  // striped header like the awning
+  for(let i=0;i<bw/10;i++) px(bx+i*10,by,10,10,i%2?'#ff5a7a':'#fff');
+  ctx.textAlign='center'; ctx.fillStyle='#14233a'; ctx.font='bold 10px "Courier New",monospace';
+  ctx.fillText('SHAVE ICE & SURF SHOP',W/2,by+8);
+  ctx.fillStyle=C.gold; ctx.font='bold 11px "Courier New",monospace';
+  ctx.fillText('🪙 '+coins+' coins',W/2,by+24);
+  ctx.font='9px "Courier New",monospace'; ctx.textAlign='left';
+  let yy=by+38;
+  for(let i=0;i<SHOP.length;i++){
+    const it=SHOP[i], isSel=i===shop.sel;
+    const ownedIt = it.kind==='treat' ? false : owned.includes(it.id);
+    const equipped = it.kind!=='treat' && equip[it.kind]===it.id;
+    if(isSel){ px(bx+6,yy-8,bw-12,13,'#24456a'); }
+    if(it.color && it.color!=='none') px(bx+12,yy-6,9,9,it.color); else px(bx+12,yy-6,9,9,'#334');
+    ctx.fillStyle = isSel?C.gold:C.txt;
+    let label=it.name;
+    if(it.perk==='longboard') label+=' ·catches easier';
+    if(it.perk==='tough') label+=' ·+1 hit';
+    ctx.fillText(label, bx+26, yy+1);
+    ctx.textAlign='right';
+    const right = equipped ? 'EQUIPPED' : ownedIt ? 'owned·ENTER' : (it.price===0?'free':('🪙'+it.price));
+    ctx.fillStyle = equipped?C.good : ownedIt?'#8fb' : (coins>=it.price?C.gold:C.bad);
+    ctx.fillText(right, bx+bw-12, yy+1);
+    ctx.textAlign='left';
+    yy+=15;
+  }
+  ctx.textAlign='center'; ctx.fillStyle='#8fb'; ctx.font='8px "Courier New",monospace';
+  ctx.fillText('up/down choose · ENTER buy/equip · B close',W/2,by+bh-8);
+  ctx.textAlign='left';
+}
+
 function drawHUD(){
   px(0,0,W,16,'#00000059');
   ctx.font='bold 11px "Courier New",monospace'; ctx.textAlign='left';
   ctx.fillStyle=C.gold; ctx.fillText('SCORE '+score,6,12);
   ctx.textAlign='right'; ctx.fillStyle=C.good; ctx.fillText('BEST '+high,W-6,12);
   ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText(state==='beach'?'🏖 BEACH':'🌊 LINEUP',W/2,12);
+  ctx.textAlign='left'; ctx.fillStyle=C.gold; ctx.font='bold 10px "Courier New",monospace';
+  ctx.fillText('🪙 '+coins, 92, 12);
+  ctx.font='bold 11px "Courier New",monospace';
   if(state==='water'&&water.surfing){ ctx.fillStyle=C.purp; ctx.fillText('RIDE '+water.ride+(water.combo>1?('  x'+water.combo):''),W/2,28); }
   if(player.injured){ ctx.fillStyle=C.bad; ctx.textAlign='center'; ctx.fillText('🩹 HURT — heal at Chandler on da beach',W/2, state==='water'?44:28); }
   if(flashT>0&&flash){ ctx.fillStyle=flash.col; ctx.font='bold 11px monospace'; ctx.textAlign='center'; ctx.fillText(flash.txt,flash.x,flash.y); }
