@@ -344,7 +344,7 @@ function setMsg(m,d=140){ msg=m; msgT=d; }
 function floatScore(txt,x,y,col){ flash={txt,x,y,col:col||C.gold}; flashT=70; }
 
 const player={ x:W/2, y:0, facing:1, board:C.good, shorts:'#2a3a6a', shirt:'none',
-  injured:0, recover:0, downT:0, invuln:0, trickT:0, trickKind:'', knockT:0 };
+  injured:0, recover:0, downT:0, invuln:0, trickT:0, trickKind:'', knockT:0, hitCool:0 };
 
 /* ---- shop catalog: cosmetic gear, a tiny perk here and there ---- */
 const SHOP = [
@@ -538,6 +538,18 @@ function buy(item){
 
 function updBeach(){
   const b=beach, sp=1.5;
+  if(player.hitCool>0) player.hitCool--;
+  if(b.screen===SCR.HOUSE && player.knockT===0 && player.hitCool===0){   // run over by traffic on the road
+    const ry=HOUSE_ROAD_Y;
+    for(const c of b.cars){
+      const r = c.kind==='car' ? [c.x-15,ry-6,c.x+15,ry+10] : [c.x-11,ry-2,c.x+11,ry+9];
+      if(feetHit(player.x,player.y,[r])){
+        player.knockT=180; player.hitCool=360; beep(90,.4,'sawtooth',.06);
+        setMsg(c.kind==='car'?"💥 A car wen' hit you! Out cold fo' 3 seconds...":"💥 Cyclist wen' bowl you ovah! Out cold fo' 3 seconds...",180);
+        break;
+      }
+    }
+  }
   if(player.knockT>0){            // knocked out by the ATV — no control (buggy still rolls via tickBuggy)
     player.knockT--;
     return;
@@ -1038,11 +1050,7 @@ function solidsNow(){
     out.push([W/2-54,100,W/2+54,164]);                          // the RCVA house
     out.push([64-4,ry-10,64+10,ry+0]);                            // tall palm (left)
     out.push([W-70-4,ry-8,W-70+10,ry+2]);                         // tall palm (right)
-    out.push([16,ry-10,W/2-16,ry]); out.push([W/2+16,ry-10,W-16,ry]); // hedge, with a gate gap in the middle
-    for(const c of b.cars){                                        // cars + cyclists on the road
-      if(c.kind==='car') out.push([c.x-15,ry-6,c.x+15,ry+10]);
-      else out.push([c.x-11,ry-2,c.x+11,ry+9]);
-    }
+    out.push([16,ry-12,W/2-22,ry]); out.push([W/2+16,ry-12,W-16,ry]); // stone wall (gate gap in the middle)
   } else if(b.screen===SCR.SURF){ out.push(palmRect(30,H-6),palmRect(W-30,H-6)); }
   else if(b.screen===SCR.TOWN){ out.push(palmRect(28,H-6),palmRect(92,H-12),palmRect(W/2+10,H-8),palmRect(W-30,H-6)); }
   else { out.push(palmRect(26,H-8),palmRect(84,H-14),palmRect(W/2-40,H-6),palmRect(W/2+70,H-12),palmRect(W-28,H-6)); }
@@ -1113,8 +1121,18 @@ function drawHouseScreen(){
   drawTallPalm(64, roadY-4, 70); drawTallPalm(W-70, roadY-2, 78);
   // the house itself
   drawRCVAHouse(W/2, houseBand+70);
-  // low hedge in front of the yard
-  for(let x=16;x<W-16;x+=10){ if(x+12>W/2-16 && x<W/2+16) continue; px(x,roadY-10,12,10,'#2f7a3c'); px(x,roadY-10,12,2,'#3f9a4c'); }  // gate gap in the middle
+  // low stone wall in front of the yard (with a gate gap in the middle)
+  { const wy=roadY-12, gx0=W/2-16, gx1=W/2+16;
+    const seg=(x0,x1)=>{
+      px(x0,wy,x1-x0,12,'#a8a08e');                              // stone body
+      px(x0,wy+3,x1-x0,1,'#7f7868'); px(x0,wy+8,x1-x0,1,'#7f7868');       // mortar courses
+      for(let x=x0;x<x1;x+=12){ px(x,wy+4,1,4,'#7f7868'); px(x+6,wy+9,1,3,'#7f7868'); } // staggered joints
+      px(x0,wy,x1-x0,3,'#cfc8b6'); px(x0,wy,x1-x0,1,'#e6e0d0');  // concrete cap + highlight
+      px(x0,wy+11,x1-x0,1,'#6a6456');                            // base shadow
+    };
+    seg(16,gx0); seg(gx1,W-16);
+    for(const gx of [gx0-6,gx1]){ px(gx,wy-6,6,18,'#8f8776'); px(gx-1,wy-8,8,3,'#cfc8b6'); px(gx,wy-6,1,18,'#b5ad9a'); }  // gate pillars
+  }
   // --- the ROAD (cars + cyclists go by) ---
   px(0,roadY,W,14,'#3a3a40'); px(0,roadY,W,2,'#4a4a52'); px(0,roadY+14,W,2,'#2a2a30');
   for(let x=0; x<W; x+=24) px(x+6,roadY+6,10,2,'#d8d26a');   // center dashes
@@ -1128,12 +1146,17 @@ function drawHouseScreen(){
   for(let i=0;i<14;i++){ const x=(i*97+23)%W, yy=walkTop+20+((i*53)%(H-walkTop-26)); px(x,yy,2,2,i%2?'#f4e27a':'#f2f2f2'); } // little flowers
   // player
   const moving=keys.left||keys.right||keys.up||keys.down;
+  if(player.knockT>0){
+    softShadow(player.x, player.y+12, 11);
+    drawDude(player.x,player.y,C.skin,player.shorts,player.facing,'down',frame);
+    ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
+    ctx.fillText('OUT COLD '+Math.ceil(player.knockT/60)+'s',player.x,player.y-14); ctx.textAlign='left';
+    return;
+  }
   softShadow(player.x, player.y+13, 10);
   drawBeachBoard(player.x,player.y,player.facing,moving);
   drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
   if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
-  // prompt at the TOP now (up = back to the beach)
-  ctx.fillStyle=C.txt; ctx.font='10px monospace'; ctx.textAlign='center'; ctx.fillText('▲ up to da surf beach',W/2,SEATOP+4); ctx.textAlign='left';
 
 }
 function drawTallPalm(x,by,h){
@@ -1175,7 +1198,7 @@ function drawRCVAHouse(x,y){
   px(x-wW/2+2, fy+6, wW-4, 2, g2);
   px(x-28, fy+18, 24, 10, glass); px(x+6, fy+18, 24, 10, glass);
   px(x-28,fy+18,24,2,'#aecbd8'); px(x+6,fy+18,24,2,'#aecbd8');
-  // ground-level posts holding it up (house sits above the hedge)
+  // ground-level posts holding it up (house sits above the wall)
   px(x-wW/2+6, topY+floorH*2, 6, 18, g3); px(x+wW/2-12, topY+floorH*2, 6, 18, g3); px(x-4, topY+floorH*2, 6, 18, g3);
   // the sign: plain pixel lettering "RCVA" on the upper rail (NOT the brand's diamond logo)
   px(x-28, topY+4, 56, 12, '#14233a'); px(x-28, topY+4, 56, 2, '#2a4a5a');
