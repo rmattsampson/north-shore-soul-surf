@@ -547,17 +547,25 @@ function updBeach(){
 
   // ----- screen transitions (walk off an edge) -----
   if(b.screen===SCR.HOUSE){
-    // RCVA house is a yard, no surf here: walk UP to go back to the surf spot
-    player.x=clamp(player.x,16,W-16); player.y=clamp(player.y,SHORE+4,H-14);
-    if(player.y<=SHORE+6 && keys.up){ b.screen=SCR.SURF; player.y=H-44; setMsg("Back to da surf spot.",90); return; }
+    // RCVA house screen: roam the WHOLE screen (up to the hillside, all the way down the sand)
+    player.x=clamp(player.x,10,W-10); player.y=clamp(player.y,SEATOP+14,H-14);
+    // walk into the top edge (the hillside) to head back up to the surf spot
+    if(player.y<=SEATOP+16 && keys.up){ b.screen=SCR.SURF; player.y=H-44; setMsg("Back to da surf spot.",90); return; }
   } else {
     // beach screens: ↑ at shoreline paddles out
-    player.x=clamp(player.x,2,W-2); player.y=clamp(player.y,SHORE+4,H-14);
+    player.y=clamp(player.y,SHORE+4,H-14);
     if(player.y<=SHORE+6 && keys.up){ enterWater(); return; }
     // left/right edges move between TOWN(0) ◀ SURF(1) ▶ COVE(2)
-    if(player.x<=4 && keys.left && b.screen>SCR.TOWN){ b.screen--; player.x=W-20; announceScreen(); return; }
-    if(player.x>=W-4 && keys.right && b.screen<SCR.COVE){ b.screen++; player.x=20; announceScreen(); return; }
-    player.x=clamp(player.x,16,W-16);
+    // trigger when you walk INTO the edge (not a pixel-exact test)
+    if(player.x<=10 && keys.left){
+      if(b.screen>SCR.TOWN){ b.screen--; player.x=W-24; announceScreen(); return; }
+      player.x=10;  // western-most screen: wall
+    }
+    if(player.x>=W-10 && keys.right){
+      if(b.screen<SCR.COVE){ b.screen++; player.x=24; announceScreen(); return; }
+      player.x=W-10; // eastern-most screen: wall
+    }
+    player.x=clamp(player.x,10,W-10);
     // from the SURF screen, walk DOWN past the sand to reach the RCVA house
     if(b.screen===SCR.SURF && player.y>=H-16 && keys.down){ b.screen=SCR.HOUSE; player.y=SHORE+14; setMsg("⬇ Down to da RCVA surf house...",110); return; }
   }
@@ -990,45 +998,80 @@ function drawBeach(){
 }
 // RCVA surf house — a grassy yard below the surf spot (original house, text sign only)
 function drawHouseScreen(){
-  // the sea band becomes grass/yard up here
-  px(0,SEATOP,W,SHORE-SEATOP,'#3f8a4a'); px(0,SEATOP,W,3,'#4f9a58');   // lawn
-  for(let i=0;i<60;i++){ const x=(i*71)%W, y=SEATOP+6+((i*37)%(SHORE-SEATOP-8)); px(x,y,1,2,'#2f7a3c'); } // grass flecks
-  px(0,SHORE,W,H-SHORE,C.sandWet); gradBand(0,SHORE,W,H-SHORE,C.sandWet,C.sand,6);  // sandy path/yard
-  // a fence line
-  for(let x=10;x<W;x+=22){ px(x,SEATOP+4,3,12,'#caa06a'); } px(0,SEATOP+8,W,2,'#b8905a');
+  // lush forested hillside rising behind the house (layered green, 32-bit)
+  gradBand(0,SEATOP,W,(SHORE-SEATOP), '#1c3a26', '#2f6a3c', 8);
+  // treeline silhouettes on the hill
+  ctx.fillStyle='#24502f';
+  for(let x=-10;x<W+10;x+=16){ const hh=12+((x*7)%14); ctx.beginPath();
+    ctx.moveTo(x,SEATOP+18); ctx.lineTo(x+8,SEATOP+18-hh); ctx.lineTo(x+16,SEATOP+18); ctx.closePath(); ctx.fill(); }
+  ctx.fillStyle='#2f6a3c';
+  for(let x=0;x<W;x+=22){ const hh=10+((x*5)%12); ctx.beginPath();
+    ctx.moveTo(x,SEATOP+34); ctx.lineTo(x+11,SEATOP+34-hh); ctx.lineTo(x+22,SEATOP+34); ctx.closePath(); ctx.fill(); }
+  // tall palms rising behind the house (like the photo)
+  drawTallPalm(70, SHORE+6, 92); drawTallPalm(W-90, SHORE+2, 104); drawTallPalm(W-40, SHORE+10, 80);
+  // sandy yard foreground
+  gradBand(0,SHORE,W,H-SHORE,C.sandWet,C.sand,6);
   drawRCVAHouse(beach.house.x, beach.house.y);
-  drawPalm(40,SHORE+40); drawPalm(W-40,SHORE+44);
-  // a local chilling in the yard
-  softShadow(W*0.3, SHORE+58, 10); drawDude(W*0.3, SHORE+50,'#a86a34','#c0392b',1,'stand',frame);
+  // big green hedge across the base of the house + a rock (foreground, like the photo)
+  for(let x=20;x<W-20;x+=10){ const hy=SHORE-6+Math.sin(x*0.3)*2; px(x,hy,12,14,'#2f7a3c'); px(x,hy,12,3,'#3f9a4c'); }
+  px(W/2-26,SHORE-2,24,14,'#5a5048'); px(W/2-26,SHORE-2,24,3,'#6a6052'); // rock
+  // a couple of locals sitting on the sand in front (like the photo)
+  softShadow(W*0.44,SHORE+40,9); drawDude(W*0.44,SHORE+34,'#a86a34','#c0392b',1,'down',frame);
+  softShadow(W*0.52,SHORE+42,9); drawDude(W*0.52,SHORE+36,'#c88a4e','#2b6cb0',1,'down',frame);
   // player
   const moving=keys.left||keys.right||keys.up||keys.down;
   softShadow(player.x, player.y+13, 10);
   drawBeachBoard(player.x,player.y,player.facing,moving);
   drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
   if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
-  ctx.fillStyle=C.txt; ctx.font='10px monospace'; ctx.textAlign='center'; ctx.fillText('▲ back to surf',W/2,SEATOP+2); ctx.textAlign='left';
+  ctx.fillStyle=C.txt; ctx.font='10px monospace'; ctx.textAlign='center'; ctx.fillText('▲ back to surf',W/2,SEATOP+10); ctx.textAlign='left';
+}
+function drawTallPalm(x,by,h){
+  // slender curved trunk rising high, drooping fronds — original
+  for(let i=0;i<h;i+=4){ const sway=Math.sin(i*0.05)*6; px(x+sway,by-h+i,4,4,'#6a4a28'); px(x+sway,by-h+i,1,4,'#8a6a3a'); }
+  const tx=x+Math.sin(0)*6, ty=by-h;
+  const g='#2f9e52',g2='#247f43',g3='#39b863';
+  px(tx-26,ty-2,28,5,g2); px(tx-22,ty+2,20,4,g);
+  px(tx+2,ty-2,28,5,g2);  px(tx+8,ty+2,20,4,g);
+  px(tx-16,ty-9,34,5,g3); px(tx-12,ty-14,26,5,g);
+  px(tx-5,ty-18,12,6,g3);
+  px(tx-3,ty-2,8,6,'#5a3a1a'); // coconuts
 }
 function drawRCVAHouse(x,y){
-  softShadow(x,y+18,34);
-  // two-storey beach house — original design, plain text sign (no brand logo)
-  px(x-44,y-52,88,54,'#e7ddc8'); px(x-44,y-52,88,4,'#f2ead8');      // body + lit top
-  px(x+30,y-52,14,54,'#d2c7ad');                                     // shadow side
-  // roof
-  px(x-50,y-58,100,8,'#7a4a2a'); px(x-50,y-58,100,2,'#8a5a34');
-  // upstairs lanai railing + door
-  px(x-40,y-40,80,2,'#8a5a34'); for(let i=-38;i<40;i+=8) px(x+i,y-40,2,6,'#8a5a34');
-  px(x-8,y-50,16,10,'#5a9ad0'); px(x-8,y-50,16,2,'#7ab8e8');         // upper glass door
-  // downstairs: big window + door
-  px(x-38,y-26,24,18,'#5a9ad0'); px(x-38,y-26,24,2,'#7ab8e8');       // window
-  px(x+10,y-24,16,24,'#3a2412');                                     // door
-  px(x+22,y-14,2,2,'#ffd23f');                                       // door knob
-  // surfboards leaning by the door
-  px(x+30,y-28,4,28,'#ff5d5d'); px(x+36,y-30,4,30,'#2fbfae');
-  // the sign: plain pixel lettering "RCVA" on a board over the door (NOT a brand logo)
-  px(x-30,y-66,60,10,'#1a2a3a'); px(x-30,y-66,60,2,'#2a4a5a');
-  ctx.fillStyle=C.gold; ctx.font='bold 9px "Courier New",monospace'; ctx.textAlign='center';
-  ctx.fillText('R C V A',x,y-58);
-  ctx.fillStyle=C.good; ctx.font='7px monospace'; ctx.fillText('SURF HOUSE',x,y+10); ctx.textAlign='left';
+  softShadow(x,y+18,46);
+  const g1='#9a988c', g2='#b4b2a4', g3='#7c7a70', wood='#8a887c', glass='#8fb0bf';
+  const topY=y-92, floorH=30, wW=104;
+  // BODY — two grey-wood storeys (daytime reference)
+  px(x-wW/2, topY, wW, floorH*2, g1);
+  px(x-wW/2, topY, wW, 3, g2);                    // lit top edge
+  px(x+wW/2-14, topY, 14, floorH*2, g3);          // shadow side
+  // big PEAKED / gabled roof with wide eaves (the signature of the photo)
+  ctx.fillStyle='#6a6860';
+  ctx.beginPath(); ctx.moveTo(x-wW/2-12, topY+2); ctx.lineTo(x, topY-22); ctx.lineTo(x+wW/2+12, topY+2); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#7c7a70';
+  ctx.beginPath(); ctx.moveTo(x-wW/2-12, topY+2); ctx.lineTo(x, topY-22); ctx.lineTo(x, topY+2); ctx.closePath(); ctx.fill(); // lit roof half
+  px(x-wW/2-12, topY+2, wW+24, 3, '#58564e');     // eave shadow line
+  // tall flagpole on the peak
+  px(x-1, topY-40, 2, 18, '#ccc'); px(x+1, topY-40, 7, 5, '#eee'); // pole + little flag
+  // --- upper lanai: full-width railing + glass doors ---
+  let fy=topY;
+  for(let i=-wW/2+4;i<wW/2-2;i+=6) px(x+i, fy+8, 2, 9, g2);  // balusters
+  px(x-wW/2+2, fy+6, wW-4, 2, g2);                            // top rail
+  px(x-26, fy+18, 22, 10, glass); px(x+6, fy+18, 22, 10, glass);
+  px(x-26,fy+18,22,2,'#aecbd8'); px(x+6,fy+18,22,2,'#aecbd8');
+  // --- lower lanai: railing + doors ---
+  fy=topY+floorH;
+  for(let i=-wW/2+4;i<wW/2-2;i+=6) px(x+i, fy+8, 2, 9, g2);
+  px(x-wW/2+2, fy+6, wW-4, 2, g2);
+  px(x-28, fy+18, 24, 10, glass); px(x+6, fy+18, 24, 10, glass);
+  px(x-28,fy+18,24,2,'#aecbd8'); px(x+6,fy+18,24,2,'#aecbd8');
+  // ground-level posts holding it up (house sits above the hedge)
+  px(x-wW/2+6, topY+floorH*2, 6, 18, g3); px(x+wW/2-12, topY+floorH*2, 6, 18, g3); px(x-4, topY+floorH*2, 6, 18, g3);
+  // the sign: plain pixel lettering "RCVA" on the upper rail (NOT the brand's diamond logo)
+  px(x-28, topY+4, 56, 12, '#14233a'); px(x-28, topY+4, 56, 2, '#2a4a5a');
+  ctx.fillStyle=C.gold; ctx.font='bold 10px "Courier New",monospace'; ctx.textAlign='center';
+  ctx.fillText('R C V A', x, topY+13);
+  ctx.fillStyle=C.good; ctx.font='7px monospace'; ctx.fillText('SURF HOUSE', x, y+16); ctx.textAlign='left';
 }
 function drawProp(p){
   if(p.k==='slipper'){ px(p.x-5,p.y,10,4,'#2e6bbf'); px(p.x-1,p.y-2,2,3,'#1a4a8a'); }
