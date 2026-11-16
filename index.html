@@ -547,10 +547,10 @@ function updBeach(){
 
   // ----- screen transitions (walk off an edge) -----
   if(b.screen===SCR.HOUSE){
-    // RCVA house screen: roam the WHOLE screen (up to the hillside, all the way down the sand)
-    player.x=clamp(player.x,10,W-10); player.y=clamp(player.y,SEATOP+14,H-14);
-    // walk into the top edge (the hillside) to head back up to the surf spot
-    if(player.y<=SEATOP+16 && keys.up){ b.screen=SCR.SURF; player.y=H-44; setMsg("Back to da surf spot.",90); return; }
+    // RCVA house screen. House + hillside up top, open sand you can roam below. You enter at
+    // the bottom sand (continued down the beach); walk back DOWN off the bottom to return to surf.
+    player.x=clamp(player.x,10,W-10); player.y=clamp(player.y,SEATOP+14,H-6);
+    if(player.y>=H-8 && keys.down){ b.screen=SCR.SURF; player.x=clamp(player.x,20,W-20); player.y=H-20; setMsg("Back up da beach to da surf.",90); beep(560,.07,'triangle'); return; }
   } else {
     // beach screens: ↑ at shoreline paddles out
     player.y=clamp(player.y,SHORE+4,H-14);
@@ -566,8 +566,9 @@ function updBeach(){
       player.x=W-10; // eastern-most screen: wall
     }
     player.x=clamp(player.x,10,W-10);
-    // from the SURF screen, walk DOWN past the sand to reach the RCVA house
-    if(b.screen===SCR.SURF && player.y>=H-16 && keys.down){ b.screen=SCR.HOUSE; player.y=SHORE+14; setMsg("⬇ Down to da RCVA surf house...",110); return; }
+    // from the SURF beach, walk DOWN off the bottom to continue to the RCVA house screen;
+    // land on the open sand in FRONT of the house (not stuck in the hillside grass).
+    if(b.screen===SCR.SURF && player.y>=H-14 && keys.down){ b.screen=SCR.HOUSE; player.x=clamp(player.x,20,W-20); player.y=H-24; setMsg("⬇ Down da beach to da RCVA house...",110); beep(560,.07,'triangle'); return; }
   }
 
   // ----- per-screen interactions -----
@@ -1024,7 +1025,7 @@ function drawHouseScreen(){
   drawBeachBoard(player.x,player.y,player.facing,moving);
   drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
   if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
-  ctx.fillStyle=C.txt; ctx.font='10px monospace'; ctx.textAlign='center'; ctx.fillText('▲ back to surf',W/2,SEATOP+10); ctx.textAlign='left';
+  ctx.fillStyle=C.txt; ctx.font='10px monospace'; ctx.textAlign='center'; ctx.fillText('▼ back to surf beach',W/2,H-4); ctx.textAlign='left';
 }
 function drawTallPalm(x,by,h){
   // slender curved trunk rising high, drooping fronds — original
