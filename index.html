@@ -380,8 +380,7 @@ function skyNow(){
 }
 function isNight(){ const t=dayT%1; return t>=0.70 && t<0.86; }
 let sleepFade=0;  // >0 = sleep fade-to-black playing
-function sleepTilMorning(){ dayT=0.10; sleepFade=70; setMsg("😴 Zzz... slept till morning. Fresh day, braddah!",150); beep(360,.2,'triangle'); if(score>high){high=score;setHS(high);}
-  if(beach&&beach.tidepools) for(const tp of beach.tidepools) tp.done=false; }  // tide pools refill overnight
+function sleepTilMorning(){ dayT=0.10; sleepFade=70; setMsg("😴 Zzz... slept till morning. Fresh day, braddah!",150); beep(360,.2,'triangle'); if(score>high){high=score;setHS(high);} }
 
 const player={ x:W/2, y:0, facing:1, board:C.good, shorts:'#2a3a6a', shirt:'none',
   injured:0, recover:0, downT:0, invuln:0, trickT:0, trickKind:'', knockT:0, hitCool:0 };
@@ -464,8 +463,6 @@ function buildBeach(){
     folks:[ {x:W*0.42, y:H-30, cool:0}, {x:W*0.72, y:H-22, cool:0} ],  // locals (town)
     house:{x:W/2, y:SHORE+40},        // RCVA surf house (house screen, below surf)
     cars:[], road:[], scrLock:0,      // road traffic behind the house
-    // tide pools on the cove-down screen — walk up + B to search for a find
-    tidepools:[ {x:W*0.28,y:0,done:false}, {x:W*0.54,y:0,done:false}, {x:W*0.78,y:0,done:false} ],
     screen:1 };                       // 0=TOWN  1=SURF  2=COVE  3=RCVA HOUSE  (start on surf)
   const kinds=['slipper','honu','cooler'];
   for(let i=0;i<3;i++) beach.props.push({k:kinds[i],x:rnd(90,W-90),y:rnd(H-70,H-24)});
@@ -477,6 +474,15 @@ const SCR={ TOWN:0, SURF:1, COVE:2, HOUSE:3, MYHOUSE:4, COVEDOWN:5 };
 const DOWN_MAP={ 0:4, 1:3, 2:5 };  // TOWN⬇=MY HOUSE, SURF⬇=RCVA house, COVE⬇=cove-down
 const UP_FROM ={ 4:0, 3:1, 5:2 };  // return targets
 const IS_DOWN = s => s>=3;         // screens 3,4,5 are vertical down-scenes
+// the LAND row, left→right, mirroring the beaches above (Town/Surf/Cove)
+const LAND_ROW = [SCR.MYHOUSE, SCR.HOUSE, SCR.COVEDOWN];
+function announceLand(){
+  const b=beach;
+  if(b.screen===SCR.MYHOUSE) setMsg("◀ YOUR PLACE — hammock to sleep",110);
+  else if(b.screen===SCR.HOUSE) setMsg("RCVA SURF HOUSE",110);
+  else if(b.screen===SCR.COVEDOWN) setMsg("DA COVE ▶ — quiet end of da road",110);
+  beep(560,.07,'triangle');
+}
 function announceScreen(){
   const b=beach;
   if(b.screen===SCR.TOWN) setMsg("◀ TOWN — shave-ice shop, surf shack, locals",120);
@@ -618,9 +624,20 @@ function updBeach(){
   // ----- screen transitions (walk off an edge) -----
   if(IS_DOWN(b.screen)){
     // Vertical down-scene: beach edge up top. UP walks back to the beach screen above it.
-    player.x=clamp(player.x,10,W-10); player.y=clamp(player.y,SEATOP+10,H-10);
+    player.y=clamp(player.y,SEATOP+10,H-10);
     if(b.scrLock>0){ b.scrLock--; }
     else if(player.y<=SEATOP+12 && keys.up){ b.screen=UP_FROM[b.screen]; b.scrLock=10; player.x=clamp(player.x,20,W-20); player.y=H-30; setMsg("Back up to da beach.",90); beep(560,.07,'triangle'); return; }
+    // LAND row scrolls left/right too: MY PLACE ◀ RCVA HOUSE ▶ DA COVE (mirrors the beaches above)
+    const li=LAND_ROW.indexOf(b.screen);
+    if(player.x<=10 && keys.left){
+      if(li>0){ b.screen=LAND_ROW[li-1]; player.x=W-24; announceLand(); return; }
+      player.x=10;
+    }
+    if(player.x>=W-10 && keys.right){
+      if(li<LAND_ROW.length-1){ b.screen=LAND_ROW[li+1]; player.x=24; announceLand(); return; }
+      player.x=W-10;
+    }
+    player.x=clamp(player.x,10,W-10);
   } else {
     // beach screens: ↑ at shoreline paddles out
     player.y=clamp(player.y,SHORE+4,H-14);
@@ -673,26 +690,10 @@ function updBeach(){
   consume('b'); // swallow stray B on other screens
   // MY HOUSE: walk up to the hammock (bottom-front) and press B to sleep until morning
   if(b.screen===SCR.MYHOUSE){
-    const hy=(SEATOP+10+70)+30;   // matches drawMyHouse hammock y
-    if(near(player.x,player.y,W/2,hy,30)){
+    const HM=myHammock();         // same spot drawMyHouse draws the hammock
+    if(near(player.x,player.y,HM.x,HM.y,34)){
       if(consume('b')){ sleepTilMorning(); return; }
       else if(!msgT) setMsg("🛏️ Your hammock — press B to sleep till morning",60);
-    }
-  }
-  // COVE-DOWN: search tide pools (B) for a lil find — coins + score, one per pool per day
-  if(b.screen===SCR.COVEDOWN && b.tidepools){
-    const py=(SEATOP+10)+54;   // pools sit in the grassy band
-    let onPool=null;
-    for(const tp of b.tidepools){ if(near(player.x,player.y,tp.x,py,22)) onPool=tp; }
-    if(onPool){
-      if(onPool.done){ if(!msgT) setMsg("Dis pool stay picked ovah. Try anothah, cuz.",50); }
-      else if(consume('b')){
-        onPool.done=true;
-        const finds=[["🐚 one cowry shell",12],["🦀 one lil aʻama crab",10],["⭐ one starfish",14],["🐠 one tiny manini",11],["🫧 opihi on da rock",16]];
-        const f=finds[ri(0,finds.length-1)]; score+=f[1]; coins+=Math.ceil(f[1]/3); setCoins(coins);
-        floatScore('+'+f[1],player.x,player.y-14,C.good); beep(820,.08,'triangle');
-        setMsg("Tide pool: found "+f[0]+"!  🪙+"+Math.ceil(f[1]/3),130);
-      } else if(!msgT) setMsg("🫧 Tide pool — press B to search",60);
     }
   }
   // props can be picked up on whichever beach screen they're on (surf/cove)
@@ -718,7 +719,8 @@ function updBeach(){
   if(b.photoT>0) b.photoT--;
   else if(!b.photographer){
     if(Math.random()<0.20){ b.photographer={x:rnd(140,340),y:H-60,t:ri(300,520)};
-      setMsg("📷 Photographer on da beach — go score waves fo' DOUBLE points!",150); beep(880,.1); }
+      // only announce it when you're actually standing on a beach screen
+      if(state==='beach' && !IS_DOWN(b.screen)){ setMsg("📷 Photographer on da beach — go score waves fo' DOUBLE points!",150); beep(880,.1); } }
     else b.photoT=ri(260,520);   // keep him off the beach, try again later
   }
   if(b.photographer){ b.photographer.t--; if(b.photographer.t<0){ b.photographer=null; b.photoT=ri(300,560); } }
@@ -1192,29 +1194,29 @@ function drawHouseScreen(){
   const roadY = SEATOP+92;           // the road
   // --- beach-sand edge at the very top ---
   gradBand(0,sandTop,W,houseBand-sandTop, C.sand, C.sandWet, 4);
-  // --- grassy yard the house sits on ---
-  gradBand(0,houseBand,W,roadY-houseBand, '#3f8a4a', '#2f7a3c', 6);
-  for(let i=0;i<70;i++){ const x=(i*71)%W, yy=houseBand+4+((i*37)%(roadY-houseBand-6)); px(x,yy,1,2,'#246a30'); }
+  // --- the grounds the building sits on — different per screen ---
+  if(beach.screen===SCR.COVEDOWN){
+    // cove-down: sandy, rocky ground with driftwood + scrub (not tidy lawn)
+    gradBand(0,houseBand,W,roadY-houseBand, '#c9b074', '#9a8a52', 6);
+    for(let i=0;i<50;i++){ const x=(i*83)%W, yy=houseBand+4+((i*47)%(roadY-houseBand-6)); px(x,yy,2,2,i%3?'#b8a060':'#7a9a5a'); } // pebbles + scrub
+    for(const dx of [40, W*0.4, W-70]){ px(dx,roadY-16,20,3,'#8a7a5a'); px(dx+2,roadY-18,14,2,'#9a8a6a'); } // driftwood logs
+    px(W*0.22,roadY-18,16,10,'#6a6250'); px(W*0.72,roadY-14,12,8,'#6a6250');  // rocks
+  } else if(beach.screen===SCR.MYHOUSE){
+    // my place: tidy green lawn with flowers
+    gradBand(0,houseBand,W,roadY-houseBand, '#3f9a52', '#2f7a3c', 6);
+    for(let i=0;i<70;i++){ const x=(i*71)%W, yy=houseBand+4+((i*37)%(roadY-houseBand-6)); px(x,yy,1,2,'#246a30'); }
+    for(let i=0;i<16;i++){ const x=(i*89+17)%W, yy=houseBand+8+((i*51)%(roadY-houseBand-10)); px(x,yy,2,2,i%2?'#ff6b8a':'#ffd23f'); } // flowers
+  } else {
+    // RCVA: plain grassy yard
+    gradBand(0,houseBand,W,roadY-houseBand, '#3f8a4a', '#2f7a3c', 6);
+    for(let i=0;i<70;i++){ const x=(i*71)%W, yy=houseBand+4+((i*37)%(roadY-houseBand-6)); px(x,yy,1,2,'#246a30'); }
+  }
   // tall palms flanking the house
   drawTallPalm(64, roadY-4, 70); drawTallPalm(W-70, roadY-2, 78);
-  // the building depends on which down-screen this is
+  // the building depends on which down-screen this is (RCVA stays centered; others offset)
   if(beach.screen===SCR.HOUSE)      drawRCVAHouse(W/2, houseBand+70);
-  else if(beach.screen===SCR.MYHOUSE) drawMyHouse(W/2, houseBand+70);
-  else /* COVEDOWN */                drawCoveShack(W/2, houseBand+70);
-  // tide pools on the cove-down grass (original scenery; little critters to find)
-  if(beach.screen===SCR.COVEDOWN && beach.tidepools){
-    const py=houseBand+54;
-    for(const tp of beach.tidepools){
-      softShadow(tp.x,py+3,13);
-      // rocky rim + water
-      px(tp.x-13,py-7,26,16,'#6a6250'); px(tp.x-13,py-7,26,2,'#7f7868');     // rock
-      px(tp.x-10,py-5,20,11,'#2f93aa'); px(tp.x-10,py-5,20,2,'#5fc0d0');     // water + glint
-      for(let i=0;i<5;i++) if(dither(tp.x-8+i*4,py-1,0.5)) px(tp.x-8+i*4,py-1,2,1,'#bfeefc'); // ripples
-      if(!tp.done){ // a little critter peeking
-        px(tp.x-2,py-2,4,3,'#e07a4a'); px(tp.x-3,py-1,1,2,'#e07a4a'); px(tp.x+2,py-1,1,2,'#e07a4a'); // crab-ish
-      } else { px(tp.x-6,py+1,12,2,'#9a926f'); } // emptied, wet sand
-    }
-  }
+  else if(beach.screen===SCR.MYHOUSE) drawMyHouse(W*0.60, houseBand+70);
+  else /* COVEDOWN */                drawCoveShack(W*0.38, houseBand+70);
   // low stone wall in front of the yard (with a gate gap in the middle)
   { const wy=roadY-12, gx0=W/2-16, gx1=W/2+16;
     const seg=(x0,x1)=>{
@@ -1251,7 +1253,12 @@ function drawHouseScreen(){
   drawBeachBoard(player.x,player.y,player.facing,moving);
   drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
   if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
-
+  // land-row edge arrows (you can walk between MY PLACE ◀ RCVA ▶ DA COVE)
+  { const li=LAND_ROW.indexOf(beach.screen);
+    ctx.fillStyle=C.txt; ctx.font='10px monospace';
+    if(li>0){ ctx.textAlign='left'; ctx.fillText('◀',4,H-40); }
+    if(li<LAND_ROW.length-1){ ctx.textAlign='right'; ctx.fillText('▶',W-4,H-40); }
+    ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText('▲ up to da beach',W/2,SEATOP+6); ctx.textAlign='left'; }
 }
 function drawTallPalm(x,by,h){
   // slender curved trunk rising high, drooping fronds — original
@@ -1300,34 +1307,44 @@ function drawRCVAHouse(x,y){
   ctx.fillText('R C V A', x, topY+13);
   ctx.fillStyle=C.good; ctx.font='7px monospace'; ctx.fillText('SURF HOUSE', x, y+16); ctx.textAlign='left';
 }
-// YOUR place — a cozy single-storey cottage with a hammock strung out front
+// YOUR place — a teal plantation cottage with a covered porch + a big hammock to sleep in
 function drawMyHouse(x,y){
-  softShadow(x,y+18,40);
-  const w1='#caa06a', w2='#dcb87c', w3='#a8824e', roof='#7a4a2a';
-  const topY=y-50, floorH=46, wW=84;
-  px(x-wW/2, topY, wW, floorH, w1); px(x-wW/2, topY, wW, 3, w2); px(x+wW/2-12, topY, 12, floorH, w3); // body
-  // gable roof
-  ctx.fillStyle=roof; ctx.beginPath(); ctx.moveTo(x-wW/2-8,topY+2); ctx.lineTo(x,topY-20); ctx.lineTo(x+wW/2+8,topY+2); ctx.closePath(); ctx.fill();
-  ctx.fillStyle='#8a5a34'; ctx.beginPath(); ctx.moveTo(x-wW/2-8,topY+2); ctx.lineTo(x,topY-20); ctx.lineTo(x,topY+2); ctx.closePath(); ctx.fill();
-  px(x-wW/2-8,topY+2,wW+16,2,'#5a3a1a');
-  // door + windows (warm glow at night)
+  softShadow(x,y+18,44);
   const lit=isNight();
-  px(x-6,topY+22,12,24,'#3a2412'); px(x+3,topY+34,2,2,'#ffd23f');
-  px(x-28,topY+12,16,12, lit?'#ffd98a':'#8fb0bf'); px(x+12,topY+12,16,12, lit?'#ffd98a':'#8fb0bf');
-  px(x-28,topY+12,16,2,'#aecbd8'); px(x+12,topY+12,16,2,'#aecbd8');
-  // two posts + a hammock slung between them, out front (THIS is where you sleep)
-  const hy=y+30, px0=x-46, px1=x+46;
-  px(px0,hy-26,3,30,'#6a4a28'); px(px1,hy-26,3,30,'#6a4a28');          // posts
-  // hammock sag (a shallow curve of woven stripes)
-  for(let i=0;i<=40;i++){ const t=i/40, hx=px0+4+(px1-px0-8)*t, sag=Math.sin(t*Math.PI)*10;
-    px(hx, hy-8+sag, 2, 3, i%2?'#e07a5a':'#f2c27a'); }
-  px(px0+2,hy-10,4,2,'#8a5a34'); px(px1-4,hy-10,4,2,'#8a5a34');        // tie-offs
-  // little sign
-  px(x-26, topY-30, 52, 11, '#2a4a2a'); px(x-26,topY-30,52,2,'#3a6a3a');
-  ctx.fillStyle=C.gold; ctx.font='bold 8px "Courier New",monospace'; ctx.textAlign='center';
-  ctx.fillText('HOME', x, topY-22);
-  ctx.fillStyle=C.good; ctx.font='7px monospace'; ctx.fillText('[B] SLEEP AT NIGHT', x, hy+10); ctx.textAlign='left';
+  const w1='#3f8a8a', w2='#58a6a6', w3='#2f6a6a', roof='#b23a3a', roofHi='#d05a5a', trim='#f2ead8';
+  const topY=y-54, floorH=50, wW=92;
+  // teal board-and-batten body with vertical battens
+  px(x-wW/2, topY, wW, floorH, w1); px(x-wW/2, topY, wW, 3, w2); px(x+wW/2-14, topY, 14, floorH, w3);
+  for(let bx=x-wW/2+6; bx<x+wW/2-6; bx+=10) px(bx, topY+3, 1, floorH-3, w3);     // battens
+  // low-pitch HIP roof with wide eaves (red tin) — different from RCVA's tall gable
+  ctx.fillStyle=roof; ctx.beginPath(); ctx.moveTo(x-wW/2-10,topY+2); ctx.lineTo(x-22,topY-16); ctx.lineTo(x+22,topY-16); ctx.lineTo(x+wW/2+10,topY+2); ctx.closePath(); ctx.fill();
+  px(x-22,topY-16,44,3,roofHi); px(x-wW/2-10,topY+1,wW+20,2,'#7a2424');          // ridge hi + eave shadow
+  // covered front porch posts + rail
+  px(x-wW/2+2,topY+floorH-18,3,18,trim); px(x+wW/2-5,topY+floorH-18,3,18,trim);
+  px(x-wW/2+2,topY+floorH-18,wW-4,2,trim);
+  // dutch door + shuttered windows (warm glow at night)
+  px(x-6,topY+26,12,24,'#2a3a2a'); px(x+3,topY+36,2,2,'#ffd23f');
+  const g=lit?'#ffd98a':'#bfe0e0';
+  px(x-30,topY+14,16,14,g); px(x+14,topY+14,16,14,g);
+  px(x-32,topY+14,2,14,trim); px(x-14,topY+14,2,14,trim); px(x+12,topY+14,2,14,trim); px(x+30,topY+14,2,14,trim); // shutters
+  px(x-30,topY+14,16,2,trim); px(x+14,topY+14,16,2,trim);
+  // --- BIG hammock in the yard, left of the house (where you sleep) ---
+  const HM=myHammock(), hy=HM.y, px0=HM.x-42, px1=HM.x+42;
+  px(px0,hy-30,4,34,'#6a4a28'); px(px0,hy-30,2,34,'#8a6a3a');       // left post (lit edge)
+  px(px1,hy-30,4,34,'#6a4a28'); px(px1,hy-30,2,34,'#8a6a3a');       // right post
+  // deep woven sag, thicker + striped so it's unmistakable
+  for(let i=0;i<=56;i++){ const t=i/56, hx=px0+5+(px1-px0-10)*t, sag=Math.sin(t*Math.PI)*16;
+    px(hx, hy-10+sag, 2, 5, i%2?'#e0563a':'#f2c27a'); }
+  px(px0+3,hy-12,4,3,'#8a5a34'); px(px1-6,hy-12,4,3,'#8a5a34');     // tie-offs
+  px(px0-2,hy-33,8,3,'#d05a5a'); px(px1-6,hy-33,8,3,'#d05a5a');     // little post caps
+  // sign + prompt
+  px(x-30, topY-28, 60, 12, '#1a3a3a'); px(x-30,topY-28,60,2,'#2a5a5a');
+  ctx.fillStyle=C.gold; ctx.font='bold 9px "Courier New",monospace'; ctx.textAlign='center';
+  ctx.fillText('MY PLACE', x, topY-19);
+  ctx.fillStyle=C.good; ctx.font='7px monospace'; ctx.fillText('[B] SLEEP', HM.x, hy-36); ctx.textAlign='left';
 }
+// hammock center on the MY PLACE screen (shared by the drawing and the sleep check)
+function myHammock(){ return { x:W*0.60-96, y:SEATOP+10+70-11 }; }   // in the yard, left of MY PLACE
 // cove-down: a chill beach shack / lookout at the quiet spot
 function drawCoveShack(x,y){
   softShadow(x,y+16,34);
