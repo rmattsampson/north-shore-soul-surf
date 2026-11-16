@@ -1119,8 +1119,8 @@ function solidsNow(){
     if(b.screen===SCR.HOUSE)      out.push([W/2-52, houseBand+18, W/2+52, houseBand+70]);   // RCVA (centered)
     else if(b.screen===SCR.MYHOUSE) out.push([W*0.60-52, houseBand+20, W*0.60+52, houseBand+92]);   // house + porch
     else /* COVEDOWN */            out.push([W*0.38-35, houseBand+36, W*0.38+35, houseBand+70]);
-    // the two sidewalk/stone walls (gate gap in the middle) — only on RCVA which has the wall
-    if(b.screen===SCR.HOUSE){ const wy=roadY-12; out.push([16,wy,W/2-22,wy+12], [W/2+16,wy,W-16,wy+12]); }
+    // the stone walls along the sidewalk (drawn on every land screen; gate gap in the middle stays open)
+    { const wy=roadY-12; out.push([16,wy,W/2-22,wy+12], [W/2+16,wy,W-16,wy+12]); }
   }
   // ATV on the beach screens blocks you (it's solid); everything else is walk-through
   if(!IS_DOWN(b.screen) && b.buggy) out.push([b.buggy.x-16, SHORE+8, b.buggy.x+16, SHORE+24]);
