@@ -554,7 +554,7 @@ function update(){
   if(beachBuilt) tickBuggy();  // lifeguard ATV keeps driving even while you surf
   if(beachBuilt) tickLocal();  // a local strolls the beach ~1/min and drops stuff
   if(beachBuilt) tickTourist();  // a lone original tourist wanders by
-  if(beachBuilt) tickRoad();     // cars + cyclists on the road behind the RCVA house
+  // (land scenes have a sidewalk now, no road traffic)
   if(state==='splash'){ if(consume('enter')){ state='help'; beep(660,.1);} else if(consume('space')){ enterBeach(); } return; }
   if(state==='help'){ if(consume('enter')||consume('space')){ enterBeach(); } return; }
   if(state==='gameover'){ if(consume('enter')||consume('space')){ score=0; state='splash'; } return; }
@@ -592,17 +592,6 @@ function buy(item){
 function updBeach(){
   const b=beach, sp=1.5;
   if(player.hitCool>0) player.hitCool--;
-  if(IS_DOWN(b.screen) && player.knockT===0 && player.hitCool===0){   // run over by traffic on the road
-    const ry=HOUSE_ROAD_Y;
-    for(const c of b.cars){
-      const r = c.kind==='car' ? [c.x-15,ry-6,c.x+15,ry+10] : [c.x-11,ry-2,c.x+11,ry+9];
-      if(feetHit(player.x,player.y,[r])){
-        player.knockT=180; player.hitCool=360; beep(90,.4,'sawtooth',.06);
-        setMsg(c.kind==='car'?"💥 A car wen' hit you! Out cold fo' 3 seconds...":"💥 Cyclist wen' bowl you ovah! Out cold fo' 3 seconds...",180);
-        break;
-      }
-    }
-  }
   if(player.knockT>0){            // knocked out by the ATV — no control (buggy still rolls via tickBuggy)
     player.knockT--;
     return;
@@ -1191,7 +1180,7 @@ function drawHouseScreen(){
   // band heights down the screen
   const sandTop = SEATOP;            // sandy beach edge you walked down from (up top)
   const houseBand = SEATOP+10;       // house + yard sits here
-  const roadY = SEATOP+92;           // the road
+  const roadY = SEATOP+140;          // the path/sidewalk — moved farther down
   // --- beach-sand edge at the very top ---
   gradBand(0,sandTop,W,houseBand-sandTop, C.sand, C.sandWet, 4);
   // --- the grounds the building sits on — different per screen ---
@@ -1229,17 +1218,15 @@ function drawHouseScreen(){
     seg(16,gx0); seg(gx1,W-16);
     for(const gx of [gx0-6,gx1]){ px(gx,wy-6,6,18,'#8f8776'); px(gx-1,wy-8,8,3,'#cfc8b6'); px(gx,wy-6,1,18,'#b5ad9a'); }  // gate pillars
   }
-  // --- the ROAD (cars + cyclists go by) ---
-  px(0,roadY,W,14,'#3a3a40'); px(0,roadY,W,2,'#4a4a52'); px(0,roadY+14,W,2,'#2a2a30');
-  for(let x=0; x<W; x+=24) px(x+6,roadY+6,10,2,'#d8d26a');   // center dashes
-  for(const c of beach.cars) drawVehicle(c, roadY+3);
-  // --- walkable ground south of the road: sidewalk, then open grass (no mountains) ---
-  const walkTop = roadY+16;
-  px(0,walkTop,W,8,'#b9b2a0'); px(0,walkTop,W,2,'#d2cbb8'); px(0,walkTop+8,W,2,'#8f897a');   // sidewalk
-  for(let x=0;x<W;x+=22) px(x,walkTop+2,1,6,'#9d9788');                                       // paving seams
-  gradBand(0,walkTop+10,W,H-walkTop-10, '#3f8a4a', '#2f7a3c', 6);                              // lawn
-  for(let i=0;i<140;i++){ const x=(i*67)%W, yy=walkTop+14+((i*41)%(H-walkTop-16)); px(x,yy,1,2,'#246a30'); }
-  for(let i=0;i<14;i++){ const x=(i*97+23)%W, yy=walkTop+20+((i*53)%(H-walkTop-26)); px(x,yy,2,2,i%2?'#f4e27a':'#f2f2f2'); } // little flowers
+  // --- a concrete SIDEWALK path running across (no cars anymore) ---
+  px(0,roadY,W,16,'#c2bca8'); px(0,roadY,W,2,'#d8d2c0'); px(0,roadY+16,W,2,'#9a9480');   // path + top highlight + base shadow
+  for(let x=0;x<W;x+=26) px(x,roadY+2,1,12,'#a8a290');                                    // expansion joints
+  for(let i=0;i<24;i++){ const sx=(i*53)%W; px(sx,roadY+5+((i*7)%6),2,1,'#b0aa96'); }      // speckle
+  // --- open grass below the path ---
+  const walkTop = roadY+18;
+  gradBand(0,walkTop,W,H-walkTop, '#3f8a4a', '#2f7a3c', 6);                                 // lawn
+  for(let i=0;i<140;i++){ const x=(i*67)%W, yy=walkTop+6+((i*41)%(H-walkTop-8)); px(x,yy,1,2,'#246a30'); }
+  for(let i=0;i<14;i++){ const x=(i*97+23)%W, yy=walkTop+12+((i*53)%(H-walkTop-16)); px(x,yy,2,2,i%2?'#f4e27a':'#f2f2f2'); } // little flowers
   // player
   const moving=keys.left||keys.right||keys.up||keys.down;
   if(player.knockT>0){
@@ -1329,14 +1316,23 @@ function drawMyHouse(x,y){
   px(x-32,topY+14,2,14,trim); px(x-14,topY+14,2,14,trim); px(x+12,topY+14,2,14,trim); px(x+30,topY+14,2,14,trim); // shutters
   px(x-30,topY+14,16,2,trim); px(x+14,topY+14,16,2,trim);
   // --- BIG hammock in the yard, left of the house (where you sleep) ---
-  const HM=myHammock(), hy=HM.y, px0=HM.x-42, px1=HM.x+42;
-  px(px0,hy-30,4,34,'#6a4a28'); px(px0,hy-30,2,34,'#8a6a3a');       // left post (lit edge)
-  px(px1,hy-30,4,34,'#6a4a28'); px(px1,hy-30,2,34,'#8a6a3a');       // right post
-  // deep woven sag, thicker + striped so it's unmistakable
-  for(let i=0;i<=56;i++){ const t=i/56, hx=px0+5+(px1-px0-10)*t, sag=Math.sin(t*Math.PI)*16;
-    px(hx, hy-10+sag, 2, 5, i%2?'#e0563a':'#f2c27a'); }
-  px(px0+3,hy-12,4,3,'#8a5a34'); px(px1-6,hy-12,4,3,'#8a5a34');     // tie-offs
-  px(px0-2,hy-33,8,3,'#d05a5a'); px(px1-6,hy-33,8,3,'#d05a5a');     // little post caps
+  const HM=myHammock(), hy=HM.y, px0=HM.x-40, px1=HM.x+40;
+  // two posts with a crossbar
+  px(px0,hy-32,4,36,'#6a4a28'); px(px0,hy-32,2,36,'#8a6a3a');
+  px(px1,hy-32,4,36,'#6a4a28'); px(px1,hy-32,2,36,'#8a6a3a');
+  // suspension ropes from each post down to the hammock ends
+  for(let i=0;i<6;i++){ px(px0+3+i, hy-28+i*2, 1, 2, '#c8b89a'); px(px1-2-i, hy-28+i*2, 1, 2, '#c8b89a'); }
+  // the hammock bed: a filled banana curve (deep sag), with a lighter top edge and rope-net lines
+  const span=px1-px0, midSag=14;
+  for(let i=0;i<=span;i++){ const t=i/span, hx=px0+i, sag=Math.sin(t*Math.PI)*midSag;
+    const top=hy-6+sag, h=10;                 // canopy thickness
+    px(hx, top, 1, h, '#e0a86a');             // canvas body
+    px(hx, top, 1, 2, '#f2c892');             // lit top lip
+    px(hx, top+h-1, 1, 1, '#b07a44');         // underside shadow
+  }
+  for(let i=6;i<span;i+=8){ const t=i/span, hx=px0+i, sag=Math.sin(t*Math.PI)*midSag; px(hx, hy-6+sag, 1, 10, '#c8945a'); } // weave lines
+  // end gathers tied to the ropes
+  px(px0+2,hy-8,4,6,'#8a5a34'); px(px1-6,hy-8,4,6,'#8a5a34');
   // sign + prompt
   px(x-30, topY-28, 60, 12, '#1a3a3a'); px(x-30,topY-28,60,2,'#2a5a5a');
   ctx.fillStyle=C.gold; ctx.font='bold 9px "Courier New",monospace'; ctx.textAlign='center';
