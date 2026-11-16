@@ -418,15 +418,24 @@ let beachBuilt=false;
 function buildBeach(){
   beach={ photographer:null, buggy:null, chandler:{x:58,y:H-54}, local:null, tourist:null,
     props:[], photoT:ri(160,340), buggyT:ri(260,560), chatCool:60, localT:ri(2400,3600), touristT:ri(400,900),
-    // fixed Hawaiian-flair buildings along the back of the beach
-    iceShop:{x:W-70, y:SHORE+22},     // shave-ice stand = the SHOP
-    shack:{x:118, y:SHORE+20},        // surf shack / home
-    // a couple of North Shore locals to say hi to
-    folks:[ {x:W*0.42, y:H-30, cool:0}, {x:W*0.72, y:H-22, cool:0} ],
-    shopCool:0 };
+    // fixed Hawaiian-flair buildings
+    iceShop:{x:W-70, y:SHORE+22},     // shave-ice stand = the SHOP (town screen)
+    shack:{x:118, y:SHORE+20},        // surf shack / home (town screen)
+    folks:[ {x:W*0.42, y:H-30, cool:0}, {x:W*0.72, y:H-22, cool:0} ],  // locals (town)
+    house:{x:W/2, y:SHORE+40},        // RCVA surf house (house screen, below surf)
+    screen:1 };                       // 0=TOWN  1=SURF  2=COVE  3=RCVA HOUSE  (start on surf)
   const kinds=['slipper','honu','cooler'];
   for(let i=0;i<3;i++) beach.props.push({k:kinds[i],x:rnd(90,W-90),y:rnd(H-70,H-24)});
   beachBuilt=true;
+}
+// which screen owns which flair
+const SCR={ TOWN:0, SURF:1, COVE:2, HOUSE:3 };
+function announceScreen(){
+  const b=beach;
+  if(b.screen===SCR.TOWN) setMsg("◀ TOWN — shave-ice shop, surf shack, locals",120);
+  else if(b.screen===SCR.SURF) setMsg("SURF SPOT — ↑ paddle out · ↓ to da RCVA house",120);
+  else if(b.screen===SCR.COVE) setMsg("COVE ▶ — quiet beach, photographer hangs here",120);
+  beep(560,.07,'triangle');
 }
 
 function enterBeach(reason){
@@ -535,35 +544,66 @@ function updBeach(){
   if(keys.right){ player.x+=sp; player.facing=1; }
   if(keys.up) player.y-=sp;
   if(keys.down) player.y+=sp;
-  player.x=clamp(player.x,16,W-16); player.y=clamp(player.y,SHORE+4,H-14);
-  if(player.y<=SHORE+6 && keys.up){ enterWater(); return; }
 
-  if(player.injured && near(player.x,player.y,b.chandler.x,b.chandler.y+6,22)){
-    player.recover++;
-    if(player.recover>80){ player.injured=0; player.recover=0; beep(540,.14,'triangle');
-      setMsg("Chandler: 'You good now, braddah. Surf wit' aloha.'",150); }
-    else if(frame%30===0) setMsg("Chandler patching you up... hang loose",40);
-  } else if(near(player.x,player.y,b.chandler.x,b.chandler.y+6,22)){
-    // walk up to Chandler and he talks story — original soul-surf lines, pidgin spirit
-    if(b.chatCool>0) b.chatCool--;
-    else { setMsg("Chandler: "+CHANDLER_LINES[ri(0,CHANDLER_LINES.length-1)],150);
-      beep(500,.08,'triangle'); b.chatCool=260; }
+  // ----- screen transitions (walk off an edge) -----
+  if(b.screen===SCR.HOUSE){
+    // RCVA house is a yard, no surf here: walk UP to go back to the surf spot
+    player.x=clamp(player.x,16,W-16); player.y=clamp(player.y,SHORE+4,H-14);
+    if(player.y<=SHORE+6 && keys.up){ b.screen=SCR.SURF; player.y=H-44; setMsg("Back to da surf spot.",90); return; }
+  } else {
+    // beach screens: ↑ at shoreline paddles out
+    player.x=clamp(player.x,2,W-2); player.y=clamp(player.y,SHORE+4,H-14);
+    if(player.y<=SHORE+6 && keys.up){ enterWater(); return; }
+    // left/right edges move between TOWN(0) ◀ SURF(1) ▶ COVE(2)
+    if(player.x<=4 && keys.left && b.screen>SCR.TOWN){ b.screen--; player.x=W-20; announceScreen(); return; }
+    if(player.x>=W-4 && keys.right && b.screen<SCR.COVE){ b.screen++; player.x=20; announceScreen(); return; }
+    player.x=clamp(player.x,16,W-16);
+    // from the SURF screen, walk DOWN past the sand to reach the RCVA house
+    if(b.screen===SCR.SURF && player.y>=H-16 && keys.down){ b.screen=SCR.HOUSE; player.y=SHORE+14; setMsg("⬇ Down to da RCVA surf house...",110); return; }
   }
-  // SHOP: walk up to da shave-ice stand, press B to open the buy menu
-  if(near(player.x,player.y,b.iceShop.x,b.iceShop.y,24)){
-    if(consume('b')){ openShop(); return; }
-    else if(!msgT) setMsg("🍧 Shave Ice & Surf Shop — press B fo' shop",60);
-  } else if(consume('b')){ /* ignore B elsewhere */ }
-  // say HI to the locals when you're close (original aloha lines)
-  for(const f of b.folks){ if(f.cool>0) f.cool--;
-    if(near(player.x,player.y,f.x,f.y,18) && f.cool===0){
-      setMsg("Local: "+GREETS[ri(0,GREETS.length-1)],130); beep(600,.07,'triangle'); f.cool=240; } }
+
+  // ----- per-screen interactions -----
+  if(b.screen===SCR.SURF){
+    if(player.injured && near(player.x,player.y,b.chandler.x,b.chandler.y+6,22)){
+      player.recover++;
+      if(player.recover>80){ player.injured=0; player.recover=0; beep(540,.14,'triangle');
+        setMsg("Chandler: 'You good now, braddah. Surf wit' aloha.'",150); }
+      else if(frame%30===0) setMsg("Chandler patching you up... hang loose",40);
+    } else if(near(player.x,player.y,b.chandler.x,b.chandler.y+6,22)){
+      if(b.chatCool>0) b.chatCool--;
+      else { setMsg("Chandler: "+CHANDLER_LINES[ri(0,CHANDLER_LINES.length-1)],150);
+        beep(500,.08,'triangle'); b.chatCool=260; }
+    }
+  }
+  if(b.screen===SCR.TOWN){
+    // SHOP: walk up to da shave-ice stand, press B
+    if(near(player.x,player.y,b.iceShop.x,b.iceShop.y,24)){
+      if(consume('b')){ openShop(); return; }
+      else if(!msgT) setMsg("🍧 Shave Ice & Surf Shop — press B fo' shop",60);
+    }
+    // say HI to the locals
+    for(const f of b.folks){ if(f.cool>0) f.cool--;
+      if(near(player.x,player.y,f.x,f.y,18) && f.cool===0){
+        setMsg("Local: "+GREETS[ri(0,GREETS.length-1)],130); beep(600,.07,'triangle'); f.cool=240; } }
+  }
+  consume('b'); // swallow stray B on other screens
+  // props can be picked up on whichever beach screen they're on (surf/cove)
+  if(b.screen===SCR.SURF || b.screen===SCR.COVE){
+    for(const p of b.props){ if(!p.got && near(player.x,player.y,p.x,p.y,15)){
+      p.got=true; score+=5; coins+=2; setCoins(coins); beep(760,.06); floatScore('+5',p.x,p.y-10,C.good);
+      if(p.k==='slipper') setMsg("Found one lost slippah. Classic North Shore.",90);
+      if(p.k==='honu') setMsg("A honu restin'. Give 'um space, yeah.",90);
+      if(p.k==='cooler') setMsg("Cooler stay empty. Somebody wen' drink all da grindz.",90);
+    }}
+  }
+  if(false){
   for(const p of b.props){ if(!p.got && near(player.x,player.y,p.x,p.y,15)){
     p.got=true; score+=5; coins+=2; setCoins(coins); beep(760,.06); floatScore('+5',p.x,p.y-10,C.good);
     if(p.k==='slipper') setMsg("Found one lost slippah. Classic North Shore.",90);
     if(p.k==='honu') setMsg("A honu restin'. Give 'um space, yeah.",90);
     if(p.k==='cooler') setMsg("Cooler stay empty. Somebody wen' drink all da grindz.",90);
   }}
+  }
   // photographer: out only ~20% of the time. When his timer elapses, ROLL:
   // 20% he shows up (new spot, picked once), else he stays away for another window.
   // While he IS out we never touch his position — just count down his visit.
@@ -583,7 +623,7 @@ function tickBuggy(){
   if(b.buggyT>0)b.buggyT--; else if(!b.buggy){ b.buggy={x:-30}; }
   if(b.buggy){ b.buggy.x+=1.4; if(b.buggy.x>W+30){ b.buggy=null; b.buggyT=ri(380,760); }
     // ATV hits you -> knocked out ~3s, but only while you're ON the beach
-    else if(state==='beach' && player.knockT===0 && near(player.x,player.y,b.buggy.x,SHORE+16,16)){
+    else if(state==='beach' && beach.screen!==SCR.HOUSE && player.knockT===0 && near(player.x,player.y,b.buggy.x,SHORE+16,16)){
       player.knockT=180; beep(90,.4,'sawtooth',.06);
       setMsg("💥 LIFEGUARD ATV wen' run you ovah! Out cold fo' 3 seconds...",180); } }
 }
@@ -800,7 +840,8 @@ function wipeout(reason){ const w=water;
 function render(){
   if(state==='splash') return drawSplash();
   if(state==='help') return drawHelp();
-  drawSky(); drawMountains(); drawSeaBands(); drawSand();
+  drawSky(); drawMountains();
+  if(!(state==='beach' && beach.screen===SCR.HOUSE)){ drawSeaBands(); drawSand(); }
   if(state==='shop'){ drawBeach(); drawShop(); drawHUD(); return; }
   if(state==='beach') drawBeach(); else if(state==='water') drawWater();
   drawHUD(); drawBanner();
@@ -848,26 +889,41 @@ function drawHelp(){
 }
 
 function drawBeachProps(){
-  // fixed Hawaiian-flair buildings along the back of the beach (original art)
-  drawShack(beach.shack.x, beach.shack.y);
-  drawIceShop(beach.iceShop.x, beach.iceShop.y);
-  // the two North Shore locals you can say hi to
-  for(const f of beach.folks){ softShadow(f.x,f.y+12,10);
-    drawDude(f.x,f.y,'#a86a34','#2f8a6a',1,'stand',frame); }
-  // Chandler + his hale (always on the sand, both scenes)
-  softShadow(beach.chandler.x, beach.chandler.y+12, 11);
-  px(38,beach.chandler.y-10,46,18,'#6b4a2a'); px(34,beach.chandler.y-15,54,6,'#8a5a2a');
-  px(38,beach.chandler.y-15,54,2,'#a56a33');   // lit roof edge
-  drawDude(beach.chandler.x,beach.chandler.y,'#a86a34',C.sea3,1,'stand',frame);
-  px(beach.chandler.x-14,beach.chandler.y-26,30,4,'#111');
-  ctx.fillStyle=C.good; ctx.font='7px monospace'; ctx.textAlign='center';
-  ctx.fillText('CHANDLER',beach.chandler.x,beach.chandler.y-29); ctx.textAlign='left';
-  for(const p of beach.props){ if(!p.got){ softShadow(p.x,p.y+4,7); drawProp(p); } }
-  if(beach.photographer) drawPhotog(beach.photographer.x,beach.photographer.y);
-  if(beach.buggy){ softShadow(beach.buggy.x,SHORE+28,18); drawBuggy(beach.buggy.x,SHORE+16); }
-  if(beach.local){ const L=beach.local; softShadow(L.x,L.y+13,9);
-    drawDude(L.x,L.y,'#b07a44','#8a4a6a',L.dir,(frame>>2)%2?'walk':'stand',frame); }
-  if(beach.tourist) drawTourist(beach.tourist);
+  const b=beach;
+  // TOWN screen: shave-ice shop, surf shack, locals
+  if(b.screen===SCR.TOWN){
+    drawShack(b.shack.x, b.shack.y);
+    drawIceShop(b.iceShop.x, b.iceShop.y);
+    for(const f of b.folks){ softShadow(f.x,f.y+12,10);
+      drawDude(f.x,f.y,'#a86a34','#2f8a6a',1,'stand',frame); }
+  }
+  // SURF screen: Chandler + his hale
+  if(b.screen===SCR.SURF){
+    softShadow(b.chandler.x, b.chandler.y+12, 11);
+    px(38,b.chandler.y-10,46,18,'#6b4a2a'); px(34,b.chandler.y-15,54,6,'#8a5a2a');
+    px(38,b.chandler.y-15,54,2,'#a56a33');   // lit roof edge
+    drawDude(b.chandler.x,b.chandler.y,'#a86a34',C.sea3,1,'stand',frame);
+    px(b.chandler.x-14,b.chandler.y-26,30,4,'#111');
+    ctx.fillStyle=C.good; ctx.font='7px monospace'; ctx.textAlign='center';
+    ctx.fillText('CHANDLER',b.chandler.x,b.chandler.y-29); ctx.textAlign='left';
+  }
+  // props live on the SURF + COVE beaches
+  if(b.screen===SCR.SURF || b.screen===SCR.COVE){
+    for(const p of b.props){ if(!p.got){ softShadow(p.x,p.y+4,7); drawProp(p); } }
+  }
+  // roamers appear on the beach screens (not the house yard)
+  if(b.screen!==SCR.HOUSE){
+    if(b.photographer) drawPhotog(b.photographer.x,b.photographer.y);
+    if(b.buggy){ softShadow(b.buggy.x,SHORE+28,18); drawBuggy(b.buggy.x,SHORE+16); }
+    if(b.local){ const L=b.local; softShadow(L.x,L.y+13,9);
+      drawDude(L.x,L.y,'#b07a44','#8a4a6a',L.dir,(frame>>2)%2?'walk':'stand',frame); }
+    if(b.tourist) drawTourist(b.tourist);
+  }
+  // screen arrows so you know you can walk off the edge
+  if(b.screen===SCR.SURF||b.screen===SCR.COVE){ ctx.fillStyle=C.txt; ctx.font='10px monospace'; ctx.textAlign='left'; ctx.fillText('◀',4,H-40); }
+  if(b.screen===SCR.TOWN||b.screen===SCR.SURF){ ctx.fillStyle=C.txt; ctx.font='10px monospace'; ctx.textAlign='right'; ctx.fillText('▶',W-4,H-40); }
+  if(b.screen===SCR.SURF){ ctx.fillStyle=C.txt; ctx.font='10px monospace'; ctx.textAlign='center'; ctx.fillText('▼ RCVA house',W/2,H-4); }
+  ctx.textAlign='left';
 }
 // surf shack / home — original pixel building
 function drawShack(x,y){
@@ -912,6 +968,7 @@ function drawBeachBoard(x,y,facing,moving){
   }
 }
 function drawBeach(){
+  if(beach.screen===SCR.HOUSE){ drawHouseScreen(); return; }
   drawBeachProps();
   drawWaves();   // swell keeps rolling in while you're on the sand
   drawPalm(30,H-6); drawPalm(W-30,H-6);
@@ -930,6 +987,48 @@ function drawBeach(){
     if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
     if(player.injured) px(player.x-3,player.y-20,6,3,C.bad);
   }
+}
+// RCVA surf house — a grassy yard below the surf spot (original house, text sign only)
+function drawHouseScreen(){
+  // the sea band becomes grass/yard up here
+  px(0,SEATOP,W,SHORE-SEATOP,'#3f8a4a'); px(0,SEATOP,W,3,'#4f9a58');   // lawn
+  for(let i=0;i<60;i++){ const x=(i*71)%W, y=SEATOP+6+((i*37)%(SHORE-SEATOP-8)); px(x,y,1,2,'#2f7a3c'); } // grass flecks
+  px(0,SHORE,W,H-SHORE,C.sandWet); gradBand(0,SHORE,W,H-SHORE,C.sandWet,C.sand,6);  // sandy path/yard
+  // a fence line
+  for(let x=10;x<W;x+=22){ px(x,SEATOP+4,3,12,'#caa06a'); } px(0,SEATOP+8,W,2,'#b8905a');
+  drawRCVAHouse(beach.house.x, beach.house.y);
+  drawPalm(40,SHORE+40); drawPalm(W-40,SHORE+44);
+  // a local chilling in the yard
+  softShadow(W*0.3, SHORE+58, 10); drawDude(W*0.3, SHORE+50,'#a86a34','#c0392b',1,'stand',frame);
+  // player
+  const moving=keys.left||keys.right||keys.up||keys.down;
+  softShadow(player.x, player.y+13, 10);
+  drawBeachBoard(player.x,player.y,player.facing,moving);
+  drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
+  if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
+  ctx.fillStyle=C.txt; ctx.font='10px monospace'; ctx.textAlign='center'; ctx.fillText('▲ back to surf',W/2,SEATOP+2); ctx.textAlign='left';
+}
+function drawRCVAHouse(x,y){
+  softShadow(x,y+18,34);
+  // two-storey beach house — original design, plain text sign (no brand logo)
+  px(x-44,y-52,88,54,'#e7ddc8'); px(x-44,y-52,88,4,'#f2ead8');      // body + lit top
+  px(x+30,y-52,14,54,'#d2c7ad');                                     // shadow side
+  // roof
+  px(x-50,y-58,100,8,'#7a4a2a'); px(x-50,y-58,100,2,'#8a5a34');
+  // upstairs lanai railing + door
+  px(x-40,y-40,80,2,'#8a5a34'); for(let i=-38;i<40;i+=8) px(x+i,y-40,2,6,'#8a5a34');
+  px(x-8,y-50,16,10,'#5a9ad0'); px(x-8,y-50,16,2,'#7ab8e8');         // upper glass door
+  // downstairs: big window + door
+  px(x-38,y-26,24,18,'#5a9ad0'); px(x-38,y-26,24,2,'#7ab8e8');       // window
+  px(x+10,y-24,16,24,'#3a2412');                                     // door
+  px(x+22,y-14,2,2,'#ffd23f');                                       // door knob
+  // surfboards leaning by the door
+  px(x+30,y-28,4,28,'#ff5d5d'); px(x+36,y-30,4,30,'#2fbfae');
+  // the sign: plain pixel lettering "RCVA" on a board over the door (NOT a brand logo)
+  px(x-30,y-66,60,10,'#1a2a3a'); px(x-30,y-66,60,2,'#2a4a5a');
+  ctx.fillStyle=C.gold; ctx.font='bold 9px "Courier New",monospace'; ctx.textAlign='center';
+  ctx.fillText('R C V A',x,y-58);
+  ctx.fillStyle=C.good; ctx.font='7px monospace'; ctx.fillText('SURF HOUSE',x,y+10); ctx.textAlign='left';
 }
 function drawProp(p){
   if(p.k==='slipper'){ px(p.x-5,p.y,10,4,'#2e6bbf'); px(p.x-1,p.y-2,2,3,'#1a4a8a'); }
