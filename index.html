@@ -549,12 +549,11 @@ function updBeach(){
 
   // ----- screen transitions (walk off an edge) -----
   if(b.screen===SCR.HOUSE){
-    // RCVA house screen. House + hillside up top, open sand below. You pop out here from the
-    // beach; press UP to turn around and go straight back to the beach. (Different key from
-    // entry + a one-frame lock so it can't oscillate.)
+    // RCVA house screen. You pop out right AT the house (mid-screen). Turn around and walk
+    // DOWN off the bottom to go straight back to the beach. Lock prevents re-trigger.
     player.x=clamp(player.x,10,W-10); player.y=clamp(player.y,SEATOP+22,H-10);
     if(b.scrLock>0){ b.scrLock--; }
-    else if(player.y<=SEATOP+24 && keys.up){ b.screen=SCR.SURF; b.scrLock=10; player.x=clamp(player.x,20,W-20); player.y=H-30; setMsg("Back to da surf beach.",90); beep(560,.07,'triangle'); return; }
+    else if(player.y>=H-12 && keys.down){ b.screen=SCR.SURF; b.scrLock=10; player.x=clamp(player.x,20,W-20); player.y=H-30; setMsg("Back to da surf beach.",90); beep(560,.07,'triangle'); return; }
   } else {
     // beach screens: ↑ at shoreline paddles out
     player.y=clamp(player.y,SHORE+4,H-14);
@@ -572,7 +571,7 @@ function updBeach(){
     }
     player.x=clamp(player.x,10,W-10);
     // from the SURF beach, walk DOWN off the bottom → pop out AT the RCVA house (down top).
-    if(b.screen===SCR.SURF && player.y>=H-14 && keys.down && b.scrLock===0){ b.screen=SCR.HOUSE; b.scrLock=10; player.x=clamp(player.x,20,W-20); player.y=SEATOP+40; setMsg("⬇ Down da beach to da RCVA house",110); beep(560,.07,'triangle'); return; }
+    if(b.screen===SCR.SURF && player.y>=H-14 && keys.down && b.scrLock===0){ b.screen=SCR.HOUSE; b.scrLock=10; player.x=W/2; player.y=SHORE+34; setMsg("⬇ Down da beach to da RCVA house",110); beep(560,.07,'triangle'); return; }
   }
 
   // ----- per-screen interactions -----
@@ -996,9 +995,14 @@ function drawBeach(){
   if(beach.screen===SCR.HOUSE){ drawHouseScreen(); return; }
   drawBeachProps();
   drawWaves();   // swell keeps rolling in while you're on the sand
-  // lusher palm line along the back of the beach screens (varied sizes)
-  drawPalm(30,H-6); drawPalm(W-30,H-6);
-  drawPalm(96,H-10); drawPalm(W-104,H-8); drawPalm(W/2-30,H-12); drawPalm(W/2+60,H-6);
+  // palms vary by screen: 2 on the main SURF screen, 3–5 on town/cove
+  if(beach.screen===SCR.SURF){
+    drawPalm(30,H-6); drawPalm(W-30,H-6);
+  } else if(beach.screen===SCR.TOWN){
+    drawPalm(28,H-6); drawPalm(92,H-12); drawPalm(W/2+10,H-8); drawPalm(W-30,H-6);
+  } else { // COVE — 5 palms, lushest
+    drawPalm(26,H-8); drawPalm(84,H-14); drawPalm(W/2-40,H-6); drawPalm(W/2+70,H-12); drawPalm(W-28,H-6);
+  }
   if(player.knockT>0){
     softShadow(player.x, player.y+12, 11);
     drawBeachBoard(player.x,player.y,player.facing,false);
