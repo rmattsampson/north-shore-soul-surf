@@ -1,0 +1,14 @@
+{
+  "name": "North Shore — Soul Surf",
+  "short_name": "Soul Surf",
+  "description": "A tiny 16-bit North Shore surf game. No winners, no losers — just good vibes.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#140a20",
+  "theme_color": "#140a20",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

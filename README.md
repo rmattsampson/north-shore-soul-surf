@@ -59,3 +59,17 @@ assets, no dependencies, no network calls.
 MIT — see `LICENSE`.
 
 *Cheehoo! Surf wit' aloha, braddah.* 🤙
+
+## Install as an app / play online (PWA)
+
+The game is a Progressive Web App — it can install to your device and play offline.
+
+### Host it free on GitHub Pages
+1. Push this repo to GitHub (you already have it at `github.com/<you>/north-shore-soul-surf`).
+2. On GitHub: **Settings → Pages → Build and deployment → Source: Deploy from a branch**, pick `main` / `/ (root)`, Save.
+3. After a minute it's live at `https://<you>.github.io/north-shore-soul-surf/` — a public link you can send anyone.
+
+### Install it
+Open that URL in Chrome/Edge/Safari and use **Install** (the install icon in the address bar, or Share → Add to Home Screen on iOS). It gets its own icon and window and works offline after the first load.
+
+> Note: the install/offline features need `http(s)` (GitHub Pages or any web server). Opening `index.html` straight off disk still plays the game fine — it just won't register the offline service worker.
