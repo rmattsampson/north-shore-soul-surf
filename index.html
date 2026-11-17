@@ -141,7 +141,8 @@ function px(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(x|0,y|0,w|0,h|0); }
 /* ============================================================
    SPRITES
    ============================================================ */
-function drawDude(x,y,skin,trunks,facing,pose,t){
+function drawDude(x,y,skin,trunks,facing,pose,t,shirt){
+  const hasShirt = shirt && shirt!=='none';
   const fx=facing<0?-1:1;
   const skinD = shade(skin,-28);            // shadow tone
   ctx.save(); ctx.translate(x|0,y|0); ctx.scale(fx,1);
@@ -165,6 +166,7 @@ function drawDude(x,y,skin,trunks,facing,pose,t){
     // torso: shadow core, lit left, sunset rim on the sun side (right in local space)
     px(-4+lean,-4-crouch,9,8,skin); px(-4+lean,-4-crouch,3,8,skinH); px(1+lean,-4-crouch,4,8,skinD);
     px(5+lean,-4-crouch,1,8,rim);
+    if(hasShirt){ px(-4+lean,-4-crouch,9,8,shirt); px(-4+lean,-4-crouch,3,8,shade(shirt,22)); px(1+lean,-4-crouch,4,8,shade(shirt,-22)); px(-4+lean,-4-crouch,9,1,shade(shirt,36)); }
     // arms per pose (3-tone)
     if(tuck){ px(-9+lean,-1-crouch,5,3,skin); px(5+lean,-1-crouch,5,3,skin); px(5+lean,-1-crouch,5,1,rim); }
     else if(leanArmUp){ px(-10+lean,-10-crouch,4,8,skin); px(-10+lean,-10-crouch,2,8,skinH); px(5+lean,-3-crouch,5,3,skin); }
@@ -184,6 +186,7 @@ function drawDude(x,y,skin,trunks,facing,pose,t){
     px(-6,0,7,4,trunks); px(-6,0,7,1,shade(trunks,30));
     // torso lying flat, chest end lifted a touch
     px(0,-1,8,4,skin); px(0,2,8,1,skinD);
+    if(hasShirt){ px(-1,-1,9,4,shirt); px(-1,-1,9,1,shade(shirt,30)); px(-1,2,9,1,shade(shirt,-26)); }
     // head up, looking forward over the nose of the board
     px(7,-3,5,5,skin); px(10,-3,2,5,skinD); px(7,-4,5,2,C.hair);
     // arms reaching ahead and down into the water, alternating stroke
@@ -200,6 +203,8 @@ function drawDude(x,y,skin,trunks,facing,pose,t){
   px(-4,3,9,4,trunks); px(-4,3,9,1,shade(trunks,36));
   px(-4,-4,9,8,skin); px(-4,-4,3,8,skinH2); px(1,-4,4,8,skinD); px(5,-4,1,8,rim2);
   px(-6,-3,3,6,skin); px(4,-3,3,6,skin); px(5,-3,2,6,rim2);
+  if(hasShirt){ px(-4,-4,9,8,shirt); px(-4,-4,3,8,shade(shirt,22)); px(1,-4,4,8,shade(shirt,-22)); px(-4,-4,9,1,shade(shirt,36));
+    px(-6,-3,3,2,shirt); px(4,-3,3,2,shade(shirt,-22)); }                    // short sleeves
   px(-3,-11,7,7,skin); px(-3,-11,3,7,skinH2); px(1,-11,3,7,skinD); px(4,-11,1,7,rim2); px(-3,-12,7,3,C.hair);
   ctx.restore();
 }
@@ -360,7 +365,7 @@ function floatScore(txt,x,y,col){ flash={txt,x,y,col:col||C.gold}; flashT=70; }
 
 /* ---- day/night clock ---- dayT cycles 0..1 (morning→midday→sunset→night→morning) */
 let dayT=0.12;                 // start mid-morning
-const DAY_LEN=16200;           // ~4.5 min per full cycle at 60fps (slower)
+const DAY_LEN=18000;           // ~4.5 min per full cycle at 60fps (slower)
 // sky keyframes at phase t: [skyTop, mid, lower] + sun tint + sun alpha
 const SKY_KEYS=[
   { t:0.00, a:'#1a2a5a', b:'#3a6aa0', c:'#8ac0e0', sun:'#fff0c0', sa:0.9, night:false }, // dawn
@@ -713,14 +718,14 @@ function updBeach(){
   }}
   }
   // photographer: out only ~20% of the time. When his timer elapses, ROLL:
-  // 20% he shows up (new spot, picked once), else he stays away for another window.
+  // 40% he shows up (new spot, picked once), else he stays away for another window.
   // While he IS out we never touch his position — just count down his visit.
   if(b.photoT>0) b.photoT--;
   else if(!b.photographer){
-    if(Math.random()<0.20){ b.photographer={x:rnd(140,340),y:H-60,t:ri(300,520)};
+    if(Math.random()<0.40){ b.photographer={x:rnd(140,340),y:H-60,t:ri(420,660)};
       // he only works da COVE — only announce it when you're standing on that beach
       if(state==='beach' && b.screen===SCR.COVE){ setMsg("📷 Photographer on da beach — go score waves fo' DOUBLE points!",150); beep(880,.1); } }
-    else b.photoT=ri(260,520);   // keep him off the beach, try again later
+    else b.photoT=ri(200,400);   // keep him off the beach, try again later
   }
   if(b.photographer){ b.photographer.t--; if(b.photographer.t<0){ b.photographer=null; b.photoT=ri(300,560); } }
 }
@@ -1087,15 +1092,15 @@ function drawHelp(){
 
 // people chilling on towels (daytime only — dey go home at night). Walk-through, inspectable.
 const SUNBATHERS = {
-  [SCR.TOWN]: [ {x:300,y:280,towel:'#ff6b8a',skin:'#e0b08a',suit:'#2a6ac0',hat:true,  id:'sun-town',
+  [SCR.TOWN]: [ {x:300,y:280,towel:'#ff6b8a',skin:'#e0b08a',suit:'#2a6ac0',hat:true,  id:'sun-town', g:'f',
                  lines:["Tourist sunbathing. Going be red like one tako by pau hana.","She asked if da sharks come up on da sand. Nah.","Reading one book called 'How To Surf'. Chapter one: get wet."]} ],
-  [SCR.SURF]: [ {x:236,y:284,towel:'#ffd23f',skin:'#b07a44',suit:'#c0392b',umbrella:'#e0563a', id:'sun-surf1',
+  [SCR.SURF]: [ {x:236,y:284,towel:'#ffd23f',skin:'#b07a44',suit:'#c0392b',umbrella:'#e0563a', id:'sun-surf1', g:'m',
                  lines:["Uncle under da umbrella. Been here since 1974.","He no move, but he sees everything in da lineup.","He says: 'Da waves come in sets, brah. Be patient.'"]},
-                {x:352,y:288,towel:'#3f9ac0',skin:'#f0c8a0',suit:'#ff5aa0',shades:true, id:'sun-surf2',
+                {x:352,y:288,towel:'#3f9ac0',skin:'#f0c8a0',suit:'#ff5aa0',shades:true, id:'sun-surf2', g:'m',
                  lines:["Somebody catching rays. Sunscreen... maybe.","Headphones in. Totally checked out. Mean.","Fell asleep. Going have one shades tan line."]} ],
-  [SCR.COVE]: [ {x:186,y:284,towel:'#2fbfae',skin:'#c88a4e',suit:'#1f3a6a',shades:true, id:'sun-cove1',
+  [SCR.COVE]: [ {x:186,y:284,towel:'#2fbfae',skin:'#c88a4e',suit:'#1f3a6a',shades:true, id:'sun-cove1', g:'f',
                  lines:["Local girl chilling at da cove. Da quiet spot.","She surfed earlier. Now: nap time.","She says da cove stay secret. Don't tell nobody."]},
-                {x:338,y:278,towel:'#f2ead8',skin:'#8a5a34',suit:'#2f8a4a',umbrella:'#2f7a9a', id:'sun-cove2',
+                {x:338,y:278,towel:'#f2ead8',skin:'#8a5a34',suit:'#2f8a4a',umbrella:'#2f7a9a', id:'sun-cove2', g:'m',
                  lines:["Big braddah napping under da umbrella.","Snoring louder than da shorebreak.","Cooler next to him is HIS. Don't even think about it."]} ],
 };
 function drawSunbather(s){
@@ -1111,7 +1116,8 @@ function drawSunbather(s){
   if(s.shades) px(x-14,y+1,5,2,'#111');
   if(s.hat){ px(x-17,y-4,11,3,'#efe4c0'); px(x-15,y-6,7,3,'#e0d4a8'); }
   px(x-8,y-1,12,6,sk); px(x-8,y-1,12,1,shade(sk,22));                            // torso
-  px(x-6,y,8,4,s.suit);                                                          // swimsuit
+  if(s.g==='f'){ px(x-8,y-1,13,6,s.suit); px(x-8,y-1,13,1,shade(s.suit,30)); px(x-6,y-2,2,1,s.suit); px(x-2,y-2,2,1,s.suit); } // full one-piece + straps
+  else { px(x+1,y,6,5,s.suit); px(x+1,y,6,1,shade(s.suit,30)); }               // guys: shirtless, just board shorts
   px(x+4,y,11,2,sk); px(x+4,y+3,11,2,skD);                                       // legs
   px(x-6,y+5,8,2,skD);                                                           // arm resting at side
   if(((frame>>6)+x)%7===0) px(x-6,y-4,3,2,sk);                                   // now and then a lazy wave of the hand
@@ -1228,8 +1234,7 @@ function drawBeach(){
     const moving=state!=='shop' && (keys.left||keys.right||keys.up||keys.down);   // arrows only drive the menu while shopping
     softShadow(player.x, player.y+13, 10);
     drawBeachBoard(player.x,player.y,player.facing,moving);
-    drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
-    if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
+    drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame,player.shirt);
     if(player.injured) px(player.x-3,player.y-20,6,3,C.bad);
   }
 }
@@ -1405,8 +1410,7 @@ function drawHouseScreen(){
   }
   softShadow(player.x, player.y+13, 10);
   drawBeachBoard(player.x,player.y,player.facing,moving);
-  drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
-  if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
+  drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame,player.shirt);
 }
 function drawTallPalm(x,by,h){
   // slender curved trunk rising high, drooping fronds — original
@@ -1657,8 +1661,7 @@ function drawCabin(){
   // player (board stays leaning outside by the door)
   const moving=keys.left||keys.right||keys.up||keys.down;
   softShadow(player.x, player.y+13, 10);
-  drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
-  if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
+  drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame,player.shirt);
 }
 function drawMyPlaceRoom(){
   const c=CABIN, lit=isNight();
@@ -2099,10 +2102,7 @@ function drawWater(){
     // board carve tilt during a cutback reads as a little spray arc under the tail
     if(w.surfing&&player.trickT>0){ for(let i=0;i<4;i++) px(player.x-14+i*8, player.y+9+Math.sin(frame*0.4+i)*2, 3,2, C.foam); }
     // prone paddler lies right on the deck; standing poses keep their offset
-    drawDude(player.x, pose==='paddle' ? player.y+1 : player.y-5, C.skin,player.shorts,player.facing,pose,frame);
-    if(player.shirt!=='none'){
-      if(w.surfing){ px(player.x-5,player.y-13,10,7,player.shirt); px(player.x-5,player.y-13,10,2,shade(player.shirt,30)); }
-      else { const sx=player.facing<0?player.x-8:player.x; px(sx,player.y,8,4,player.shirt); px(sx,player.y,8,1,shade(player.shirt,30)); } }
+    drawDude(player.x, pose==='paddle' ? player.y+1 : player.y-5, C.skin,player.shorts,player.facing,pose,frame,player.shirt);
     if(w.surfing){
       const label = player.trickT>0 ? (player.trickKind==='barrel'?'BARREL!':player.trickKind==='lip'?'OFF-DA-LIP':'CUTBACK') : 'SHREDDIN';
       const col = player.trickT>0 ? (player.trickKind==='barrel'?C.purp:C.gold) : C.good;
