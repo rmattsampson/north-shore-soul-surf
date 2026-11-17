@@ -31,7 +31,6 @@
 <body>
 <div id="wrap">
   <canvas id="game" width="480" height="320"></canvas>
-  <div id="hint">← → steer · ↑ paddle out · SPACE drop-in / kick out · Z cutback · X off-the-lip · Z+X barrel · ↓ go to beach · ENTER start · M mute</div>
 </div>
 <script>
 "use strict";
@@ -476,20 +475,9 @@ const UP_FROM ={ 4:0, 3:1, 5:2 };  // return targets
 const IS_DOWN = s => s>=3;         // screens 3,4,5 are vertical down-scenes
 // the LAND row, left→right, mirroring the beaches above (Town/Surf/Cove)
 const LAND_ROW = [SCR.MYHOUSE, SCR.HOUSE, SCR.COVEDOWN];
-function announceLand(){
-  const b=beach;
-  if(b.screen===SCR.MYHOUSE) setMsg("◀ YOUR PLACE — hammock to sleep",110);
-  else if(b.screen===SCR.HOUSE) setMsg("RCVA SURF HOUSE",110);
-  else if(b.screen===SCR.COVEDOWN) setMsg("DA COVE ▶ — quiet end of da road",110);
-  beep(560,.07,'triangle');
-}
-function announceScreen(){
-  const b=beach;
-  if(b.screen===SCR.TOWN) setMsg("◀ TOWN — shave-ice shop, surf shack, locals",120);
-  else if(b.screen===SCR.SURF) setMsg("SURF SPOT — ↑ paddle out · ↓ to da RCVA house",120);
-  else if(b.screen===SCR.COVE) setMsg("COVE ▶ — quiet beach, photographer hangs here",120);
-  beep(560,.07,'triangle');
-}
+// screen changes just chime — no on-screen direction text
+function announceLand(){ beep(560,.07,'triangle'); }
+function announceScreen(){ beep(560,.07,'triangle'); }
 
 function enterBeach(reason){
   if(!beachBuilt) buildBeach();          // beach persists; built once, never wiped
@@ -499,7 +487,7 @@ function enterBeach(reason){
   if(comingFromWater){ player.x=clamp(player.x,16,W-16); player.y=SHORE+10; }
   else { player.x=W/2; player.y=H-40; }
   player.facing=1; player.downT=0;
-  setMsg(reason||"PAU HANA — walk da beach. STOP walking to plant your board. ↑ at da shoreline fo' paddle out",180);
+  if(reason) setMsg(reason,180);
 }
 function enterWater(){
   if(player.injured){ setMsg("You stay hurt, cuz — go find Chandler fo' heal!",150); return; }
@@ -508,7 +496,7 @@ function enterWater(){
   water.surfing=false; water.cur=null; water.ride=0; water.combo=0; water.style=0; water.spray=[];
   water.huis=[]; water.laird=null; water.shark=null;
   water.sharkT=ri(620,1100); water.huiT=ri(260,480); water.pro=null; water.proT=ri(360,700);
-  setMsg("Paddle out (↑). Line up wit' a swell → SPACE drop-in",160);
+ 
 }
 
 // waves live independent of the scene so the swell keeps rolling even on the beach
@@ -615,7 +603,7 @@ function updBeach(){
     // Vertical down-scene: beach edge up top. UP walks back to the beach screen above it.
     player.y=clamp(player.y,SEATOP+10,H-10);
     if(b.scrLock>0){ b.scrLock--; }
-    else if(player.y<=SEATOP+12 && keys.up){ b.screen=UP_FROM[b.screen]; b.scrLock=10; player.x=clamp(player.x,20,W-20); player.y=H-30; setMsg("Back up to da beach.",90); beep(560,.07,'triangle'); return; }
+    else if(player.y<=SEATOP+12 && keys.up){ b.screen=UP_FROM[b.screen]; b.scrLock=10; player.x=clamp(player.x,20,W-20); player.y=H-30; beep(560,.07,'triangle'); return; }
     // LAND row scrolls left/right too: MY PLACE ◀ RCVA HOUSE ▶ DA COVE (mirrors the beaches above)
     const li=LAND_ROW.indexOf(b.screen);
     if(player.x<=10 && keys.left){
@@ -647,8 +635,7 @@ function updBeach(){
     // from any beach screen, walk DOWN off the bottom → pop out at its down-scene (top).
     if(DOWN_MAP[b.screen]!==undefined && player.y>=H-14 && keys.down && b.scrLock===0){
       b.screen=DOWN_MAP[b.screen]; b.scrLock=10; player.x=W/2-80; player.y=SEATOP+18;
-      const nm = b.screen===SCR.MYHOUSE?"⬇ Down to your place" : b.screen===SCR.HOUSE?"⬇ Down to da RCVA house" : "⬇ Down da beach path";
-      setMsg(nm,110); beep(560,.07,'triangle'); return;
+      beep(560,.07,'triangle'); return;
     }
   }
 
@@ -669,7 +656,7 @@ function updBeach(){
     // SHOP: walk up to da shave-ice stand, press B
     if(near(player.x,player.y,b.iceShop.x,b.iceShop.y,24)){
       if(consume('b')){ openShop(); return; }
-      else if(!msgT) setMsg("🍧 Shave Ice & Surf Shop — press B fo' shop",60);
+      
     }
     // say HI to the locals
     for(const f of b.folks){ if(f.cool>0) f.cool--;
@@ -681,7 +668,7 @@ function updBeach(){
     const HM=myHammock();         // same spot drawMyHouse draws the hammock
     if(near(player.x,player.y,HM.x,HM.y,40)){
       if(consume('b')){ sleepTilMorning(); return; }
-      else if(!msgT) setMsg("🛏️ Your hammock — press B to sleep till morning",60);
+      
     }
   }
   // props can be picked up on whichever beach screen they're on (surf/cove)
@@ -1033,9 +1020,6 @@ function drawBeachProps(){
     if(b.tourist) drawTourist(b.tourist);
   }
   // screen arrows so you know you can walk off the edge
-  if(b.screen===SCR.SURF||b.screen===SCR.COVE){ ctx.fillStyle=C.txt; ctx.font='10px monospace'; ctx.textAlign='left'; ctx.fillText('◀',4,H-40); }
-  if(b.screen===SCR.TOWN||b.screen===SCR.SURF){ ctx.fillStyle=C.txt; ctx.font='10px monospace'; ctx.textAlign='right'; ctx.fillText('▶',W-4,H-40); }
-  if(b.screen===SCR.SURF){ ctx.fillStyle=C.txt; ctx.font='10px monospace'; ctx.textAlign='center'; ctx.fillText('▼ RCVA house',W/2,H-4); }
   ctx.textAlign='left';
 }
 // surf shack / home — original pixel building
@@ -1061,7 +1045,7 @@ function drawIceShop(x,y){
   px(x-16,y-22,5,2,'#fff'); px(x-4,y-22,5,2,'#fff'); px(x+8,y-22,5,2,'#fff'); // ice tops
   px(x-12,y-3,24,3,C.gold);                                          // flowers/lei garland
   ctx.fillStyle=C.gold; ctx.font='6px monospace'; ctx.textAlign='center';
-  ctx.fillText('🍧 SHAVE ICE',x,y-33); ctx.fillText('[B] SHOP',x,y+8); ctx.textAlign='left';
+  ctx.fillText('🍧 SHAVE ICE',x,y-33); ctx.textAlign='left';
 }
 function drawBeachBoard(x,y,facing,moving){
   // the surfer's board on the sand: carried upright at your side while walking,
@@ -1257,12 +1241,6 @@ function drawHouseScreen(){
   drawBeachBoard(player.x,player.y,player.facing,moving);
   drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
   if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
-  // land-row edge arrows (you can walk between MY PLACE ◀ RCVA ▶ DA COVE)
-  { const li=LAND_ROW.indexOf(beach.screen);
-    ctx.fillStyle=C.txt; ctx.font='10px monospace';
-    if(li>0){ ctx.textAlign='left'; ctx.fillText('◀',4,H-40); }
-    if(li<LAND_ROW.length-1){ ctx.textAlign='right'; ctx.fillText('▶',W-4,H-40); }
-    ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText('▲ up to da beach',W/2,SEATOP+6); ctx.textAlign='left'; }
 }
 function drawTallPalm(x,by,h){
   // slender curved trunk rising high, drooping fronds — original
@@ -1354,7 +1332,7 @@ function drawMyHouse(x,y){
   px(x-30, topY-28, 60, 12, '#1a3a3a'); px(x-30,topY-28,60,2,'#2a5a5a');
   ctx.fillStyle=C.gold; ctx.font='bold 9px "Courier New",monospace'; ctx.textAlign='center';
   ctx.fillText('MY PLACE', x, topY-19);
-  ctx.fillStyle=C.good; ctx.font='7px monospace'; ctx.fillText('[B] SLEEP', HM.x, hy-36); ctx.textAlign='left';
+  ctx.textAlign='left';
 }
 // hammock center on the MY PLACE screen (shared by the drawing and the sleep check)
 function myHammock(){ return { x:W*0.60-96, y:SEATOP+10+70-11 }; }   // in the yard, left of MY PLACE
