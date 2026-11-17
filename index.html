@@ -549,7 +549,7 @@ function update(){
   if(state==='help'){ if(consume('enter')||consume('space')){ enterBeach(); } return; }
   if(state==='gameover'){ if(consume('enter')||consume('space')){ score=0; state='splash'; } return; }
   if(state==='shop'){ updShop(); return; }
-  if(state==='beach') updBeach(); else if(state==='water') updWater();
+  if(state==='beach') updBeach(); else if(state==='water') updWater(); else if(state==='cabin') updCabin();
 }
 
 /* ---- SHOP: simple buy menu overlaid on the beach ---- */
@@ -671,6 +671,8 @@ function updBeach(){
       if(consume('b')){ sleepTilMorning(); return; }
       
     }
+    // walk up the front steps to the door and press B to go inside
+    if(Math.abs(player.x-MYHOUSE_X)<16 && player.y>=CABIN_DOOR_Y-6 && player.y<=CABIN_DOOR_Y+16 && consume('b')){ enterCabin(); return; }
   }
   // RCVA yard: walk past da Billabong fence → Sterling Spencer pops up ovah it
   if(b.sterling>0) b.sterling--;
@@ -678,8 +680,8 @@ function updBeach(){
   if(b.screen===SCR.HOUSE && b.sterling===0 && b.sterlingCool===0){
     const BB=billabongLayout();
     if(player.x>=BB.p1-6 && player.x<=BB.f0+30 && player.y>=BB.ft && player.y<=BB.fb+14){
-      b.sterling=150; b.sterlingCool=600; beep(640,.08,'triangle');
-      setMsg("Sterling Spencer: 'You know da rulez!!'",150);
+      b.sterling=STERLING_T; b.sterlingCool=STERLING_T+450; beep(640,.08,'triangle');
+      setMsg("Sterling: 'You know da rulez!!'",STERLING_T);
     }
   }
   // props can be picked up on whichever beach screen they're on (surf/cove)
@@ -974,7 +976,7 @@ function render(){
   drawSky(); drawMountains();
   if(!(state==='beach' && IS_DOWN(beach.screen))){ drawSeaBands(); drawSand(); }
   if(state==='shop'){ drawBeach(); drawShop(); drawHUD(); return; }
-  if(state==='beach') drawBeach(); else if(state==='water') drawWater();
+  if(state==='beach') drawBeach(); else if(state==='water') drawWater(); else if(state==='cabin') drawCabin();
   // night wash over the whole world (beach + water), lifts near dawn
   if(isNight() && state!=='shop'){ ctx.save(); ctx.globalAlpha=0.34; ctx.fillStyle='#0a0f2a'; ctx.fillRect(0,0,W,H); ctx.restore(); }
   if(sleepFade>0){ const a=sleepFade>35?(70-sleepFade)/35:sleepFade/35; ctx.save(); ctx.globalAlpha=Math.min(1,a*1.2); ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H); ctx.restore(); sleepFade--; }
@@ -1146,7 +1148,7 @@ const HOUSE_ROAD_Y = SEATOP+92;   // keep in sync with drawHouseScreen's roadY
 function palmRect(x,by){ return [x-4,by-8,x+9,by+2]; }
 function solidsNow(){
   const b=beach, out=[];
-  // SIMPLE collision: you can walk through everything EXCEPT homes, the ATV, and the sidewalk walls.
+  // SIMPLE collision: you can walk through everything EXCEPT homes, the ATV, the sidewalk walls and the Billabong fence.
   if(IS_DOWN(b.screen)){
     const houseBand=SEATOP+10, roadY=SEATOP+140;
     // the home on this land screen (matches drawHouseScreen's building x per screen)
@@ -1158,7 +1160,11 @@ function solidsNow(){
     { const wy=roadY-12;
       if(b.screen===SCR.HOUSE){ const BB=billabongLayout();
         out.push([16,wy,W/2-22,wy+12], [W/2+16,wy,W-16,wy+12]);   // one gate: the center path
-        out.push([BB.x-42, houseBand+30, BB.x+42, houseBand+70]);                          // Billabong house (fence is walk-through)
+        out.push([BB.x-42, houseBand+30, BB.x+42, houseBand+70]);                          // Billabong house
+        out.push([BB.f0-1, BB.ft-9, BB.f1+4, BB.ft-1],   // picket fence: back row
+                 [BB.f0-1, BB.fb-11, BB.f1+4, BB.fb],  //   front row
+                 [BB.f0-1, BB.ft-9, BB.f0+4, BB.fb],   //   left side (along the path)
+                 [BB.f1-1, BB.ft-9, BB.f1+4, BB.fb]);  //   right side
       } else out.push([16,wy,W/2-22,wy+12], [W/2+16,wy,W-16,wy+12]); }
   }
   // ATV on the beach screens blocks you (it's solid); everything else is walk-through
@@ -1377,6 +1383,7 @@ function drawTrailHouse(x,y){
   px(x-31,topY+8,18,1,trim); px(x+13,topY+8,18,1,trim); px(x-31,topY+19,18,2,trim); px(x+13,topY+19,18,2,trim);
   px(x-30,topY+21,16,3,'#ff6b8a'); px(x+14,topY+21,16,3,'#ffd23f');               // flower boxes
 }
+const STERLING_T = 270;   // how long Sterling stays popped up (~4.5 s; was 2.5 s)
 // Billabong house + picket-fenced yard, right of the RCVA house (shared by drawing, collision and Sterling)
 function billabongLayout(){
   const houseBand=SEATOP+10, roadY=SEATOP+140;
@@ -1424,7 +1431,7 @@ function drawBillabongHouse(x,y){
 // He stays put: crouched out of sight → stands up to peek over → ducks back down. The real
 // front fence (drawn right after this) hides his lower body; a clip hides anything below its top.
 function drawSterling(BB){
-  const t=beach.sterling, rise=Math.min(1,(150-t)/18, t/18);  // stand up, hold, sit back down
+  const t=beach.sterling, rise=Math.min(1,(STERLING_T-t)/18, t/18);  // stand up, hold, sit back down
   const fenceTop=BB.fb-11, sx=BB.f0+18;
   const sy=fenceTop-1+Math.round((1-rise)*16);                  // up: head+shoulders over the fence
   ctx.save(); ctx.beginPath(); ctx.rect(0,0,W,fenceTop); ctx.clip();
@@ -1433,10 +1440,90 @@ function drawSterling(BB){
   px(sx-4,sy-13,8,2,'#e8d27a');                                 // blond hair
   ctx.restore();
   if(rise>0.6){
-    const nm='STERLING SPENCER', nw=nm.length*5+6;
+    const nm='STERLING', nw=nm.length*5+6;
     px(sx-nw/2,fenceTop-28,nw,7,'#111'); ctx.fillStyle=C.gold; ctx.font='7px monospace'; ctx.textAlign='center';
     ctx.fillText(nm,sx,fenceTop-22); ctx.textAlign='left';
   }
+}
+/* ---- MY PLACE: inside the cabin (walk around, B at the bed to sleep, walk out the door) ---- */
+const MYHOUSE_X = W*0.60;                 // matches drawMyHouse(W*0.60, …)
+const CABIN_DOOR_Y = SEATOP+10+70+20;     // where you stand at the bottom of the porch steps
+const CABIN = { x0:60, x1:420, wallY:52, floorY:120, y1:300, doorX:W/2,
+  bed:[78,124,178,196], stand:[184,124,206,150], table:[318,176,386,212], board:[350,58,362,116] };
+function enterCabin(){ state='cabin'; player.x=CABIN.doorX; player.y=CABIN.y1-26; player.facing=1; beep(520,.08,'triangle'); }
+function leaveCabin(){ state='beach'; beach.screen=SCR.MYHOUSE; player.x=MYHOUSE_X; player.y=CABIN_DOOR_Y+6; beep(440,.08,'triangle'); }
+function cabinSolids(){
+  const c=CABIN, f=r=>[r[0],r[1],r[2],r[3]];
+  return [f(c.bed), f(c.stand), f(c.table)];
+}
+function updCabin(){
+  const sp=1.5, ox=player.x, oy=player.y;
+  if(keys.left){ player.x-=sp; player.facing=-1; }
+  if(keys.right){ player.x+=sp; player.facing=1; }
+  if(keys.up) player.y-=sp;
+  if(keys.down) player.y+=sp;
+  player.x=clamp(player.x,CABIN.x0+12,CABIN.x1-12);
+  player.y=clamp(player.y,CABIN.floorY-8,CABIN.y1-14);
+  const rs=cabinSolids(), nx=player.x, ny=player.y;
+  if(feetHit(nx,ny,rs) && !feetHit(ox,oy,rs)){
+    if(!feetHit(nx,oy,rs)){ player.y=oy; } else if(!feetHit(ox,ny,rs)){ player.x=ox; } else { player.x=ox; player.y=oy; }
+  }
+  // out the door: walk down into it, or press B standing on it
+  const atDoor=Math.abs(player.x-CABIN.doorX)<16 && player.y>=CABIN.y1-18;
+  if(atDoor && (keys.down || consume('b'))){ leaveCabin(); return; }
+  // B next to the bed = sleep till morning
+  const b=CABIN.bed;
+  if(player.x>b[0]-12 && player.x<b[2]+16 && player.y<b[3]+14 && consume('b')){ sleepTilMorning(); }
+}
+function drawCabin(){
+  const c=CABIN, lit=isNight();
+  px(0,0,W,H,'#120c08');                                                     // dark outside the room
+  // back wall: knotty-pine planks
+  px(c.x0,c.wallY,c.x1-c.x0,c.floorY-c.wallY,'#b98a52');
+  for(let x=c.x0; x<c.x1; x+=14){ px(x,c.wallY,1,c.floorY-c.wallY,'#8a5e30'); px(x+5,c.wallY+((x*7)%40)+8,2,2,'#7a4e22'); }
+  px(c.x0,c.floorY-4,c.x1-c.x0,4,'#6a4422');                                 // baseboard
+  // window on the back wall: sky by day, stars by night
+  const wx=232, wy=c.wallY+12;
+  px(wx-2,wy-2,52,38,'#f2ead8'); px(wx,wy,48,34,lit?'#141a3a':'#8fd0ef');
+  if(lit){ px(wx+8,wy+6,1,1,'#fff'); px(wx+30,wy+10,1,1,'#fff'); px(wx+20,wy+22,1,1,'#fff'); px(wx+36,wy+4,4,4,'#dfe6ff'); }
+  else { px(wx,wy+24,48,10,'#2f8aa8'); px(wx+30,wy+4,8,8,'#ffe27a'); }
+  px(wx+23,wy,2,34,'#f2ead8'); px(wx,wy+16,48,2,'#f2ead8');                  // window cross
+  // surfboard hung on the wall
+  { const [bx0,by0,bx1,by1]=c.board; px(bx0,by0+3,bx1-bx0,by1-by0-6,'#2fbfae'); px(bx0+1,by0,bx1-bx0-2,4,'#6fe'); px(bx0+1,by1-4,bx1-bx0-2,4,'#2fbfae'); px(bx0+5,by0+3,1,by1-by0-6,'#fff'); }
+  // a little framed photo of a wave
+  px(140,c.wallY+16,26,20,'#5a3a1a'); px(142,c.wallY+18,22,16,'#8fd0ef'); px(142,c.wallY+28,22,6,'#2f8aa8'); px(146,c.wallY+26,10,3,'#fff');
+  // floor: wide wood boards
+  gradBand(c.x0,c.floorY,c.x1-c.x0,c.y1-c.floorY,'#8a5a30','#6a4422',4);
+  for(let y=c.floorY+10; y<c.y1; y+=12) px(c.x0,y,c.x1-c.x0,1,'#5a3a1a');
+  // woven lauhala rug in the middle
+  px(190,196,110,62,'#c9a35a'); for(let i=0;i<6;i++) px(194,202+i*9,102,2,'#a07a3a'); px(190,196,110,2,'#e0bc72');
+  // side walls + door gap in the front wall
+  px(c.x0-8,c.wallY,8,c.y1-c.wallY+8,'#5a3a1a'); px(c.x1,c.wallY,8,c.y1-c.wallY+8,'#5a3a1a');
+  px(c.x0-8,c.y1,c.doorX-20-(c.x0-8),8,'#5a3a1a'); px(c.doorX+20,c.y1,c.x1+8-(c.doorX+20),8,'#5a3a1a');
+  px(c.doorX-20,c.y1,40,8,lit?'#1a2238':'#cfe8c0');                          // open doorway: the yard outside
+  // BED: headboard on the wall, pillow, patterned quilt
+  { const [b0,b1,b2,b3]=c.bed;
+    px(b0-2,b1-22,b2-b0+4,24,'#5a3a1a'); px(b0-2,b1-22,b2-b0+4,3,'#7a5228');     // headboard
+    px(b0,b1,b2-b0,b3-b1,'#f2ead8');                                             // sheet
+    px(b0+8,b1+4,b2-b0-16,14,'#ffffff'); px(b0+8,b1+16,b2-b0-16,2,'#d8d0c0');    // pillow
+    px(b0,b1+24,b2-b0,b3-b1-24,'#3f9ac0');                                       // quilt
+    for(let qx=b0+4; qx<b2-6; qx+=14) for(let qy=b1+30; qy<b3-6; qy+=14){ px(qx,qy,6,6,'#e0563a'); px(qx+2,qy+2,2,2,'#ffd23f'); } // hibiscus squares
+    px(b0,b3-3,b2-b0,3,'#2f6a8a'); }
+  // nightstand + lamp (glows warm at night)
+  { const [n0,n1,n2,n3]=c.stand; px(n0,n1,n2-n0,n3-n1,'#7a5228'); px(n0,n1,n2-n0,2,'#9a6a38'); px(n0+4,n1+10,n2-n0-8,2,'#5a3a1a');
+    px(n0+9,n1-10,4,10,'#c9a35a'); px(n0+4,n1-18,14,9,lit?'#ffe9a8':'#f2e2b8');
+    if(lit){ ctx.save(); ctx.globalAlpha=0.18; ctx.fillStyle='#ffd98a'; ctx.beginPath(); ctx.arc(n0+11,n1-14,46,0,Math.PI*2); ctx.fill(); ctx.restore(); } }
+  // table + chair with a ukulele and a bowl of mangoes
+  { const [t0,t1,t2,t3]=c.table; px(t0,t1,t2-t0,8,'#7a5228'); px(t0,t1,t2-t0,2,'#9a6a38');
+    px(t0+4,t1+8,4,t3-t1-8,'#5a3a1a'); px(t2-8,t1+8,4,t3-t1-8,'#5a3a1a');
+    px(t0+10,t1-6,18,6,'#c96a2a'); px(t0+12,t1-9,6,4,'#ffb43a'); px(t0+19,t1-9,6,4,'#e8d040');        // mango bowl
+    px(t0+38,t1-4,16,5,'#c98a3a'); px(t0+52,t1-3,10,2,'#5a3a1a'); px(t0+42,t1-3,3,3,'#3a2412');       // ukulele lying on top
+    px(t2+6,t1+2,14,4,'#7a5228'); px(t2+6,t1-14,3,16,'#7a5228'); px(t2+8,t1+6,3,12,'#5a3a1a'); px(t2+17,t1+6,3,12,'#5a3a1a'); } // chair
+  // player (board stays leaning outside by the door)
+  const moving=keys.left||keys.right||keys.up||keys.down;
+  softShadow(player.x, player.y+13, 10);
+  drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
+  if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
 }
 // YOUR place — a teal plantation cottage with a covered porch + a big hammock to sleep in
 function drawMyHouse(x,y){
@@ -1456,6 +1543,10 @@ function drawMyHouse(x,y){
   px(x-wW/2-6,porchY+10,wW+12,4,'#6a4a28'); px(x-wW/2-6,porchY+10,wW+12,1,'#8a6a3a'); // porch deck
   for(const pxp of [x-wW/2-2, x-16, x+16, x+wW/2-2]){ px(pxp,porchTop+4,3,porchY-porchTop+6,trim); } // posts
   px(x-wW/2-2,porchY+2,wW+4,2,trim);                                          // porch rail
+  px(x-10,porchY+2,20,2,w1);                                                   // gap in the rail for the steps
+  // wooden STEPS from the porch deck down to the yard
+  for(let i=0;i<3;i++){ const sy=porchY+14+i*4, sw=20+i*4;
+    px(x-sw/2,sy,sw,4,'#7a5a32'); px(x-sw/2,sy,sw,1,'#a07a48'); px(x-sw/2,sy+3,sw,1,'#4a3418'); }
   // dutch door + shuttered windows (warm glow at night)
   px(x-6,topY+26,12,24,'#2a3a2a'); px(x+3,topY+36,2,2,'#ffd23f');
   const g=lit?'#ffd98a':'#bfe0e0';
@@ -1662,7 +1753,7 @@ function drawHUD(){
   ctx.font='bold 11px "Courier New",monospace'; ctx.textAlign='left';
   ctx.fillStyle=C.gold; ctx.fillText('SCORE '+score,6,12);
   ctx.textAlign='right'; ctx.fillStyle=C.good; ctx.fillText('BEST '+high,W-6,12);
-  ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText(state==='beach'?'🏖 BEACH':state==='shop'?'🍧 SHOP':'🌊 LINEUP',W/2,12);
+  ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText(state==='beach'?'🏖 BEACH':state==='shop'?'🍧 SHOP':state==='cabin'?'🏠 MY PLACE':'🌊 LINEUP',W/2,12);
   ctx.textAlign='left'; ctx.fillStyle=C.gold; ctx.font='bold 10px "Courier New",monospace';
   ctx.fillText('🪙 '+coins, 92, 12);
   ctx.font='bold 11px "Courier New",monospace';
