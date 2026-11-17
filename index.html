@@ -671,8 +671,11 @@ function updBeach(){
       if(consume('b')){ sleepTilMorning(); return; }
       
     }
-    // walk up the front steps to the door and press B to go inside
-    if(Math.abs(player.x-MYHOUSE_X)<16 && player.y>=CABIN_DOOR_Y-6 && player.y<=CABIN_DOOR_Y+16 && consume('b')){ enterCabin(); return; }
+    // front steps: B opens (or shuts) the door, then just walk UP into the house
+    const atSteps = Math.abs(player.x-MYHOUSE_X)<26 && player.y>=CABIN_DOOR_Y-14 && player.y<=CABIN_DOOR_Y+30;
+    if(atSteps && consume('b')){ b.doorOpen=!b.doorOpen; beep(b.doorOpen?520:380,.07,'triangle'); }
+    if(b.doorOpen && atSteps && keys.up){ enterCabin(); return; }
+    if(!atSteps) b.doorOpen=false;   // door swings shut when you walk off
   }
   // RCVA yard: walk past da Billabong fence → Sterling Spencer pops up ovah it
   if(b.sterling>0) b.sterling--;
@@ -1449,9 +1452,9 @@ function drawSterling(BB){
 const MYHOUSE_X = W*0.60;                 // matches drawMyHouse(W*0.60, …)
 const CABIN_DOOR_Y = SEATOP+10+70+20;     // where you stand at the bottom of the porch steps
 const CABIN = { x0:60, x1:420, wallY:52, floorY:120, y1:300, doorX:W/2,
-  bed:[78,124,178,196], stand:[184,124,206,150], table:[318,176,386,212], board:[350,58,362,116] };
+  bed:[88,124,140,168], stand:[148,126,166,146], table:[318,176,386,212], board:[350,58,362,116] };
 function enterCabin(){ state='cabin'; player.x=CABIN.doorX; player.y=CABIN.y1-26; player.facing=1; beep(520,.08,'triangle'); }
-function leaveCabin(){ state='beach'; beach.screen=SCR.MYHOUSE; player.x=MYHOUSE_X; player.y=CABIN_DOOR_Y+6; beep(440,.08,'triangle'); }
+function leaveCabin(){ beach.doorOpen=false; state='beach'; beach.screen=SCR.MYHOUSE; player.x=MYHOUSE_X; player.y=CABIN_DOOR_Y+6; beep(440,.08,'triangle'); }
 function cabinSolids(){
   const c=CABIN, f=r=>[r[0],r[1],r[2],r[3]];
   return [f(c.bed), f(c.stand), f(c.table)];
@@ -1503,11 +1506,11 @@ function drawCabin(){
   px(c.doorX-20,c.y1,40,8,lit?'#1a2238':'#cfe8c0');                          // open doorway: the yard outside
   // BED: headboard on the wall, pillow, patterned quilt
   { const [b0,b1,b2,b3]=c.bed;
-    px(b0-2,b1-22,b2-b0+4,24,'#5a3a1a'); px(b0-2,b1-22,b2-b0+4,3,'#7a5228');     // headboard
+    px(b0-2,b1-14,b2-b0+4,16,'#5a3a1a'); px(b0-2,b1-14,b2-b0+4,2,'#7a5228');     // headboard
     px(b0,b1,b2-b0,b3-b1,'#f2ead8');                                             // sheet
-    px(b0+8,b1+4,b2-b0-16,14,'#ffffff'); px(b0+8,b1+16,b2-b0-16,2,'#d8d0c0');    // pillow
-    px(b0,b1+24,b2-b0,b3-b1-24,'#3f9ac0');                                       // quilt
-    for(let qx=b0+4; qx<b2-6; qx+=14) for(let qy=b1+30; qy<b3-6; qy+=14){ px(qx,qy,6,6,'#e0563a'); px(qx+2,qy+2,2,2,'#ffd23f'); } // hibiscus squares
+    px(b0+6,b1+3,b2-b0-12,8,'#ffffff'); px(b0+6,b1+10,b2-b0-12,1,'#d8d0c0');     // pillow
+    px(b0,b1+15,b2-b0,b3-b1-15,'#3f9ac0');                                       // quilt
+    for(let qx=b0+4; qx<b2-4; qx+=10) for(let qy=b1+19; qy<b3-4; qy+=10){ px(qx,qy,4,4,'#e0563a'); px(qx+1,qy+1,2,2,'#ffd23f'); } // hibiscus squares
     px(b0,b3-3,b2-b0,3,'#2f6a8a'); }
   // nightstand + lamp (glows warm at night)
   { const [n0,n1,n2,n3]=c.stand; px(n0,n1,n2-n0,n3-n1,'#7a5228'); px(n0,n1,n2-n0,2,'#9a6a38'); px(n0+4,n1+10,n2-n0-8,2,'#5a3a1a');
@@ -1548,7 +1551,10 @@ function drawMyHouse(x,y){
   for(let i=0;i<3;i++){ const sy=porchY+14+i*4, sw=20+i*4;
     px(x-sw/2,sy,sw,4,'#7a5a32'); px(x-sw/2,sy,sw,1,'#a07a48'); px(x-sw/2,sy+3,sw,1,'#4a3418'); }
   // dutch door + shuttered windows (warm glow at night)
-  px(x-6,topY+26,12,24,'#2a3a2a'); px(x+3,topY+36,2,2,'#ffd23f');
+  if(beach.doorOpen){   // door swung open: warm room light inside, door slab against the jamb
+    px(x-6,topY+26,12,24,'#3a2412'); px(x-5,topY+28,10,22,'#ffd98a'); px(x-5,topY+44,10,6,'#b98a52');
+    px(x+6,topY+26,3,24,'#2a3a2a'); px(x+6,topY+26,1,24,'#4a5a4a');
+  } else { px(x-6,topY+26,12,24,'#2a3a2a'); px(x+3,topY+36,2,2,'#ffd23f'); }
   const g=lit?'#ffd98a':'#bfe0e0';
   px(x-30,topY+14,16,14,g); px(x+14,topY+14,16,14,g);
   px(x-32,topY+14,2,14,trim); px(x-14,topY+14,2,14,trim); px(x+12,topY+14,2,14,trim); px(x+30,topY+14,2,14,trim); // shutters
