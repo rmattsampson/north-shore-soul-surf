@@ -750,17 +750,45 @@ function tickRoad(){
   for(const c of b.cars) c.x += (c.kind==='bike'?1.4:0.8)*c.dir;   // pedestrian speeds
   b.cars=b.cars.filter(c=>c.x>-40 && c.x<W+40);
 }
+// tight name tag: dark plate sized to the actual text (no empty space at the end)
+function nameTag(text,cx,baseline,col){
+  ctx.font='7px monospace'; const w=Math.ceil(ctx.measureText(text).width)+4;
+  px(Math.round(cx-w/2),baseline-7,w,9,'#111');
+  ctx.fillStyle=col; ctx.textAlign='center'; ctx.fillText(text,cx,baseline); ctx.textAlign='left';
+}
+// Kelly Slater (real name, generic sprite) as a friendly parody of himself
+const KELLY_LINES=[
+  "Too many kooks out here.",
+  "Where's Sterling? He owes me a wave.",
+  "Eleven world titles and nobody saves me a parking spot.",
+  "In my wave pool, da waves wait fo' ME.",
+  "Back in '92 dis lineup was empty, brah.",
+  "Retire? I tried once. Didn't take.",
+  "Is dat a thruster? Cute.",
+  "Somebody tell Sterling da rulez are MY rulez.",
+  "I'm fifty-something and still getting barreled. What's your excuse?",
+  "Nice board. Shape 'um in one Tempe wave tank?",
+  "Pipe's flat. I'll make it break.",
+  "I don't paddle out. Da ocean comes to me.",
+  "Signed my own autograph on dat cooler. You're welcome.",
+  "Where's Sterling? I need somebody fo' beat.",
+];
+let kellyIdx = Math.floor(Math.random()*KELLY_LINES.length);
 // Kelly Slater (real name only, generic original sprite) strolls the beach now and then
 function tickKelly(){
   const b=beach; if(!beachBuilt) return;
   if(!b.kelly){
     if(b.kellyT>0){ b.kellyT--; return; }
     const fromLeft=Math.random()<0.5;
-    b.kelly={ x:fromLeft?-20:W+20, dir:fromLeft?1:-1, y:SHORE+ri(26,H-SHORE-20), said:false };
+    b.kelly={ x:fromLeft?-20:W+20, dir:fromLeft?1:-1, y:SHORE+ri(26,H-SHORE-20), said:0 };
   } else {
-    const K=b.kelly; K.x+=0.7*K.dir;
-    if(!K.said && K.x>W*0.4 && K.x<W*0.6){ K.said=true;
-      if(state==='beach' && !IS_DOWN(b.screen)){ setMsg("Kelly Slater: 'Too many kooks out here.'",160); beep(520,.08,'triangle'); } }
+    const K=b.kelly; K.x+=0.55*K.dir;   // strolls slow so he can talk
+    // he talks at three spots along his walk (a friendly parody of himself)
+    const prog = K.dir>0 ? K.x/W : 1-K.x/W, stops=[0.18,0.5,0.82];
+    while(K.said<stops.length && prog>=stops[K.said]){
+      if(state==='beach' && !IS_DOWN(b.screen)){
+        setMsg("Kelly Slater: '"+KELLY_LINES[kellyIdx%KELLY_LINES.length]+"'",200); kellyIdx++; beep(520,.08,'triangle'); }
+      K.said++; }
     if(K.x<-30||K.x>W+30){ b.kelly=null; b.kellyT=ri(6000,9600); }   // back in ~2-3 min
   }
 }
@@ -1062,9 +1090,7 @@ function drawBeachProps(){
     px(38,b.chandler.y-10,46,18,'#6b4a2a'); px(34,b.chandler.y-15,54,6,'#8a5a2a');
     px(38,b.chandler.y-15,54,2,'#a56a33');   // lit roof edge
     drawDude(b.chandler.x,b.chandler.y,'#a86a34',C.sea3,1,'stand',frame);
-    px(b.chandler.x-14,b.chandler.y-26,30,4,'#111');
-    ctx.fillStyle=C.good; ctx.font='7px monospace'; ctx.textAlign='center';
-    ctx.fillText('CHANDLER',b.chandler.x,b.chandler.y-29); ctx.textAlign='left';
+    nameTag('CHANDLER',b.chandler.x,b.chandler.y-29,C.good);
   }
   // props live on the SURF + COVE beaches
   if(b.screen===SCR.SURF || b.screen===SCR.COVE){
@@ -1081,9 +1107,7 @@ function drawBeachProps(){
       drawDude(K.x,K.y,'#d9a070','#1f3a6a',K.dir,(frame>>2)%2?'walk':'stand',frame);
       px(K.x-4,K.y-4,9,8,'#f2f2f2'); px(K.x-4,K.y-4,9,2,'#ffffff');           // white tee
       px(K.x-3,K.y-12,7,2,'#2a2a2a');                                          // cap
-      const nm='KELLY SLATER', nw=nm.length*5+6;
-      px(K.x-nw/2,K.y-24,nw,7,'#111'); ctx.fillStyle=C.gold; ctx.font='7px monospace'; ctx.textAlign='center';
-      ctx.fillText(nm,K.x,K.y-18); ctx.textAlign='left'; }
+      nameTag('KELLY SLATER',K.x,K.y-18,C.gold); }
   }
   ctx.textAlign='left';
 }
@@ -1463,9 +1487,7 @@ function drawSterling(BB){
   px(sx-4,sy-13,8,2,'#e8d27a');                                 // blond hair
   ctx.restore();
   if(rise>0.6){
-    const nm='STERLING', nw=nm.length*5+6;
-    px(sx-nw/2,fenceTop-28,nw,7,'#111'); ctx.fillStyle=C.gold; ctx.font='7px monospace'; ctx.textAlign='center';
-    ctx.fillText(nm,sx,fenceTop-22); ctx.textAlign='left';
+    nameTag('STERLING',sx,fenceTop-22,C.gold);
   }
 }
 /* ---- MY PLACE: inside the cabin (walk around, B at the bed to sleep, walk out the door) ---- */
@@ -1649,7 +1671,7 @@ function inspectables(){
   if(!IS_DOWN(scr)){
     add('shoreline',player.x,SHORE+6,12,["Whitewater fizzing ovah your toes.","Wet sand. Good fo' check da swell from here.","One crab wen' run sideways from you."]);
     for(const [pxl] of BEACH_PALMS[scr]) add('palm',pxl+3,H-22,18,["Coconut palm. Watch out fo' falling coconuts, brah.","Palm stay leaning toward da ocean, like you.","Somebody carved initials in da trunk."]);
-    if(b.kelly) add('kelly',b.kelly.x,b.kelly.y,24,["Kelly Slater. Eleven world titles and still out here.","Kelly no stay talk story. Too busy watching da lineup.","He looks at your board... and keeps walking."]);
+    if(b.kelly) add('kelly',b.kelly.x,b.kelly.y,24,["Kelly Slater. Eleven world titles and he'll tell you about every one.","He's checking his reflection in da wet sand.","He looks at your board, sighs, and keeps walking.","Bald, tan, and somehow still younger than you."]);
     if(b.tourist) add('tourist',b.tourist.x,b.tourist.y,22,["Tourist wit' one camera. Asking where's Pipeline.","Sunburnt already. Day one.","He stay wearing socks wit' slippahs."]);
     if(b.local) add('local',b.local.x,b.local.y,22,["Local uncle walking his beach. Respect.","He drops stuff everywhere. Free souvenirs.","Uncle's been surfing here since before you was born."]);
     { const bx=buggyLX(); if(bx!==null) add('atv',bx,SHORE+16,28,["Lifeguard ATV. Dey own dis beach.","Lifeguards on patrol. Stay outta da way.","Red cross on da back. No mess wit' 'um."]); }
@@ -1788,8 +1810,7 @@ function drawPhotog(x,y){
   const tx=x-16;
   px(tx-5,y-6,10,8,'#3a7a4a'); px(tx-5,y-6,3,8,'#4a9a5c'); px(tx+2,y-6,3,8,'#2a5a38'); // vest 3-tone
   px(tx-3,y-4,2,2,'#1a3a24'); px(tx+1,y-1,2,2,'#1a3a24');  // vest pockets
-  px(x-28,y-22,34,4,'#111'); ctx.fillStyle=C.gold; ctx.font='7px monospace'; ctx.textAlign='center';
-  ctx.fillText('📷 2x WAVES',x-11,y-25); ctx.textAlign='left';
+  nameTag('📷 2x WAVES',x-11,y-25,C.gold);
 }
 function drawBuggy(x,y){
   // LIFEGUARD ATV / quad — chunkier detailed sprite (facing right)
@@ -1865,9 +1886,7 @@ function drawWater(){
     if(L.female){ // swim top for the women surfers (original, generic)
       const ty = L.surf ? L.y-14 : L.y-6;   // torso height differs surf vs paddle
       px(L.x-5,ty,10,3,'#ff5aa0'); px(L.x-5,ty,10,1,'#ff8cc0'); } // bikini top band + highlight
-    const nm=L.name.toUpperCase(), nw=nm.length*5+6;
-    px(L.x-nw/2,L.y-28,nw,6,'#111'); ctx.fillStyle=C.gold; ctx.font='7px monospace'; ctx.textAlign='center';
-    ctx.fillText(nm,L.x,L.y-23); ctx.textAlign='left'; }
+    nameTag(L.name.toUpperCase(),L.x,L.y-23,C.gold); }
   // spray particles (behind the surfer)
   for(const s of w.spray){ const c = s.kind==='barrel'?C.purp : s.life>12?'#fff':C.foam; px(s.x,s.y,2,2,c); }
   // player
