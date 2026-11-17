@@ -1378,19 +1378,23 @@ function drawBillabongHouse(x,y){
   ctx.fillStyle=C.gold; ctx.font='bold 8px "Courier New",monospace'; ctx.textAlign='center';
   ctx.fillText('BILLABONG', x, topY-18); ctx.textAlign='left';
 }
-// Sterling Spencer (real name only, generic original sprite) rising over the fence
+// Sterling Spencer (real name only, generic original sprite) peering over the FRONT fence.
+// He stays put: crouched out of sight → stands up to peek over → ducks back down. The real
+// front fence (drawn right after this) hides his lower body; a clip hides anything below its top.
 function drawSterling(BB){
-  const t=beach.sterling, rise=Math.min(1,(150-t)/12, t/12);   // pop up, hold, duck back down
-  const sx=BB.f0+14, sy=BB.ft+44+Math.round((1-rise)*16);
-  drawDude(sx,sy,'#c88a4e','#c0392b',-1,'stand',frame);
-  px(sx-4,sy-4,9,8,'#2b6cb0'); px(sx-4,sy-4,9,2,'#3f86d0');                 // blue tee
-  px(sx-4,sy-13,8,2,'#e8d27a');                                            // blond hair
-  // a fence panel in front of his legs so he reads as peeking over it
-  for(let x=BB.f0+2; x<BB.f0+28; x+=5){ px(x,sy+2,3,14,'#efe6d2'); px(x,sy+1,3,1,'#fff'); }
-  px(BB.f0+2,sy+6,26,1,'#b8ae96');
-  const nm='STERLING SPENCER', nw=nm.length*5+6;
-  px(sx-nw/2,sy-26,nw,7,'#111'); ctx.fillStyle=C.gold; ctx.font='7px monospace'; ctx.textAlign='center';
-  ctx.fillText(nm,sx,sy-20); ctx.textAlign='left';
+  const t=beach.sterling, rise=Math.min(1,(150-t)/18, t/18);  // stand up, hold, sit back down
+  const fenceTop=BB.fb-11, sx=BB.f0+18;
+  const sy=fenceTop-1+Math.round((1-rise)*16);                  // up: head+shoulders over the fence
+  ctx.save(); ctx.beginPath(); ctx.rect(0,0,W,fenceTop); ctx.clip();
+  drawDude(sx,sy,'#c88a4e','#c0392b',1,'stand',0);              // frozen pose, no walk cycle
+  px(sx-4,sy-4,9,8,'#2b6cb0'); px(sx-4,sy-4,9,2,'#3f86d0');     // blue tee
+  px(sx-4,sy-13,8,2,'#e8d27a');                                 // blond hair
+  ctx.restore();
+  if(rise>0.6){
+    const nm='STERLING SPENCER', nw=nm.length*5+6;
+    px(sx-nw/2,fenceTop-28,nw,7,'#111'); ctx.fillStyle=C.gold; ctx.font='7px monospace'; ctx.textAlign='center';
+    ctx.fillText(nm,sx,fenceTop-22); ctx.textAlign='left';
+  }
 }
 // YOUR place — a teal plantation cottage with a covered porch + a big hammock to sleep in
 function drawMyHouse(x,y){
