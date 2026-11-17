@@ -896,10 +896,11 @@ function updWater(){
   if(player.downT>0){ player.downT--; if(player.downT===0 && player.y>SEABOT-4) { } return; }
 
   const paddling=!w.surfing;
-  const sp=w.surfing?2.4:1.1;    // paddling is slower than walking (1.5)
+  const wading = paddling && player.y>WADE_Y;     // knee-deep near da beach: you stand up and walk
+  const sp=w.surfing?2.4:wading?1.3:1.1;          // paddling is slower than walking (1.5); wading in between
   if(keys.left){ player.x-=sp; if(paddling)player.facing=-1; }
   if(keys.right){ player.x+=sp; if(paddling)player.facing=1; }
-  if(paddling){ if(keys.up)player.y-=1.05; if(keys.down)player.y+=1.05; }
+  if(paddling){ const v=wading?1.3:1.05; if(keys.up)player.y-=v; if(keys.down)player.y+=v; }
   player.x=clamp(player.x,14,W-14);
   player.y=clamp(player.y,SEATOP+6,SEABOT);
 
@@ -2176,6 +2177,7 @@ function drawWaves(){
     if(c.life>18) px(c.x-1, c.y-6-(a*4|0), 2, 2, col);    // flung droplet
   }
 }
+const WADE_Y = SEABOT-34;   // below this line (closer to shore) you wade instead of swim
 function drawWater(){
   const w=water;
   // the beach strip stays alive while you surf: Chandler + props + photographer + buggy
@@ -2196,6 +2198,15 @@ function drawWater(){
   // player
   if(player.downT>0){ drawDude(player.x,player.y,C.skin,player.shorts,player.facing,'down',frame); }
   else {
+    if(!w.surfing && player.y>WADE_Y){   // wading in da shallows: walk wit' da board under your arm, water round your knees
+      const moving=keys.left||keys.right||keys.up||keys.down, wy=player.y-6;
+      drawBeachBoard(player.x,wy,player.facing,true);
+      drawDude(player.x,wy,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame,player.shirt);
+      ctx.save(); ctx.globalAlpha=.55; px(player.x-9,wy+9,18,8,C.sea3); ctx.restore();          // water over da legs
+      const r=(frame>>3)%2; px(player.x-10-r,wy+9,20+2*r,1,C.foam); px(player.x-6,wy+11,3,1,'#fff'); // ripple ring
+      if(player.injured) px(player.x-3,wy-20,6,3,C.bad);
+      return;
+    }
     softShadow(player.x, player.y+9, 13);
     drawBoard(player.x,player.y+4,player.board,player.facing);
     const pose = !w.surfing ? 'paddle'
