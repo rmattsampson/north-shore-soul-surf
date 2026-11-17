@@ -1629,6 +1629,15 @@ function nearAuntie(){ return room==='trail' && near(player.x,player.y,AUNTIE_RO
 function updCabin(){
   const sp=1.5, ox=player.x, oy=player.y;
   if(consume('inspect')) doInspect();
+  if(player.waxing>0){                      // helping Turtle wax da board — hands busy, no walking
+    player.waxing--;
+    if(player.waxing===120) setMsg("Turtle: 'Small circles, brah. Like da tide coming in.'",120);
+    if(player.waxing===60)  setMsg("Turtle: 'Get da rails too! Chee, you got da touch.'",120);
+    if(frame%14===0) beep(900+((frame>>3)%3)*60,.02,'triangle',.02);   // squeaky wax
+    if(player.waxing===0){ player.wax=3; beep(760,.1,'triangle'); floatScore('WAXED!',player.x,player.y-20,C.good);
+      setMsg("You and Turtle waxed 'um up. Sticky! Next 3 waves catch easier.",240); }
+    return;
+  }
   if(keys.left){ player.x-=sp; player.facing=-1; }
   if(keys.right){ player.x+=sp; player.facing=1; }
   if(keys.up) player.y-=sp;
@@ -1652,8 +1661,8 @@ function updCabin(){
       else { npcCool=300; beep(300,.08,'triangle'); setMsg("Andy Irons: 'Empty hands? Go get me one shave ice from town, brah.'",240); }
     } else if(npcCool===0){ npcCool=600; beep(520,.07,'triangle'); setMsg("Andy Irons: 'What gifts have you brought me?'",240); }
   }
-  if(nearBlank() && consume('b')){ player.wax=3; beep(760,.08,'triangle'); floatScore('WAXED!',player.x,player.y-20,C.good);
-    setMsg("Fresh coat of Chandler's wax. Next 3 waves catch easier.",240); }
+  if(nearBlank() && consume('b')){ player.waxing=180; player.facing = player.x<COVE_ROOM.blank.x ? 1 : -1; beep(640,.08,'triangle');
+    setMsg("Turtle: 'Eh, grab one bar of wax, help me out!'",120); }
   if(nearTurtle() && npcCool===0){ npcCool=600; beep(540,.07,'triangle');
     setMsg(pickLine('turtle-talk',["Turtle: 'Eh braddah! Chandler says shape da board wit' your soul, not your hands.'","Turtle: 'Grab one wax at da blank. B. Make 'um stick.'","Turtle: 'Dis gun going be da one fo' Pipe. Watch.'","Turtle: 'Chandler no sell boards. He give 'um to who earns 'um.'"]),240); }
   if(nearAuntie() && npcCool===0){ npcCool=600; beep(560,.07,'triangle');
@@ -1718,6 +1727,7 @@ function drawCabin(){
   const moving=keys.left||keys.right||keys.up||keys.down;
   softShadow(player.x, player.y+13, 10);
   drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame,player.shirt);
+  if(player.waxing>0){ const hx=player.x+player.facing*(8+Math.sin(frame*0.35)*3); px(hx-3,player.y-2,6,3,'#e8dca8'); px(hx-3,player.y-2,6,1,'#fff6d0'); }  // wax bar in hand
 }
 function drawMyPlaceRoom(){
   const c=CABIN, lit=isNight();
@@ -1795,7 +1805,12 @@ function drawCoveRoom(){
   { const [a,b2,c2,d]=r.horses;
     for(const hx of [a+8, c2-14]){ px(hx,b2+4,6,d-b2,'#6a4a28'); px(hx-4,d-2,14,2,'#5a3a1a'); }
     const B=r.blank; ctx.fillStyle='#f6f2e6'; ctx.beginPath(); ctx.ellipse(B.x,B.y,46,6,0,0,Math.PI*2); ctx.fill();
-    px(B.x-44,B.y,88,1,'#c8c0a8'); px(B.x-30,B.y-1,60,1,'#ffffff'); }
+    px(B.x-44,B.y,88,1,'#c8c0a8'); px(B.x-30,B.y-1,60,1,'#ffffff');
+    const done = player.waxing>0 ? 1-player.waxing/180 : (player.wax>0 ? 1 : 0);
+    for(let i=0;i<Math.floor(done*26);i++){ const wx=B.x-40+((i*29)%80), wy=B.y-3+((i*7)%6);   // wax bumps (circles)
+      ctx.strokeStyle='rgba(200,190,160,.9)'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(wx,wy,2,0,Math.PI*2); ctx.stroke(); }
+    if(player.waxing>0){ const tx=B.x+30+Math.sin(frame*0.3)*6; px(tx-3,B.y-4,6,3,'#e8dca8'); }     // Turtle's wax bar moving
+  }
   // Turtle's corner: he LIVES here — old mattress, boombox, slippahs
   { const [a,b2,c2,d]=r.bed; px(a,b2,c2-a,d-b2,'#5a4a3a'); px(a+2,b2+2,c2-a-4,d-b2-4,'#c8b890'); px(a+4,b2+4,14,8,'#efe6d2');
     px(a+22,b2+6,c2-a-26,d-b2-10,'#c0503a'); for(let i=a+24;i<c2-6;i+=8) px(i,b2+8,3,3,'#ffd23f'); }   // sleeping bag
@@ -1990,7 +2005,7 @@ function doInspect(){
 function drawKeyHint(){
   if(state!=='beach' && state!=='cabin') return;
   let act=null;
-  if(state==='cabin'){ if(atCabinDoor()) act=['↓','walk out']; else if(nearCabinBed()) act=['B','sleep']; else if(nearAndy()) act=['B','give gift']; else if(nearBlank()) act=['B','wax board']; }
+  if(state==='cabin'){ if(atCabinDoor()) act=['↓','walk out']; else if(nearCabinBed()) act=['B','sleep']; else if(nearAndy()) act=['B','give gift']; else if(player.waxing>0) act=['B','waxing...']; else if(nearBlank()) act=['B','help Turtle wax']; }
   else {
     const b=beach;
     const rid=atDoorSpot();
