@@ -718,14 +718,14 @@ function updBeach(){
   }}
   }
   // photographer: out only ~20% of the time. When his timer elapses, ROLL:
-  // 40% he shows up (new spot, picked once), else he stays away for another window.
+  // 60% he shows up (new spot, picked once), else he stays away for another window.
   // While he IS out we never touch his position — just count down his visit.
   if(b.photoT>0) b.photoT--;
   else if(!b.photographer){
-    if(Math.random()<0.40){ b.photographer={x:rnd(140,340),y:H-60,t:ri(420,660)};
+    if(Math.random()<0.60){ b.photographer={x:rnd(140,340),y:H-60,t:ri(540,780)};
       // he only works da COVE — only announce it when you're standing on that beach
       if(state==='beach' && b.screen===SCR.COVE){ setMsg("📷 Photographer on da beach — go score waves fo' DOUBLE points!",150); beep(880,.1); } }
-    else b.photoT=ri(200,400);   // keep him off the beach, try again later
+    else b.photoT=ri(150,300);   // keep him off the beach, try again later
   }
   if(b.photographer){ b.photographer.t--; if(b.photographer.t<0){ b.photographer=null; b.photoT=ri(300,560); } }
 }
@@ -1010,7 +1010,7 @@ function endRide(){ const w=water; if(!w.surfing)return;
   score+=bonus; floatScore('+'+bonus,player.x,player.y-18,C.gold);
   // COINS come ONLY from da photographer: he sells your shot when he catches you riding at da cove
   let coinNote="";
-  if(photographerOut()){ const earn=Math.max(1,Math.floor(bonus*0.6)); coins+=earn; setCoins(coins);
+  if(photographerOut()){ const earn=Math.max(1,Math.floor(bonus*0.2)); coins+=earn; setCoins(coins);
     coinNote="  📷 Photog sold your shot! 🪙+"+earn; }
   setMsg(note+(w.combo>1?(" · "+w.combo+"x combo!"):"")+coinNote,150);
   w.surfing=false; w.cur=null; w.ride=0; w.combo=0; w.style=0;
@@ -1362,7 +1362,8 @@ function drawHouseScreen(){
   // the building depends on which down-screen this is (RCVA stays centered; others offset)
   if(beach.screen===SCR.HOUSE){
     drawRCVAHouse(RCVA_X, houseBand+70);
-    drawFrontStairs(RCVA_X, houseBand+52, houseBand+80, 5, beach.doorOpen==='rcva');   // stilt house: a real staircase up
+    drawHouseDoor(RCVA_X, houseBand+18, 14, 20, '#5a4430', '#d8d6cc', beach.doorOpen==='rcva');
+    drawFrontStairs(RCVA_X, houseBand+38, houseBand+80, 6, false);   // stilt house: a real staircase up to da door
     const BB=billabongLayout();
     // dirt path right down the middle: sand → between the houses → through the gate → the trail
     drawDirtPath(BB.p0,BB.p1,houseBand,roadY);
@@ -1370,7 +1371,8 @@ function drawHouseScreen(){
   }
   else if(beach.screen===SCR.MYHOUSE) drawMyHouse(W*0.60, houseBand+70);
   else /* COVEDOWN */ { drawCoveShack(W*0.38, houseBand+70);
-    drawFrontStairs(W*0.38, houseBand+70, houseBand+78, 2, beach.doorOpen==='cove'); }
+    drawHouseDoor(W*0.38, houseBand+52, 12, 18, '#6a4a28', '#4a3418', beach.doorOpen==='cove');
+    drawFrontStairs(W*0.38, houseBand+70, houseBand+78, 2, false); }
   // low stone wall in front of the yard (with a gate gap in the middle)
   { const wy=roadY-12, gx0=W/2-16, gx1=W/2+16;
     const seg=(x0,x1)=>{
@@ -1397,7 +1399,6 @@ function drawHouseScreen(){
   if(beach.screen===SCR.HOUSE){   // the center path carries on across the trail to the house on the other side
     drawDirtPath(W/2-12, W/2+12, walkTop, TRAIL_HOUSE_BASE-30);
     drawTrailHouse(W/2, TRAIL_HOUSE_BASE);
-    if(beach.doorOpen==='trail'){ px(W/2-5,TRAIL_HOUSE_BASE-19,10,19,'#ffd98a'); }   // door open: warm kitchen light
   }
   // player
   const moving=state!=='shop' && (keys.left||keys.right||keys.up||keys.down);   // arrows only drive the menu while shopping
@@ -1475,7 +1476,8 @@ function drawTrailHouse(x,y){
   ctx.fillStyle=roof; ctx.beginPath(); ctx.moveTo(x-wW/2-6,topY+1); ctx.lineTo(x-wW/2+10,topY-12); ctx.lineTo(x+wW/2-10,topY-12); ctx.lineTo(x+wW/2+6,topY+1); ctx.closePath(); ctx.fill();
   ctx.fillStyle=roofHi; ctx.fillRect(x-wW/2+10,topY-12,wW-20,3);                  // lit ridge
   px(x-wW/2-6,topY,wW+12,2,'#3f5a34');                                            // eave shadow
-  px(x-6,topY+10,12,20,trim); px(x-5,topY+11,10,19,'#7a4a2a'); px(x+2,topY+20,1,2,'#ffd23f'); // front door
+  drawHouseDoor(x, topY+11, 12, 19, '#3f7a8a', trim, beach.doorOpen==='trail');
+  px(x-8,y-1,16,2,'#c0503a'); px(x-8,y-1,16,1,'#e0705a');                        // welcome mat
   px(x-30,topY+9,16,10,'#8fb0bf'); px(x+14,topY+9,16,10,'#8fb0bf');               // windows
   px(x-31,topY+8,18,1,trim); px(x+13,topY+8,18,1,trim); px(x-31,topY+19,18,2,trim); px(x+13,topY+19,18,2,trim);
   px(x-30,topY+21,16,3,'#ff6b8a'); px(x+14,topY+21,16,3,'#ffd23f');               // flower boxes
@@ -1567,6 +1569,23 @@ function enterRoom(id){ room=id; state='cabin'; player.x=CABIN.doorX; player.y=C
 function enterCabin(){ enterRoom('myplace'); }
 function leaveCabin(){ const r=ROOMS[room]; beach.doorOpen=false; state='beach'; beach.screen=r.screen;
   player.x=r.sx; player.y = r.enter==='up' ? r.sy+6 : r.sy-10; beach.scrLock=10; beep(440,.08,'triangle'); }
+// a real front door: trim frame, two inset panels, brass knob, little lamp; open = warm room light + slab swung in
+function drawHouseDoor(cx,top,w,h,col,trim,open){
+  const x0=Math.round(cx-w/2);
+  px(x0-2,top-2,w+4,h+2,trim); px(x0-2,top-2,w+4,1,shade(trim,30));            // frame + lit header
+  if(open){
+    px(x0,top,w,h,'#ffd98a'); px(x0,top+h-4,w,4,'#c9a35a');                       // warm light + floor inside
+    px(x0+w-3,top,3,h,shade(col,-30)); px(x0+w-3,top,1,h,shade(col,20));          // door slab swung against the jamb
+  } else {
+    px(x0,top,w,h,col); px(x0,top,w,1,shade(col,30));
+    const pw=w-4, ph=Math.floor((h-6)/2);
+    px(x0+2,top+2,pw,ph,shade(col,-18)); px(x0+2,top+4+ph,pw,ph,shade(col,-18));  // inset panels
+    px(x0+2,top+2,pw,1,shade(col,22)); px(x0+2,top+4+ph,pw,1,shade(col,22));
+    px(x0+w-3,top+Math.floor(h/2),2,2,'#ffd23f');                                 // brass knob
+  }
+  px(cx-1,top-6,3,3,isNight()?'#ffe9a8':'#d8c890'); px(cx-2,top-7,5,1,'#3a2a1a');  // porch lamp over the door
+  if(isNight()){ ctx.save(); ctx.globalAlpha=.18; ctx.fillStyle='#ffd98a'; ctx.beginPath(); ctx.arc(cx,top-4,14,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+}
 // stairs drawn in front of a house: from yTop (porch / floor level) down to yBot (the yard)
 function drawFrontStairs(cx,yTop,yBot,n,open){
   const stepH=(yBot-yTop)/n;
@@ -1581,11 +1600,12 @@ const COVE_ROOM  = { crates:[[76,124,116,160],[76,160,100,184]], cot:[316,124,40
 const AUNTIE_ROOM= { counter:[70,120,214,150], table:[250,190,330,226], chair:[356,236,402,282], auntie:{x:150,y:166} };
 function cabinSolids(){
   const f=r=>[r[0],r[1],r[2],r[3]];
-  if(room==='rcva'){ const r=RCVA_ROOM; return [f(r.couch),f(r.coffee),f(r.tv),f(r.fridge),f(r.stairs)]; }
-  if(room==='cove'){ const r=COVE_ROOM; return [...r.crates.map(f),f(r.cot),f(r.table),f(r.barrel)]; }
-  if(room==='trail'){ const r=AUNTIE_ROOM; return [f(r.counter),f(r.table),f(r.chair),[r.auntie.x-6,r.auntie.y+6,r.auntie.x+6,r.auntie.y+14]]; }
+  const braz=[[CABIN.doorX-52,CABIN.y1-14,CABIN.doorX-40,CABIN.y1-4],[CABIN.doorX+40,CABIN.y1-14,CABIN.doorX+52,CABIN.y1-4]];
+  if(room==='rcva'){ const r=RCVA_ROOM; return [...braz,f(r.couch),f(r.coffee),f(r.tv),f(r.fridge),f(r.stairs)]; }
+  if(room==='cove'){ const r=COVE_ROOM; return [...braz,...r.crates.map(f),f(r.cot),f(r.table),f(r.barrel)]; }
+  if(room==='trail'){ const r=AUNTIE_ROOM; return [...braz,f(r.counter),f(r.table),f(r.chair),[r.auntie.x-6,r.auntie.y+6,r.auntie.x+6,r.auntie.y+14]]; }
   const c=CABIN;
-  return [f(c.bed), f(c.stand), f(c.table), f(c.bunk), ...c.pots.map(([x,y])=>[x-8,y-4,x+8,y+8])];
+  return [...braz,f(c.bed), f(c.stand), f(c.table), f(c.bunk), ...c.pots.map(([x,y])=>[x-8,y-4,x+8,y+8])];
 }
 // Andy Irons (real name as a label on a generic original sprite) chills in da RCVA house and wants gifts
 let gifts=0, npcCool=0;
@@ -1621,33 +1641,48 @@ function updCabin(){
     setMsg(pickLine('auntie-talk',["Auntie: 'Eat, eat! You stay too skinny, boy.'","Auntie: 'Banana bread fresh out da oven. Take two.'","Auntie: 'You went surf again? Wash your feet first!'"]),240); }
 }
 const ROOM_PAL = {
-  myplace:{ frame:'#6b4a2e', frameHi:'#9a7048', frameSh:'#3e2a18', block:'#5e4028', wall:'#d8c49a', wallHi:'#e8d8b2', wain:'#9a6e44', wainHi:'#b8885a', wainLn:'#7e5634', tileA:'#b48a5a', tileB:'#ad8454', tileHi:'#c29868', tileLn:'#9c7448' },
-  rcva:   { frame:'#5a5a58', frameHi:'#8a8a86', frameSh:'#2e2e2c', block:'#4a4a48', wall:'#c8d2d6', wallHi:'#dce4e8', wain:'#7c7a70', wainHi:'#9a988c', wainLn:'#5e5c54', tileA:'#a89c88', tileB:'#a29682', tileHi:'#b8ac98', tileLn:'#8e8270' },
-  cove:   { frame:'#4e3a26', frameHi:'#7a5e40', frameSh:'#2a1e12', block:'#3e2e1e', wall:'#9a8058', wallHi:'#ac926a', wain:'#6a5236', wainHi:'#846848', wainLn:'#4e3a26', tileA:'#8a7050', tileB:'#846a4a', tileHi:'#9a805e', tileLn:'#6e5840' },
-  trail:  { frame:'#7a5a34', frameHi:'#a88050', frameSh:'#4a3418', block:'#6a4a28', wall:'#f2dc94', wallHi:'#fae8b0', wain:'#c8a060', wainHi:'#dcb878', wainLn:'#a88048', tileA:'#e2d2b4', tileB:'#dccaa8', tileHi:'#eee0c6', tileLn:'#c8b690' },
+  myplace:{ frame:'#8a5a34', frameHi:'#b07a48', frameSh:'#5a3a1e', wain:'#6a4426', wainHi:'#8a5e36', wainLn:'#4a2e16', tileA:'#c8a070', tileLn:'#b48c5e' },
+  rcva:   { frame:'#7a7c80', frameHi:'#a2a4a8', frameSh:'#4e5054', wain:'#5e5c54', wainHi:'#7c7a70', wainLn:'#3e3c36', tileA:'#b8b0a0', tileLn:'#a49c8c' },
+  cove:   { frame:'#6a5238', frameHi:'#8a6e4e', frameSh:'#3e2e1e', wain:'#4e3a26', wainHi:'#6a5236', wainLn:'#2e2216', tileA:'#a08660', tileLn:'#8c7450' },
+  trail:  { frame:'#c89a5a', frameHi:'#e8c080', frameSh:'#8a6638', wain:'#a87a46', wainHi:'#c8965a', wainLn:'#7a5428', tileA:'#e8dcc0', tileLn:'#d4c6a6' },
 };
 function drawRoomShell(P){
   const c=CABIN, lit=isNight();
   px(0,0,W,H,'#0e0a08');
-  const T=14, ox0=c.x0-T, ox1=c.x1+T, oy0=c.wallY-10, oy1=c.y1+T;
+  const T=16, ox0=c.x0-T, ox1=c.x1+T, oy0=c.wallY-12, oy1=c.y1+T;
+  // brick masonry on every wall (classic top-down adventure-game room)
   px(ox0,oy0,ox1-ox0,oy1-oy0,P.frame);
-  px(ox0,oy0,ox1-ox0,2,P.frameHi); px(ox0,oy0,2,oy1-oy0,P.frameHi);
-  px(ox1-2,oy0,2,oy1-oy0,P.frameSh); px(ox0,oy1-2,ox1-ox0,2,P.frameSh);
-  for(let x=ox0+6; x<ox1-6; x+=18){ px(x,oy0+3,12,5,P.block); px(x,oy0+3,12,1,P.frameHi); }
-  for(let y=c.wallY+6; y<oy1-6; y+=18){ px(ox0+3,y,9,12,P.block); px(ox1-12,y,9,12,P.block); px(ox0+3,y,9,1,P.frameHi); px(ox1-12,y,9,1,P.frameHi); }
-  px(c.x0,c.wallY,c.x1-c.x0,c.floorY-c.wallY,P.wall); px(c.x0,c.wallY,c.x1-c.x0,3,P.wallHi);
-  px(c.x0,c.floorY-26,c.x1-c.x0,26,P.wain); px(c.x0,c.floorY-26,c.x1-c.x0,2,P.wainHi);
-  for(let x=c.x0+8; x<c.x1; x+=20) px(x,c.floorY-22,1,20,P.wainLn);
-  px(c.x0,c.floorY-3,c.x1-c.x0,3,P.frameSh);
-  for(let y=c.floorY, r=0; y<c.y1; y+=16, r++) for(let x=c.x0, k=0; x<c.x1; x+=16, k++){
-    const w=Math.min(16,c.x1-x), h=Math.min(16,c.y1-y);
-    px(x,y,w,h,(r+k)%2?P.tileA:P.tileB); px(x,y,w,1,P.tileHi); px(x,y,1,h,P.tileHi);
-    px(x,y+h-1,w,1,P.tileLn); px(x+w-1,y,1,h,P.tileLn); }
-  ctx.save(); ctx.globalAlpha=0.22; ctx.fillStyle='#2a1a0c';
-  ctx.fillRect(c.x0,c.floorY,c.x1-c.x0,6); ctx.fillRect(c.x0,c.floorY,6,c.y1-c.floorY); ctx.restore();
-  px(c.doorX-18,c.y1,36,T,lit?'#1a2238':'#cfe8c0');
-  px(c.doorX-20,c.y1-2,2,T+2,P.frameSh); px(c.doorX+18,c.y1-2,2,T+2,P.frameSh);
-  px(c.doorX-14,c.y1-10,28,9,'#4a7a5a'); px(c.doorX-14,c.y1-10,28,1,'#6a9a7a');
+  for(let y=oy0, r=0; y<oy1; y+=8, r++){
+    for(let x=ox0-(r%2?8:0); x<ox1; x+=16){
+      const bx=Math.max(x,ox0), bw=Math.min(x+16,ox1)-bx; if(bw<=0) continue;
+      px(bx,y,bw,1,P.frameHi); px(bx,y+7,bw,1,P.frameSh); px(bx+bw-1,y,1,8,P.frameSh);
+    }
+  }
+  // the floor sits in a recessed well: dark inner lip + lit outer edge
+  px(c.x0-2,c.floorY-2,c.x1-c.x0+4,c.y1-c.floorY+4,P.frameSh);
+  px(ox0,oy0,ox1-ox0,2,shade(P.frameHi,20)); px(ox0,oy0,2,oy1-oy0,shade(P.frameHi,20));
+  px(ox1-2,oy0,2,oy1-oy0,'#0e0a08'); px(ox0,oy1-2,ox1-ox0,2,'#0e0a08');
+  // back-wall strip just above the floor (where furniture leans): a timber rail
+  px(c.x0,c.floorY-8,c.x1-c.x0,6,P.wain); px(c.x0,c.floorY-8,c.x1-c.x0,1,P.wainHi); px(c.x0,c.floorY-3,c.x1-c.x0,1,P.wainLn);
+  // flat floor with soft tile seams (low contrast)
+  px(c.x0,c.floorY,c.x1-c.x0,c.y1-c.floorY,P.tileA);
+  for(let y=c.floorY+16; y<c.y1; y+=16) px(c.x0,y,c.x1-c.x0,1,P.tileLn);
+  for(let y=c.floorY, r=0; y<c.y1; y+=16, r++) for(let x=c.x0+(r%2?8:0); x<c.x1; x+=16) px(x,y,1,Math.min(16,c.y1-y),P.tileLn);
+  ctx.save(); ctx.globalAlpha=0.25; ctx.fillStyle='#000';
+  ctx.fillRect(c.x0,c.floorY,c.x1-c.x0,5); ctx.fillRect(c.x0,c.floorY,5,c.y1-c.floorY); ctx.restore();   // walls shade da floor
+  // arched doorway in the bottom wall (dark opening with a stepped arch, outside light beyond)
+  const dx0=c.doorX-16;
+  px(dx0,c.y1-2,32,T+2,'#0e0a08');
+  px(dx0+2,c.y1+4,28,T-4,lit?'#1a2238':'#cfe8c0');
+  px(dx0-2,c.y1-4,4,T+4,P.frameHi); px(dx0+30,c.y1-4,4,T+4,P.frameSh);              // jamb stones
+  px(c.doorX-12,c.y1-11,24,8,'#4a7a5a'); px(c.doorX-12,c.y1-11,24,1,'#6a9a7a');       // mat inside da door
+  // twin braziers either side of da doorway, flames flicker
+  for(const bx of [c.doorX-46, c.doorX+46]){
+    const by=c.y1-14, f=(frame>>2)%3;
+    px(bx-6,by,12,8,'#5a5650'); px(bx-6,by,12,2,'#8a857c'); px(bx-4,by+8,8,2,'#3a3630');
+    px(bx-4,by-6+f%2,8,6,'#ff8a2a'); px(bx-2,by-9+f,4,5,'#ffd23f'); px(bx-1,by-10+f,2,2,'#fff6c0');
+    ctx.save(); ctx.globalAlpha=lit?.22:.10; ctx.fillStyle='#ffb050'; ctx.beginPath(); ctx.arc(bx,by-4,26,0,Math.PI*2); ctx.fill(); ctx.restore();
+  }
 }
 function drawRoomWindow(wx,curtain){
   const c=CABIN, lit=isNight(), wy=c.wallY+8;
@@ -2086,9 +2121,9 @@ function drawWater(){
   drawWaves();
   if(w.shark) drawShark(w.shark.x,w.shark.y);
   for(const h of w.huis){ softShadow(h.x, h.y+9, 11); drawHui(h.x,h.y,h.surf); }
-  if(w.pro){ const L=w.pro; softShadow(L.x, L.y+9, 12); drawBoard(L.x,L.y+4,C.sea1,-1); drawDude(L.x,L.y-5,C.skin,'#111',-1,L.surf?'surf':'paddle',frame);
+  if(w.pro){ const L=w.pro; softShadow(L.x, L.y+9, 12); drawBoard(L.x,L.y+4,C.sea1,-1); drawDude(L.x,L.surf?L.y-5:L.y+1,C.skin,'#111',-1,L.surf?'surf':'paddle',frame);
     if(L.female){ // swim top for the women surfers (original, generic)
-      const ty = L.surf ? L.y-14 : L.y-6;   // torso height differs surf vs paddle
+      const ty = L.surf ? L.y-14 : L.y;     // torso height differs surf vs paddle
       px(L.x-5,ty,10,3,'#ff5aa0'); px(L.x-5,ty,10,1,'#ff8cc0'); } // bikini top band + highlight
     nameTag(L.name.toUpperCase(),L.x,L.y-23,C.gold); }
   // spray particles (behind the surfer)
@@ -2116,9 +2151,8 @@ function drawWater(){
 }
 function drawShark(x,y){ px(x-14,y-3,26,7,C.shark); px(x-17,y-1,4,4,C.shark); px(x-14,y+2,22,3,C.sharkBelly);
   px(x-2,y-10,5,7,C.shark); px(x+10,y-2,4,2,'#222'); }
-function drawHui(x,y,surfing){ drawBoard(x,y+4,'#222',-1); drawDude(x,y-5,C.huiSkin,C.hui,-1,surfing?'surf':'paddle',frame);
-  px(x-9,y-26,18,4,'#111'); ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
-  ctx.fillText('HUI',x,y-29); ctx.textAlign='left'; }
+function drawHui(x,y,surfing){ drawBoard(x,y+4,'#222',-1); drawDude(x,surfing?y-5:y+1,C.huiSkin,C.hui,-1,surfing?'surf':'paddle',frame);
+  nameTag('HUI',x,surfing?y-24:y-12,C.bad); }
 
 function drawShop(){
   // dim the beach behind the menu
