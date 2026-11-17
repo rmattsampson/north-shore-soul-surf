@@ -83,6 +83,7 @@ function norm(e){ switch(e.key){
   case ' ':return 'space'; case 'Enter':return 'enter';
   case 'z':case 'Z':return 'z'; case 'x':case 'X':return 'x';
   case 'b':case 'B':return 'b';
+  case 'i':case 'I':return 'inspect';
   case 'm':case 'M':return 'mute'; default:return null; } }
 function consume(k){ if(pressed[k]){ pressed[k]=false; return true; } return false; }
 
@@ -640,6 +641,7 @@ function updBeach(){
     }
   }
 
+  if(consume('inspect')) doInspect();   // I = look at whatever you're standing by
   // ----- per-screen interactions -----
   if(b.screen===SCR.SURF){
     if(player.injured && near(player.x,player.y,b.chandler.x,b.chandler.y+6,22)){
@@ -1013,7 +1015,7 @@ function drawHelp(){
     '↑ paddle out  ·  ← → steer  ·  ↓ go back to beach',
     'SPACE  drop in on a clean swell / kick out',
     'Z cutback · X off-da-lip · Z + X  BARREL',
-    '',
+    'B use / sleep / shop  ·  I inspect stuff',
     'score = reading waves. longer + tricks = mo betta.',
     '📷 photographer at da cove? ride there = DOUBLE.',
     '',
@@ -1145,6 +1147,7 @@ function drawBeach(){
     if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
     if(player.injured) px(player.x-3,player.y-20,6,3,C.bad);
   }
+  drawKeyHint();
 }
 // ---- solid obstacles: the player's FEET box can't enter these (x0,y0,x1,y1 in screen coords) ----
 const HOUSE_ROAD_Y = SEATOP+92;   // keep in sync with drawHouseScreen's roadY
@@ -1317,12 +1320,7 @@ function drawHouseScreen(){
   drawBeachBoard(player.x,player.y,player.facing,moving);
   drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
   if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
-  // key hint at the cabin door
-  if(atCabinSteps()){
-    const hint = beach.doorOpen ? '↑ walk in' : 'B to enter', hw=hint.length*5+10, hx=player.x, hy=player.y-30;
-    px(hx-hw/2,hy-8,hw,11,'#111'); px(hx-hw/2,hy-8,hw,1,C.gold);
-    ctx.fillStyle=C.gold; ctx.font='bold 8px monospace'; ctx.textAlign='center'; ctx.fillText(hint,hx,hy); ctx.textAlign='left';
-  }
+  drawKeyHint();
 }
 function drawTallPalm(x,by,h){
   // slender curved trunk rising high, drooping fronds — original
@@ -1458,16 +1456,17 @@ function drawSterling(BB){
 const MYHOUSE_X = W*0.60;                 // matches drawMyHouse(W*0.60, …)
 const CABIN_DOOR_Y = SEATOP+10+70+20;     // where you stand at the bottom of the porch steps
 const CABIN = { x0:60, x1:420, wallY:52, floorY:120, y1:300, doorX:W/2,
-  bed:[88,124,140,168], stand:[148,126,166,146], pots:[[76,284],[404,284],[404,136]], table:[318,176,386,212], board:[350,58,362,116] };
+  bed:[88,124,140,168], stand:[148,126,166,146], bunk:[330,244,388,292], pots:[[76,284],[404,284],[404,136]], table:[318,176,386,212], board:[350,58,362,116] };
 function atCabinSteps(){ return beach.screen===SCR.MYHOUSE && Math.abs(player.x-MYHOUSE_X)<26 && player.y>=CABIN_DOOR_Y-14 && player.y<=CABIN_DOOR_Y+30; }
 function enterCabin(){ state='cabin'; player.x=CABIN.doorX; player.y=CABIN.y1-26; player.facing=1; beep(520,.08,'triangle'); }
 function leaveCabin(){ beach.doorOpen=false; state='beach'; beach.screen=SCR.MYHOUSE; player.x=MYHOUSE_X; player.y=CABIN_DOOR_Y+6; beep(440,.08,'triangle'); }
 function cabinSolids(){
   const c=CABIN, f=r=>[r[0],r[1],r[2],r[3]];
-  return [f(c.bed), f(c.stand), f(c.table), ...c.pots.map(([x,y])=>[x-8,y-4,x+8,y+8])];
+  return [f(c.bed), f(c.stand), f(c.table), f(c.bunk), ...c.pots.map(([x,y])=>[x-8,y-4,x+8,y+8])];
 }
 function updCabin(){
   const sp=1.5, ox=player.x, oy=player.y;
+  if(consume('inspect')) doInspect();
   if(keys.left){ player.x-=sp; player.facing=-1; }
   if(keys.right){ player.x+=sp; player.facing=1; }
   if(keys.up) player.y-=sp;
@@ -1479,11 +1478,10 @@ function updCabin(){
     if(!feetHit(nx,oy,rs)){ player.y=oy; } else if(!feetHit(ox,ny,rs)){ player.x=ox; } else { player.x=ox; player.y=oy; }
   }
   // out the door: walk down into it, or press B standing on it
-  const atDoor=Math.abs(player.x-CABIN.doorX)<16 && player.y>=CABIN.y1-18;
+  const atDoor=atCabinDoor();
   if(atDoor && (keys.down || consume('b'))){ leaveCabin(); return; }
   // B next to the bed = sleep till morning
-  const b=CABIN.bed;
-  if(player.x>b[0]-12 && player.x<b[2]+16 && player.y<b[3]+14 && consume('b')){ sleepTilMorning(); }
+  if(nearCabinBed() && consume('b')){ sleepTilMorning(); }
 }
 function drawCabin(){
   const c=CABIN, lit=isNight();
@@ -1558,11 +1556,120 @@ function drawCabin(){
     px(t0+10,t1-6,18,6,'#c96a2a'); px(t0+12,t1-9,6,4,'#ffb43a'); px(t0+19,t1-9,6,4,'#e8d040');        // mango bowl
     px(t0+38,t1-4,16,5,'#c98a3a'); px(t0+52,t1-3,10,2,'#5a3a1a'); px(t0+42,t1-3,3,3,'#3a2412');       // ukulele lying on top
     px(t2+6,t1+2,14,4,'#7a5228'); px(t2+6,t1-14,3,16,'#7a5228'); px(t2+8,t1+6,3,12,'#5a3a1a'); px(t2+17,t1+6,3,12,'#5a3a1a'); } // chair
+  drawBunkBeds();
   // player (board stays leaning outside by the door)
   const moving=keys.left||keys.right||keys.up||keys.down;
   softShadow(player.x, player.y+13, 10);
   drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
   if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
+  drawKeyHint();
+}
+/* ---- INSPECT (I) + context key hints ---- */
+function nearCabinBed(){ const b=CABIN.bed; return player.x>b[0]-12 && player.x<b[2]+16 && player.y<b[3]+14; }
+function atCabinDoor(){ return Math.abs(player.x-CABIN.doorX)<16 && player.y>=CABIN.y1-18; }
+// bunk beds with two sleeping visitors (original art)
+function drawBunkBeds(){
+  const [x0,y0,x1,y1]=CABIN.bunk, wood='#6a4428', woodHi='#8a5e36', top=y0-40;
+  px(x0,top,4,y1-top,wood); px(x1-4,top,4,y1-top,wood); px(x0,top,4,1,woodHi); px(x1-4,top,4,1,woodHi);   // corner posts
+  const mattress=(my,blanket,hair,skin,zOff)=>{
+    px(x0+2,my+16,x1-x0-4,3,wood);                                  // side rail
+    px(x0+4,my,x1-x0-8,16,'#efe6d2');                               // sheet
+    px(x0+6,my+3,12,9,'#ffffff');                                   // pillow
+    px(x0+8,my+4,8,7,skin); px(x0+8,my+4,8,3,hair);                 // sleeping head
+    px(x0+17,my+2,x1-x0-23,13,blanket); px(x0+17,my+2,x1-x0-23,2,shade(blanket,30)); // blanket over the body
+    const zt=((frame+zOff)%90)/90;                                   // floating Zz
+    ctx.globalAlpha=1-zt; ctx.fillStyle='#fff'; ctx.font='bold 7px monospace';
+    ctx.fillText('z',x0+14+zt*6,my-2-zt*10); ctx.fillText('Z',x0+20+zt*8,my-8-zt*12); ctx.globalAlpha=1;
+  };
+  mattress(top+6,'#c0503a','#e8d27a','#f0c8a0',0);                  // upper bunk: mainland brah (sunburnt)
+  mattress(y1-26,'#3f7a4a','#2a1a10','#b07a44',45);                 // lower bunk: cousin from town
+  for(let ly=top+24; ly<y1-26; ly+=6) px(x1-8,ly,6,2,woodHi);       // ladder rungs
+  px(x1-9,top+22,1,y1-26-top-22,wood); px(x1-2,top+22,1,y1-26-top-22,wood);
+}
+const INSPECT_COUNTER={};
+function pickLine(id,lines){ const i=(INSPECT_COUNTER[id]||0)%lines.length; INSPECT_COUNTER[id]=i+1; return lines[i]; }
+// everything you can look at, for wherever you are right now: {id, x, y, r, lines}
+function inspectables(){
+  const out=[], add=(id,x,y,r,lines)=>out.push({id,x,y,r,lines});
+  if(state==='cabin'){
+    const c=CABIN, lit=isNight();
+    add('bunks',359,268,44,["Brah visiting from da mainland, sleeping all day.","Your cuz from town. Snoring like one shorebreak.","Dey surfed 6am dawn patrol. Now dey dead to da world.","Mainland brah stay sunburnt like one lobster. Let him sleep."]);
+    add('bed',114,170,40,["Your bed. Smells like sunscreen and salt.","Sand in da sheets again. Classic.","Quilt from Grandma. Hibiscus everywhere."]);
+    add('lamp',157,150,22,["Little lamp. Da bulb flickers when da trades blow.","Lamp made from one old koa branch.","Moths love this thing at night."]);
+    add('ukulele',368,186,22,["Ukulele. You only know three chords, but dey da right three.","Somebody wen' tune 'um wrong again.","Strum one... sounds like one sunset."]);
+    add('mangoes',340,186,20,["Fresh mangoes from da neighbor's tree. Ono.","Mango juice going drip all ovah your chin.","Don't eat 'um all, da brahs going be hungry when dey wake up."]);
+    add('wallboard',356,124,30,["Your old single-fin. Dinged but cherry.","Shaped in Chandler's barn. No touch, only admire.","Dis board seen Pipe on one big day."]);
+    add('window',256,124,34,lit?["Stars out. Tomorrow going be firing.","Can hear da shorebreak pounding in da dark.","Moon on da water. Mean."]:["Swell lines stacking up outside.","Trades light. Glassy out dea.","Somebody stay paddling out already. Hurry up, cuz."]);
+    add('photo',188,124,24,["Picture of Pipe on one solid day. Chicken skin.","You in da barrel... or maybe dat's one blur.","Signed by da boys at Sunset."]);
+    for(const [qx,qy] of c.pots) add('pot',qx,qy,24,["Clay pot. Nothing inside... just like your wallet.","Pot full of old wax and one slipper.","You try look inside. Only one gecko."]);
+    add('rug',245,228,40,["Lauhala-red rug. No track sand on it, cuz!","Somebody spilled shave ice on da rug once. Still sticky.","Comfy for napping when da bunks stay full."]);
+    add('door',c.doorX,c.y1-14,22,["Front door. Sand piles up on da mat every day.","Fresh air coming in from da yard.","Can hear da roosters outside."]);
+    return out;
+  }
+  if(state!=='beach') return out;
+  const b=beach, scr=b.screen;
+  if(!IS_DOWN(scr)){
+    add('shoreline',player.x,SHORE+6,12,["Whitewater fizzing ovah your toes.","Wet sand. Good fo' check da swell from here.","One crab wen' run sideways from you."]);
+    for(const [pxl] of BEACH_PALMS[scr]) add('palm',pxl+3,H-22,18,["Coconut palm. Watch out fo' falling coconuts, brah.","Palm stay leaning toward da ocean, like you.","Somebody carved initials in da trunk."]);
+    if(b.kelly) add('kelly',b.kelly.x,b.kelly.y,24,["Kelly Slater. Eleven world titles and still out here.","Kelly no stay talk story. Too busy watching da lineup.","He looks at your board... and keeps walking."]);
+    if(b.tourist) add('tourist',b.tourist.x,b.tourist.y,22,["Tourist wit' one camera. Asking where's Pipeline.","Sunburnt already. Day one.","He stay wearing socks wit' slippahs."]);
+    if(b.local) add('local',b.local.x,b.local.y,22,["Local uncle walking his beach. Respect.","He drops stuff everywhere. Free souvenirs.","Uncle's been surfing here since before you was born."]);
+    { const bx=buggyLX(); if(bx!==null) add('atv',bx,SHORE+16,28,["Lifeguard ATV. Dey own dis beach.","Lifeguards on patrol. Stay outta da way.","Red cross on da back. No mess wit' 'um."]); }
+    if(scr===SCR.TOWN){
+      add('shack',b.shack.x,b.shack.y,34,["Surf shack. Wax, leashes, and one old couch.","Smells like coconut wax and coffee.","Board rental: 'No kooks, no refunds.'"]);
+      add('shaveice',b.iceShop.x,b.iceShop.y,30,["Shave ice stand. Rainbow wit' ice cream on da bottom.","Line stay long, but worth it.","Li hing mui flavor. Da best."]);
+      for(const f of b.folks) add('folk',f.x,f.y,20,["Local folks talking story.","Dey stay planning one beach party.","Auntie wen' offer you one plate lunch."]);
+    }
+    if(scr===SCR.SURF) add('chandler',b.chandler.x,b.chandler.y+6,28,["Chandler. Shapes da best guns on da North Shore.","His hale smells like resin and incense.","He says: 'Surf wit' your heart, not your ego.'"]);
+    if(scr===SCR.COVE && b.photographer) add('photog',b.photographer.x,b.photographer.y,26,["Photographer wit' one big lens. Go surf, get famous.","He shoots fo' da surf magazines.","He no shoot you walking. Go catch one wave!"]);
+    return out;
+  }
+  const houseBand=SEATOP+10, roadY=SEATOP+140;
+  add('wall',player.x,roadY-10,14,["Lava-rock wall. Built by somebody's tutu.","Warm from da sun. Good fo' sitting.","Geckos hiding in da cracks."]);
+  for(const c of b.cars) add('walker',c.x,roadY+3,20,c.kind==='bike'?["Cruiser bike rolling by. No helmet, all aloha.","Bike basket full of mangoes.","Ding ding! Coming through, brah."]:["Somebody walking to da beach wit' one cooler.","Neighbor waves. You wave back.","Dey stay asking if da surf stay good."]);
+  if(scr===SCR.MYHOUSE){
+    const HM=myHammock();
+    add('hammock',HM.x,HM.y,40,["Your hammock. Best seat on da North Shore.","Perfect fo' one afternoon nap.","Striped canvas, faded from da sun."]);
+    add('cabin',MYHOUSE_X+50,CABIN_DOOR_Y+6,24,["My place. Small, but mine.","Teal walls, red roof. Bright like one sunset.","Da porch is where all da talk story happens."]);
+  } else if(scr===SCR.HOUSE){
+    const BB=billabongLayout();
+    add('rcva',RCVA_X,houseBand+80,44,["RCVA surf house. Da boys stay inside talking story.","Big lanai upstairs. Best view of da lineup.","Boards stacked everywhere. Dis house is all surf."]);
+    add('billabong',BB.f0-10,BB.ft+30,30,["Billabong house. Sterling stay guarding da yard.","White picket fence. Rules posted somewhere.","Boards on da rack all waxed up and ready."]);
+    add('trailhouse',W/2,TRAIL_HOUSE_BASE-44,36,["Little yellow house. Auntie makes da best banana bread.","Flower boxes all blooming.","Smells like somebody stay cooking kalua pig."]);
+    add('path',W/2,houseBand+40,14,["Dirt path, worn smooth by bare feet.","Path straight to da beach. Can hear da waves.","Somebody dropped one slippah here."]);
+  } else {
+    add('coveshack',W*0.38,houseBand+80,42,["Old cove shack. Fishermen stay keep nets inside.","Roof patched wit' one old surfboard.","Quiet back here. Just da birds."]);
+    for(const dx of [40, W*0.4, W-70]) add('driftwood',dx+10,roadY-16,18,["Driftwood log. Washed up from who knows where.","Good spot fo' one beach fire.","Bleached white by da sun."]);
+  }
+  return out;
+}
+function nearestInspectable(){
+  let best=null, bd=1e9;
+  for(const it of inspectables()){ const dx=player.x-it.x, dy=player.y-it.y, d=dx*dx+dy*dy; if(d<it.r*it.r && d<bd){ bd=d; best=it; } }
+  return best;
+}
+function doInspect(){
+  const it=nearestInspectable();
+  if(it){ setMsg(pickLine(it.id,it.lines),170); beep(700,.05,'triangle'); }
+  else setMsg("Nothing much fo' look at here.",70);
+}
+// small tag above your head: what B does here, plus I if there's something to look at
+function drawKeyHint(){
+  if(state!=='beach' && state!=='cabin') return;
+  let act=null;
+  if(state==='cabin'){ if(atCabinDoor()) act='↓ walk out'; else if(nearCabinBed()) act='B to sleep'; }
+  else {
+    const b=beach;
+    if(atCabinSteps()) act = b.doorOpen ? '↑ walk in' : 'B to enter';
+    else if(b.screen===SCR.MYHOUSE){ const HM=myHammock(); if(near(player.x,player.y,HM.x,HM.y,40)) act='B to sleep'; }
+    else if(b.screen===SCR.TOWN && near(player.x,player.y,b.iceShop.x,b.iceShop.y,24)) act='B to shop';
+  }
+  const look=nearestInspectable();
+  const hint = act && look ? act+' · I look' : act ? act : look ? 'I to inspect' : null;
+  if(!hint) return;
+  const hw=hint.length*5+10, hx=clamp(player.x,hw/2+2,W-hw/2-2), hy=player.y-30;
+  px(hx-hw/2,hy-8,hw,11,'#111'); px(hx-hw/2,hy-8,hw,1,C.gold);
+  ctx.fillStyle=C.gold; ctx.font='bold 8px monospace'; ctx.textAlign='center'; ctx.fillText(hint,hx,hy); ctx.textAlign='left';
 }
 // YOUR place — a teal plantation cottage with a covered porch + a big hammock to sleep in
 function drawMyHouse(x,y){
