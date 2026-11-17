@@ -1556,7 +1556,7 @@ const ROOMS = {
   rcva:   { label:'🏄 RCVA HOUSE',screen:SCR.HOUSE,    sx:RCVA_X,    sy:SEATOP+10+82,   enter:'up' },
   cove:   { label:'🪚 SHAPING BARN', screen:SCR.COVEDOWN, sx:W*0.38,    sy:SEATOP+10+82,   enter:'up' },
   trail:  { label:"🍌 AUNTIE'S",  screen:SCR.HOUSE,    sx:W/2,       sy:TRAIL_HOUSE_BASE+4, enter:'up',
-            zone:[W/2-40, TRAIL_HOUSE_BASE-6, W/2+40, H] },   // stand in front of her door (below da house)
+            zone:[W/2-64, TRAIL_HOUSE_BASE-70, W/2+64, H] },   // anywhere around her house: from da trail above OR at her front door
 };
 function atDoorSpot(){
   if(state!=='beach' || !IS_DOWN(beach.screen)) return null;
