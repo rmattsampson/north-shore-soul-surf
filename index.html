@@ -692,7 +692,7 @@ function updBeach(){
   // props can be picked up on whichever beach screen they're on (surf/cove)
   if(b.screen===SCR.SURF || b.screen===SCR.COVE){
     for(const p of b.props){ if(!p.got && near(player.x,player.y,p.x,p.y,15)){
-      p.got=true; score+=5; coins+=2; setCoins(coins); beep(760,.06); floatScore('+5',p.x,p.y-10,C.good);
+      p.got=true; score+=5; beep(760,.06); floatScore('+5',p.x,p.y-10,C.good);
       if(p.k==='slipper') setMsg("Found one lost slippah. Classic North Shore.",90);
       if(p.k==='honu') setMsg("A honu restin'. Give 'um space, yeah.",90);
       if(p.k==='cooler') setMsg("Cooler stay empty. Somebody wen' drink all da grindz.",90);
@@ -700,7 +700,7 @@ function updBeach(){
   }
   if(false){
   for(const p of b.props){ if(!p.got && near(player.x,player.y,p.x,p.y,15)){
-    p.got=true; score+=5; coins+=2; setCoins(coins); beep(760,.06); floatScore('+5',p.x,p.y-10,C.good);
+    p.got=true; score+=5; beep(760,.06); floatScore('+5',p.x,p.y-10,C.good);
     if(p.k==='slipper') setMsg("Found one lost slippah. Classic North Shore.",90);
     if(p.k==='honu') setMsg("A honu restin'. Give 'um space, yeah.",90);
     if(p.k==='cooler') setMsg("Cooler stay empty. Somebody wen' drink all da grindz.",90);
@@ -954,9 +954,11 @@ function endRide(){ const w=water; if(!w.surfing)return;
   let bonus=Math.floor(w.ride*0.6)+w.style, note="Nice ride! "+w.ride+" frames";
   if(photographerOut()){ bonus*=2; note="📷 PHOTO SCORE! DOUBLE — "+w.ride+" frames"; beep(990,.14); }
   score+=bonus; floatScore('+'+bonus,player.x,player.y-18,C.gold);
-  // earn shop coins = ~40% of the ride bonus
-  const earn=Math.max(1,Math.floor(bonus*0.4)); coins+=earn; setCoins(coins);
-  setMsg(note+(w.combo>1?(" · "+w.combo+"x combo!"):"")+"  🪙+"+earn,130);
+  // COINS come ONLY from da photographer: he sells your shot when he catches you riding at da cove
+  let coinNote="";
+  if(photographerOut()){ const earn=Math.max(1,Math.floor(bonus*0.6)); coins+=earn; setCoins(coins);
+    coinNote="  📷 Photog sold your shot! 🪙+"+earn; }
+  setMsg(note+(w.combo>1?(" · "+w.combo+"x combo!"):"")+coinNote,150);
   w.surfing=false; w.cur=null; w.ride=0; w.combo=0; w.style=0;
   // kick back out to the lineup, prone and paddling — no lingering stand
   player.y=clamp(player.y-28, SEATOP+20, SEABOT-20);
@@ -1022,7 +1024,7 @@ function drawHelp(){
     'Z cutback · X off-da-lip · Z + X  BARREL',
     'B use / sleep / shop  ·  I inspect stuff',
     'score = reading waves. longer + tricks = mo betta.',
-    '📷 photographer at da cove? ride there = DOUBLE.',
+    '📷 photog at da cove: DOUBLE pts + he sells da shot = 🪙',
     '',
     'HUI knock you off. messy wave close you out.',
     'PRO surfers snake your wave (no damage, just annoying).',
