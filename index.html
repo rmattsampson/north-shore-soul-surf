@@ -456,6 +456,7 @@ let beachBuilt=false;
 function buildBeach(){
   beach={ photographer:null, buggy:null, chandler:{x:58,y:H-54}, local:null, tourist:null,
     props:[], photoT:ri(160,340), buggyT:ri(260,560), chatCool:60, localT:ri(2400,3600), touristT:ri(400,900),
+    kelly:null, kellyT:ri(2400,4200), sterling:0, sterlingCool:0,
     // fixed Hawaiian-flair buildings
     iceShop:{x:W-70, y:SHORE+22},     // shave-ice stand = the SHOP (town screen)
     shack:{x:118, y:SHORE+20},        // surf shack / home (town screen)
@@ -542,6 +543,7 @@ function update(){
   if(beachBuilt) tickBuggy();  // lifeguard ATV keeps driving even while you surf
   if(beachBuilt) tickLocal();  // a local strolls the beach ~1/min and drops stuff
   if(beachBuilt) tickTourist();  // a lone original tourist wanders by
+  if(beachBuilt) tickKelly();    // Kelly Slater cameo on the beach
   if(beachBuilt) tickRoad();     // clothed walkers + cyclists stroll the dirt sidewalk
   if(state==='splash'){ if(consume('enter')){ state='help'; beep(660,.1);} else if(consume('space')){ enterBeach(); } return; }
   if(state==='help'){ if(consume('enter')||consume('space')){ enterBeach(); } return; }
@@ -671,6 +673,16 @@ function updBeach(){
       
     }
   }
+  // RCVA yard: walk past da Billabong fence → Sterling Spencer pops up ovah it
+  if(b.sterling>0) b.sterling--;
+  if(b.sterlingCool>0) b.sterlingCool--;
+  if(b.screen===SCR.HOUSE && b.sterling===0 && b.sterlingCool===0){
+    const BB=billabongLayout();
+    if(player.x>=296 && player.x<=350 && player.y>=BB.ft && player.y<=BB.fb+14){
+      b.sterling=150; b.sterlingCool=600; beep(640,.08,'triangle');
+      setMsg("Sterling Spencer: 'You know da rulez!!'",150);
+    }
+  }
   // props can be picked up on whichever beach screen they're on (surf/cove)
   if(b.screen===SCR.SURF || b.screen===SCR.COVE){
     for(const p of b.props){ if(!p.got && near(player.x,player.y,p.x,p.y,15)){
@@ -726,6 +738,20 @@ function tickRoad(){
   }
   for(const c of b.cars) c.x += (c.kind==='bike'?1.4:0.8)*c.dir;   // pedestrian speeds
   b.cars=b.cars.filter(c=>c.x>-40 && c.x<W+40);
+}
+// Kelly Slater (real name only, generic original sprite) strolls the beach now and then
+function tickKelly(){
+  const b=beach; if(!beachBuilt) return;
+  if(!b.kelly){
+    if(b.kellyT>0){ b.kellyT--; return; }
+    const fromLeft=Math.random()<0.5;
+    b.kelly={ x:fromLeft?-20:W+20, dir:fromLeft?1:-1, y:SHORE+ri(26,H-SHORE-20), said:false };
+  } else {
+    const K=b.kelly; K.x+=0.7*K.dir;
+    if(!K.said && K.x>W*0.4 && K.x<W*0.6){ K.said=true;
+      if(state==='beach' && !IS_DOWN(b.screen)){ setMsg("Kelly Slater: 'Too many kooks out here.'",160); beep(520,.08,'triangle'); } }
+    if(K.x<-30||K.x>W+30){ b.kelly=null; b.kellyT=ri(3600,6000); }   // back in ~1-2 min
+  }
 }
 // a lone beach tourist (original character) occasionally strolls across
 function tickTourist(){
@@ -790,10 +816,10 @@ function updWater(){
   if(player.downT>0){ player.downT--; if(player.downT===0 && player.y>SEABOT-4) { } return; }
 
   const paddling=!w.surfing;
-  const sp=w.surfing?2.4:1.6;
+  const sp=w.surfing?2.4:1.25;   // paddling is a bit slower than walking (1.5)
   if(keys.left){ player.x-=sp; if(paddling)player.facing=-1; }
   if(keys.right){ player.x+=sp; if(paddling)player.facing=1; }
-  if(paddling){ if(keys.up)player.y-=1.5; if(keys.down)player.y+=1.5; }
+  if(paddling){ if(keys.up)player.y-=1.2; if(keys.down)player.y+=1.2; }
   player.x=clamp(player.x,14,W-14);
   player.y=clamp(player.y,SEATOP+6,SEABOT);
 
@@ -1018,6 +1044,13 @@ function drawBeachProps(){
     if(b.local){ const L=b.local; softShadow(L.x,L.y+13,9);
       drawDude(L.x,L.y,'#b07a44','#8a4a6a',L.dir,(frame>>2)%2?'walk':'stand',frame); }
     if(b.tourist) drawTourist(b.tourist);
+    if(b.kelly){ const K=b.kelly; softShadow(K.x,K.y+13,9);
+      drawDude(K.x,K.y,'#d9a070','#1f3a6a',K.dir,(frame>>2)%2?'walk':'stand',frame);
+      px(K.x-4,K.y-4,9,8,'#f2f2f2'); px(K.x-4,K.y-4,9,2,'#ffffff');           // white tee
+      px(K.x-3,K.y-12,7,2,'#2a2a2a');                                          // cap
+      const nm='KELLY SLATER', nw=nm.length*5+6;
+      px(K.x-nw/2,K.y-24,nw,7,'#111'); ctx.fillStyle=C.gold; ctx.font='7px monospace'; ctx.textAlign='center';
+      ctx.fillText(nm,K.x,K.y-18); ctx.textAlign='left'; }
   }
   // screen arrows so you know you can walk off the edge
   ctx.textAlign='left';
@@ -1104,7 +1137,11 @@ function solidsNow(){
     else if(b.screen===SCR.MYHOUSE) out.push([W*0.60-52, houseBand+20, W*0.60+52, houseBand+92]);   // house + porch
     else /* COVEDOWN */            out.push([W*0.38-35, houseBand+36, W*0.38+35, houseBand+70]);
     // the stone walls along the sidewalk (drawn on every land screen; gate gap in the middle stays open)
-    { const wy=roadY-12; out.push([16,wy,W/2-22,wy+12], [W/2+16,wy,W-16,wy+12]); }
+    { const wy=roadY-12;
+      if(b.screen===SCR.HOUSE){ const BB=billabongLayout();
+        out.push([16,wy,W/2-22,wy+12], [W/2+16,wy,BB.p0,wy+12], [BB.p1,wy,W-16,wy+12]);   // path gap to Billabong
+        out.push([BB.x-42, houseBand+30, BB.x+42, houseBand+70]);                          // Billabong house (fence is walk-through)
+      } else out.push([16,wy,W/2-22,wy+12], [W/2+16,wy,W-16,wy+12]); }
   }
   // ATV on the beach screens blocks you (it's solid); everything else is walk-through
   if(!IS_DOWN(b.screen) && b.buggy) out.push([b.buggy.x-16, SHORE+8, b.buggy.x+16, SHORE+24]);
@@ -1200,10 +1237,17 @@ function drawHouseScreen(){
     gradBand(0,houseBand,W,roadY-houseBand, '#3f8a4a', '#2f7a3c', 6);
     for(let i=0;i<70;i++){ const x=(i*71)%W, yy=houseBand+4+((i*37)%(roadY-houseBand-6)); px(x,yy,1,2,'#246a30'); }
   }
-  // tall palms flanking the house
-  drawTallPalm(64, roadY-4, 70); drawTallPalm(W-70, roadY-2, 78);
+  // tall palms flanking the house (the RCVA screen's right side holds the Billabong yard instead)
+  drawTallPalm(64, roadY-4, 70); if(beach.screen!==SCR.HOUSE) drawTallPalm(W-70, roadY-2, 78);
   // the building depends on which down-screen this is (RCVA stays centered; others offset)
-  if(beach.screen===SCR.HOUSE)      drawRCVAHouse(W/2, houseBand+70);
+  if(beach.screen===SCR.HOUSE){
+    drawRCVAHouse(W/2, houseBand+70);
+    const BB=billabongLayout();
+    // dirt path running between the RCVA and Billabong houses, down to the sidewalk
+    px(BB.p0,houseBand,BB.p1-BB.p0,roadY-houseBand,'#b58a52'); px(BB.p0,houseBand,2,roadY-houseBand,'#c99a62');
+    for(let i=0;i<16;i++) px(BB.p0+3+((i*7)%(BB.p1-BB.p0-6)), houseBand+6+i*8, 2,1,'#9a743e');
+    drawBillabongYard(BB);
+  }
   else if(beach.screen===SCR.MYHOUSE) drawMyHouse(W*0.60, houseBand+70);
   else /* COVEDOWN */                drawCoveShack(W*0.38, houseBand+70);
   // low stone wall in front of the yard (with a gate gap in the middle)
@@ -1215,7 +1259,9 @@ function drawHouseScreen(){
       px(x0,wy,x1-x0,3,'#cfc8b6'); px(x0,wy,x1-x0,1,'#e6e0d0');  // concrete cap + highlight
       px(x0,wy+11,x1-x0,1,'#6a6456');                            // base shadow
     };
-    seg(16,gx0); seg(gx1,W-16);
+    seg(16,gx0);
+    if(beach.screen===SCR.HOUSE){ const BB=billabongLayout(); seg(gx1,BB.p0); seg(BB.p1,W-16); }  // second gap where the path meets the sidewalk
+    else seg(gx1,W-16);
     for(const gx of [gx0-6,gx1]){ px(gx,wy-6,6,18,'#8f8776'); px(gx-1,wy-8,8,3,'#cfc8b6'); px(gx,wy-6,1,18,'#b5ad9a'); }  // gate pillars
   }
   // --- a DIRT sidewalk path running across ---
@@ -1288,6 +1334,63 @@ function drawRCVAHouse(x,y){
   ctx.fillStyle=C.gold; ctx.font='bold 10px "Courier New",monospace'; ctx.textAlign='center';
   ctx.fillText('R C V A', x, topY+13);
   ctx.fillStyle=C.good; ctx.font='7px monospace'; ctx.fillText('SURF HOUSE', x, y+16); ctx.textAlign='left';
+}
+// Billabong house + picket-fenced yard, right of the RCVA house (shared by drawing, collision and Sterling)
+function billabongLayout(){
+  const houseBand=SEATOP+10, roadY=SEATOP+140;
+  return { x:405, base:houseBand+70,                 // house center + ground line
+           p0:310, p1:334,                           // dirt path between the two houses
+           f0:346, f1:466, ft:houseBand+16, fb:roadY-18 }; // fence box: left/right/top/bottom
+}
+function drawBillabongYard(BB){
+  const fence='#efe6d2', fenceSh='#b8ae96';
+  // back fence row (behind the house)
+  for(let x=BB.f0; x<=BB.f1; x+=6){ px(x,BB.ft-8,3,8,fence); px(x,BB.ft-9,3,1,'#fff'); }
+  px(BB.f0,BB.ft-5,BB.f1-BB.f0+3,1,fenceSh);
+  // side fence runs (left side borders the path)
+  for(let y=BB.ft; y<BB.fb; y+=8){ px(BB.f0,y,3,7,fence); px(BB.f1,y,3,7,fence); }
+  // the house
+  drawBillabongHouse(BB.x, BB.base);
+  // Sterling Spencer pops up from behind the left fence run when you walk past
+  if(beach.sterling>0) drawSterling(BB);
+  // front fence row (in front of the house)
+  for(let x=BB.f0; x<=BB.f1; x+=6){ px(x,BB.fb-10,3,10,fence); px(x,BB.fb-11,3,1,'#fff'); px(x+2,BB.fb-10,1,10,fenceSh); }
+  px(BB.f0,BB.fb-7,BB.f1-BB.f0+3,1,fenceSh); px(BB.f0,BB.fb-3,BB.f1-BB.f0+3,1,fenceSh);  // rails
+}
+function drawBillabongHouse(x,y){
+  softShadow(x,y+12,38);
+  const wall='#f2f0ea', wallSh='#cfccc2', trim='#1f3a6a', roof='#2a4a7a', roofHi='#3f66a0', glass='#8fb0bf';
+  const wW=80, topY=y-46;
+  // white plank walls with navy trim — original single-storey surf bungalow
+  px(x-wW/2,topY,wW,46,wall); px(x+wW/2-12,topY,12,46,wallSh);
+  for(let yy=topY+6; yy<y; yy+=6) px(x-wW/2,yy,wW,1,wallSh);                    // plank lines
+  // low gable roof, navy
+  ctx.fillStyle=roof; ctx.beginPath(); ctx.moveTo(x-wW/2-8,topY+2); ctx.lineTo(x,topY-14); ctx.lineTo(x+wW/2+8,topY+2); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=roofHi; ctx.beginPath(); ctx.moveTo(x-wW/2-8,topY+2); ctx.lineTo(x,topY-14); ctx.lineTo(x,topY+2); ctx.closePath(); ctx.fill();
+  px(x-wW/2-8,topY+1,wW+16,2,'#162a4a');
+  // big front window + door, navy frames
+  px(x-32,topY+14,26,16,glass); px(x-32,topY+14,26,2,'#aecbd8'); px(x-33,topY+13,28,1,trim); px(x-33,topY+30,28,2,trim);
+  px(x+6,topY+18,12,28,trim); px(x+8,topY+20,8,26,'#3a2412'); px(x+14,topY+32,1,2,'#ffd23f');
+  // surfboard rack on the side wall
+  px(x+24,topY+8,3,30,'#ffd23f'); px(x+29,topY+6,3,32,'#ff5d5d'); px(x+34,topY+10,3,28,'#2fbfae');
+  // plain text sign (no brand logo)
+  px(x-30,topY-26,60,11,'#14233a'); px(x-30,topY-26,60,2,'#2a4a6a');
+  ctx.fillStyle=C.gold; ctx.font='bold 8px "Courier New",monospace'; ctx.textAlign='center';
+  ctx.fillText('BILLABONG', x, topY-18); ctx.textAlign='left';
+}
+// Sterling Spencer (real name only, generic original sprite) rising over the fence
+function drawSterling(BB){
+  const t=beach.sterling, rise=Math.min(1,(150-t)/12, t/12);   // pop up, hold, duck back down
+  const sx=BB.f0+14, sy=BB.ft+44+Math.round((1-rise)*16);
+  drawDude(sx,sy,'#c88a4e','#c0392b',-1,'stand',frame);
+  px(sx-4,sy-4,9,8,'#2b6cb0'); px(sx-4,sy-4,9,2,'#3f86d0');                 // blue tee
+  px(sx-4,sy-13,8,2,'#e8d27a');                                            // blond hair
+  // a fence panel in front of his legs so he reads as peeking over it
+  for(let x=BB.f0+2; x<BB.f0+28; x+=5){ px(x,sy+2,3,14,'#efe6d2'); px(x,sy+1,3,1,'#fff'); }
+  px(BB.f0+2,sy+6,26,1,'#b8ae96');
+  const nm='STERLING SPENCER', nw=nm.length*5+6;
+  px(sx-nw/2,sy-26,nw,7,'#111'); ctx.fillStyle=C.gold; ctx.font='7px monospace'; ctx.textAlign='center';
+  ctx.fillText(nm,sx,sy-20); ctx.textAlign='left';
 }
 // YOUR place — a teal plantation cottage with a covered porch + a big hammock to sleep in
 function drawMyHouse(x,y){
@@ -1452,9 +1555,11 @@ function drawWater(){
                : 'surf';
     // board carve tilt during a cutback reads as a little spray arc under the tail
     if(w.surfing&&player.trickT>0){ for(let i=0;i<4;i++) px(player.x-14+i*8, player.y+9+Math.sin(frame*0.4+i)*2, 3,2, C.foam); }
-    drawDude(player.x,player.y-5,C.skin,player.shorts,player.facing,pose,frame);
-    if(player.shirt!=='none'){ const ty = w.surfing ? player.y-13 : player.y-7;
-      px(player.x-5,ty,10,7,player.shirt); px(player.x-5,ty,10,2,shade(player.shirt,30)); }
+    // prone paddler lies right on the deck; standing poses keep their offset
+    drawDude(player.x, pose==='paddle' ? player.y+1 : player.y-5, C.skin,player.shorts,player.facing,pose,frame);
+    if(player.shirt!=='none'){
+      if(w.surfing){ px(player.x-5,player.y-13,10,7,player.shirt); px(player.x-5,player.y-13,10,2,shade(player.shirt,30)); }
+      else { const sx=player.facing<0?player.x-8:player.x; px(sx,player.y,8,4,player.shirt); px(sx,player.y,8,1,shade(player.shirt,30)); } }
     if(w.surfing){
       const label = player.trickT>0 ? (player.trickKind==='barrel'?'BARREL!':player.trickKind==='lip'?'OFF-DA-LIP':'CUTBACK') : 'SHREDDIN';
       const col = player.trickT>0 ? (player.trickKind==='barrel'?C.purp:C.gold) : C.good;
