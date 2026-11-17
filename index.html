@@ -556,7 +556,6 @@ function update(){
 let shop={ sel:0 };
 function openShop(){ state='shop'; shop.sel=0; beep(680,.09,'triangle'); }
 function updShop(){
-  if(consume('b')||consume('enter')&&false){}
   if(consume('up'))   shop.sel=(shop.sel+SHOP.length-1)%SHOP.length;
   if(consume('down')) shop.sel=(shop.sel+1)%SHOP.length;
   if(consume('left')) shop.sel=(shop.sel+SHOP.length-1)%SHOP.length;
@@ -1134,7 +1133,7 @@ function drawBeach(){
     ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
     ctx.fillText('💫 dazed',player.x,player.y-14); ctx.textAlign='left';
   } else {
-    const moving=keys.left||keys.right||keys.up||keys.down;
+    const moving=state!=='shop' && (keys.left||keys.right||keys.up||keys.down);   // arrows only drive the menu while shopping
     softShadow(player.x, player.y+13, 10);
     drawBeachBoard(player.x,player.y,player.facing,moving);
     drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
@@ -1297,7 +1296,7 @@ function drawHouseScreen(){
     drawTrailHouse(W/2, TRAIL_HOUSE_BASE);
   }
   // player
-  const moving=keys.left||keys.right||keys.up||keys.down;
+  const moving=state!=='shop' && (keys.left||keys.right||keys.up||keys.down);   // arrows only drive the menu while shopping
   if(player.knockT>0){
     softShadow(player.x, player.y+12, 11);
     drawDude(player.x,player.y,C.skin,player.shorts,player.facing,'down',frame);
@@ -1663,7 +1662,7 @@ function drawHUD(){
   ctx.font='bold 11px "Courier New",monospace'; ctx.textAlign='left';
   ctx.fillStyle=C.gold; ctx.fillText('SCORE '+score,6,12);
   ctx.textAlign='right'; ctx.fillStyle=C.good; ctx.fillText('BEST '+high,W-6,12);
-  ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText(state==='beach'?'🏖 BEACH':'🌊 LINEUP',W/2,12);
+  ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText(state==='beach'?'🏖 BEACH':state==='shop'?'🍧 SHOP':'🌊 LINEUP',W/2,12);
   ctx.textAlign='left'; ctx.fillStyle=C.gold; ctx.font='bold 10px "Courier New",monospace';
   ctx.fillText('🪙 '+coins, 92, 12);
   ctx.font='bold 11px "Courier New",monospace';
