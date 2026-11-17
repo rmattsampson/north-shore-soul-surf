@@ -670,7 +670,9 @@ function updBeach(){
   // any enterable house (My Place, RCVA, Da Cove, Auntie's): B opens the door, then walk in
   if(IS_DOWN(b.screen)){
     const rid=atDoorSpot();
-    if(rid && consume('b')){ b.doorOpen = b.doorOpen===rid ? false : rid; beep(b.doorOpen?520:380,.07,'triangle'); }
+    if(rid && consume('b')){
+      if(b.doorOpen===rid){ enterRoom(rid); return; }            // door already open: B walks you in
+      b.doorOpen=rid; beep(520,.07,'triangle'); }
     if(rid && b.doorOpen===rid && keys[ROOMS[rid].enter]){ enterRoom(rid); return; }
     if(!rid) b.doorOpen=false;   // door swings shut when you walk off
   }
@@ -1550,8 +1552,8 @@ const ROOMS = {
 function atDoorSpot(){
   if(state!=='beach' || !IS_DOWN(beach.screen)) return null;
   for(const id in ROOMS){ const r=ROOMS[id]; if(r.screen!==beach.screen) continue;
-    const okY = r.enter==='up' ? (player.y>=r.sy-14 && player.y<=r.sy+30) : (player.y>=r.sy-24 && player.y<=r.sy+14);
-    if(Math.abs(player.x-r.sx)<26 && okY) return id; }
+    const okY = r.enter==='up' ? (player.y>=r.sy-30 && player.y<=r.sy+30) : (player.y>=r.sy-30 && player.y<=r.sy+18);
+    if(Math.abs(player.x-r.sx)<32 && okY) return id; }
   return null;
 }
 function atCabinSteps(){ return atDoorSpot()==='myplace'; }
@@ -1903,7 +1905,7 @@ function drawKeyHint(){
   else {
     const b=beach;
     const rid=atDoorSpot();
-    if(rid) act = b.doorOpen===rid ? [ROOMS[rid].enter==='up'?'↑':'↓','walk in'] : ['B','open door'];
+    if(rid) act = b.doorOpen===rid ? ['B',(ROOMS[rid].enter==='up'?'/ ↑':'/ ↓')+' walk in'] : ['B','open door'];
     else if(b.screen===SCR.MYHOUSE){ const HM=myHammock(); if(near(player.x,player.y,HM.x,HM.y,40)) act=['B','sleep']; }
     else if(b.screen===SCR.TOWN && near(player.x,player.y,b.iceShop.x,b.iceShop.y,24)) act=['B','shop'];
   }
