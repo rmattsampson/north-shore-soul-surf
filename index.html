@@ -998,10 +998,15 @@ function drawSplash(){
   ctx.font='bold 15px "Courier New",monospace'; ctx.fillStyle=C.good; ctx.fillText('~ SOUL SURF ~',W/2,92);
   const sx=(frame*1.5)%(W+60)-30, wy=180+Math.sin(frame*0.08)*4;
   drawBoard(sx,wy+6,C.gold,1); drawDude(sx,wy-8,C.skin,C.bad,1,'surf',frame);
-  ctx.font='12px "Courier New",monospace';
-  ctx.fillStyle=(frame%60<40)?C.txt:'#8a7'; ctx.fillText('PRESS ENTER',W/2,232);
-  ctx.fillStyle=C.gold; ctx.font='11px "Courier New",monospace'; ctx.fillText('HIGH SCORE  '+high,W/2,254);
-  ctx.fillStyle='#8fb'; ctx.font='10px "Courier New",monospace'; ctx.fillText('a lil homage to NORTH SHORE (1987) · Cheehoo!',W/2,300);
+  // readable labels: dark backing plate + drop shadow so they pop on the bright sea and sand
+  const label=(t,y,font,col)=>{
+    ctx.font=font; const tw=ctx.measureText(t).width, th=parseInt(font.match(/(\d+)px/)[1],10);
+    ctx.save(); ctx.globalAlpha=0.72; ctx.fillStyle='#0c1424'; ctx.fillRect(W/2-tw/2-8,y-th,tw+16,th+6); ctx.restore();
+    ctx.fillStyle='#000'; ctx.fillText(t,W/2+1,y+1); ctx.fillStyle=col; ctx.fillText(t,W/2,y);
+  };
+  label('PRESS ENTER',232,'bold 12px "Courier New",monospace',(frame%60<40)?'#ffffff':'#ffe27a');
+  label('HIGH SCORE  '+high,256,'bold 11px "Courier New",monospace',C.gold);
+  label('a lil homage to NORTH SHORE (1987) · Cheehoo!',300,'bold 10px "Courier New",monospace','#9fffd0');
   ctx.textAlign='left';
 }
 function drawHelp(){
