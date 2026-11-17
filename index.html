@@ -672,7 +672,7 @@ function updBeach(){
       
     }
     // front steps: B opens (or shuts) the door, then just walk UP into the house
-    const atSteps = Math.abs(player.x-MYHOUSE_X)<26 && player.y>=CABIN_DOOR_Y-14 && player.y<=CABIN_DOOR_Y+30;
+    const atSteps = atCabinSteps();
     if(atSteps && consume('b')){ b.doorOpen=!b.doorOpen; beep(b.doorOpen?520:380,.07,'triangle'); }
     if(b.doorOpen && atSteps && keys.up){ enterCabin(); return; }
     if(!atSteps) b.doorOpen=false;   // door swings shut when you walk off
@@ -1317,6 +1317,12 @@ function drawHouseScreen(){
   drawBeachBoard(player.x,player.y,player.facing,moving);
   drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
   if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
+  // key hint at the cabin door
+  if(atCabinSteps()){
+    const hint = beach.doorOpen ? '↑ walk in' : 'B to enter', hw=hint.length*5+10, hx=player.x, hy=player.y-30;
+    px(hx-hw/2,hy-8,hw,11,'#111'); px(hx-hw/2,hy-8,hw,1,C.gold);
+    ctx.fillStyle=C.gold; ctx.font='bold 8px monospace'; ctx.textAlign='center'; ctx.fillText(hint,hx,hy); ctx.textAlign='left';
+  }
 }
 function drawTallPalm(x,by,h){
   // slender curved trunk rising high, drooping fronds — original
@@ -1453,6 +1459,7 @@ const MYHOUSE_X = W*0.60;                 // matches drawMyHouse(W*0.60, …)
 const CABIN_DOOR_Y = SEATOP+10+70+20;     // where you stand at the bottom of the porch steps
 const CABIN = { x0:60, x1:420, wallY:52, floorY:120, y1:300, doorX:W/2,
   bed:[88,124,140,168], stand:[148,126,166,146], pots:[[76,284],[404,284],[404,136]], table:[318,176,386,212], board:[350,58,362,116] };
+function atCabinSteps(){ return beach.screen===SCR.MYHOUSE && Math.abs(player.x-MYHOUSE_X)<26 && player.y>=CABIN_DOOR_Y-14 && player.y<=CABIN_DOOR_Y+30; }
 function enterCabin(){ state='cabin'; player.x=CABIN.doorX; player.y=CABIN.y1-26; player.facing=1; beep(520,.08,'triangle'); }
 function leaveCabin(){ beach.doorOpen=false; state='beach'; beach.screen=SCR.MYHOUSE; player.x=MYHOUSE_X; player.y=CABIN_DOOR_Y+6; beep(440,.08,'triangle'); }
 function cabinSolids(){
