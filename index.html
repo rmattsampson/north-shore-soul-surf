@@ -566,7 +566,8 @@ function updShop(){
 }
 function buy(item){
   if(item.kind==='treat'){
-    if(coins>=item.price){ coins-=item.price; setCoins(coins); score+=25; floatScore('+25 ONO!',W/2,60,C.good); beep(900,.1); }
+    if(coins>=item.price){ coins-=item.price; setCoins(coins); score+=25; gifts++; floatScore('+25 ONO!',W/2,60,C.good); beep(900,.1);
+      setMsg("Shave ice to go ("+gifts+"). Maybe somebody at RCVA wants one...",180); }
     else beep(160,.12,'sawtooth');
     return;
   }
@@ -666,6 +667,13 @@ function updBeach(){
       if(near(player.x,player.y,f.x,f.y,18) && f.cool===0){
         setMsg("Local: "+GREETS[ri(0,GREETS.length-1)],130); beep(600,.07,'triangle'); f.cool=240; } }
   }
+  // any enterable house (My Place, RCVA, Da Cove, Auntie's): B opens the door, then walk in
+  if(IS_DOWN(b.screen)){
+    const rid=atDoorSpot();
+    if(rid && consume('b')){ b.doorOpen = b.doorOpen===rid ? false : rid; beep(b.doorOpen?520:380,.07,'triangle'); }
+    if(rid && b.doorOpen===rid && keys[ROOMS[rid].enter]){ enterRoom(rid); return; }
+    if(!rid) b.doorOpen=false;   // door swings shut when you walk off
+  }
   // MY HOUSE: walk up to the hammock and press B to sleep until morning
   if(b.screen===SCR.MYHOUSE){
     const HM=myHammock();         // same spot drawMyHouse draws the hammock
@@ -673,11 +681,6 @@ function updBeach(){
       if(consume('b')){ sleepTilMorning(); return; }
       
     }
-    // front steps: B opens (or shuts) the door, then just walk UP into the house
-    const atSteps = atCabinSteps();
-    if(atSteps && consume('b')){ b.doorOpen=!b.doorOpen; beep(b.doorOpen?520:380,.07,'triangle'); }
-    if(b.doorOpen && atSteps && keys.up){ enterCabin(); return; }
-    if(!atSteps) b.doorOpen=false;   // door swings shut when you walk off
   }
   // RCVA yard: walk past da Billabong fence → Sterling Spencer pops up ovah it
   if(b.sterling>0) b.sterling--;
@@ -691,10 +694,15 @@ function updBeach(){
   }
   // props can be picked up on whichever beach screen they're on (surf/cove)
   if(b.screen===SCR.SURF || b.screen===SCR.COVE){
-    for(const p of b.props){ if(!p.got && near(player.x,player.y,p.x,p.y,15)){
-      p.got=true; score+=5; beep(760,.06); floatScore('+5',p.x,p.y-10,C.good);
-      propFound(p);
-    }}
+    for(const p of b.props){
+      if(p.k==='honu'){   // da honu (sea turtle) stays put resting — you just notice it once in a while
+        if(p.cool>0) p.cool--;
+        else if(near(player.x,player.y,p.x,p.y,22)){ p.cool=900; setMsg("A honu (sea turtle) restin' on da sand. Give 'um space, yeah.",240); beep(560,.06,'triangle'); }
+        continue; }
+      if(!p.got && near(player.x,player.y,p.x,p.y,15)){
+        p.got=true; score+=5; beep(760,.06); floatScore('+5',p.x,p.y-10,C.good);
+        propFound(p); }
+    }
   }
   if(false){
   for(const p of b.props){ if(!p.got && near(player.x,player.y,p.x,p.y,15)){
@@ -1075,6 +1083,38 @@ function drawHelp(){
   ctx.fillText('PRESS ENTER TO PADDLE OUT',W/2,H-58); ctx.textAlign='left';
 }
 
+// people chilling on towels (daytime only — dey go home at night). Walk-through, inspectable.
+const SUNBATHERS = {
+  [SCR.TOWN]: [ {x:300,y:280,towel:'#ff6b8a',skin:'#e0b08a',suit:'#2a6ac0',hat:true,  id:'sun-town',
+                 lines:["Tourist sunbathing. Going be red like one tako by pau hana.","She asked if da sharks come up on da sand. Nah.","Reading one book called 'How To Surf'. Chapter one: get wet."]} ],
+  [SCR.SURF]: [ {x:236,y:284,towel:'#ffd23f',skin:'#b07a44',suit:'#c0392b',umbrella:'#e0563a', id:'sun-surf1',
+                 lines:["Uncle under da umbrella. Been here since 1974.","He no move, but he sees everything in da lineup.","He says: 'Da waves come in sets, brah. Be patient.'"]},
+                {x:352,y:288,towel:'#3f9ac0',skin:'#f0c8a0',suit:'#ff5aa0',shades:true, id:'sun-surf2',
+                 lines:["Somebody catching rays. Sunscreen... maybe.","Headphones in. Totally checked out. Mean.","Fell asleep. Going have one shades tan line."]} ],
+  [SCR.COVE]: [ {x:186,y:284,towel:'#2fbfae',skin:'#c88a4e',suit:'#1f3a6a',shades:true, id:'sun-cove1',
+                 lines:["Local girl chilling at da cove. Da quiet spot.","She surfed earlier. Now: nap time.","She says da cove stay secret. Don't tell nobody."]},
+                {x:338,y:278,towel:'#f2ead8',skin:'#8a5a34',suit:'#2f8a4a',umbrella:'#2f7a9a', id:'sun-cove2',
+                 lines:["Big braddah napping under da umbrella.","Snoring louder than da shorebreak.","Cooler next to him is HIS. Don't even think about it."]} ],
+};
+function drawSunbather(s){
+  const {x,y}=s;
+  if(s.umbrella){ px(x+12,y-30,2,30,'#d8d0c0');                                   // umbrella pole
+    ctx.fillStyle=s.umbrella; ctx.beginPath(); ctx.ellipse(x+13,y-30,22,9,0,Math.PI,0); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(x+13,y-30,7,9,0,Math.PI,0); ctx.fill();
+    ctx.save(); ctx.globalAlpha=.18; ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(x+6,y+3,24,7,0,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+  px(x-18,y-4,36,11,s.towel); px(x-18,y-4,36,1,shade(s.towel,40)); px(x-18,y+6,36,1,shade(s.towel,-30));   // beach towel
+  for(let i=-16;i<18;i+=6) px(x+i,y-4,2,11,shade(s.towel,22));                  // towel stripes
+  const sk=s.skin, skD=shade(sk,-26);
+  px(x-15,y-2,7,7,sk); px(x-15,y-2,7,2,C.hair);                                  // head (lying, facing up)
+  if(s.shades) px(x-14,y+1,5,2,'#111');
+  if(s.hat){ px(x-17,y-4,11,3,'#efe4c0'); px(x-15,y-6,7,3,'#e0d4a8'); }
+  px(x-8,y-1,12,6,sk); px(x-8,y-1,12,1,shade(sk,22));                            // torso
+  px(x-6,y,8,4,s.suit);                                                          // swimsuit
+  px(x+4,y,11,2,sk); px(x+4,y+3,11,2,skD);                                       // legs
+  px(x-6,y+5,8,2,skD);                                                           // arm resting at side
+  if(((frame>>6)+x)%7===0) px(x-6,y-4,3,2,sk);                                   // now and then a lazy wave of the hand
+}
+function drawSunbathers(){ if(isNight()) return; for(const s of SUNBATHERS[beach.screen]||[]) drawSunbather(s); }
 function drawBeachProps(){
   const b=beach;
   // TOWN screen: shave-ice shop, surf shack, locals
@@ -1092,6 +1132,7 @@ function drawBeachProps(){
     drawDude(b.chandler.x,b.chandler.y,'#a86a34',C.sea3,1,'stand',frame);
     nameTag('CHANDLER',b.chandler.x,b.chandler.y-29,C.good);
   }
+  drawSunbathers();
   // props live on the SURF + COVE beaches
   if(b.screen===SCR.SURF || b.screen===SCR.COVE){
     for(const p of b.props){ if(!p.got){ softShadow(p.x,p.y+4,7); drawProp(p); } }
@@ -1314,13 +1355,15 @@ function drawHouseScreen(){
   // the building depends on which down-screen this is (RCVA stays centered; others offset)
   if(beach.screen===SCR.HOUSE){
     drawRCVAHouse(RCVA_X, houseBand+70);
+    drawFrontStairs(RCVA_X, houseBand+52, houseBand+80, 5, beach.doorOpen==='rcva');   // stilt house: a real staircase up
     const BB=billabongLayout();
     // dirt path right down the middle: sand → between the houses → through the gate → the trail
     drawDirtPath(BB.p0,BB.p1,houseBand,roadY);
     drawBillabongYard(BB);
   }
   else if(beach.screen===SCR.MYHOUSE) drawMyHouse(W*0.60, houseBand+70);
-  else /* COVEDOWN */                drawCoveShack(W*0.38, houseBand+70);
+  else /* COVEDOWN */ { drawCoveShack(W*0.38, houseBand+70);
+    drawFrontStairs(W*0.38, houseBand+70, houseBand+78, 2, beach.doorOpen==='cove'); }
   // low stone wall in front of the yard (with a gate gap in the middle)
   { const wy=roadY-12, gx0=W/2-16, gx1=W/2+16;
     const seg=(x0,x1)=>{
@@ -1347,6 +1390,7 @@ function drawHouseScreen(){
   if(beach.screen===SCR.HOUSE){   // the center path carries on across the trail to the house on the other side
     drawDirtPath(W/2-12, W/2+12, walkTop, TRAIL_HOUSE_BASE-30);
     drawTrailHouse(W/2, TRAIL_HOUSE_BASE);
+    if(beach.doorOpen==='trail'){ px(W/2-5,TRAIL_HOUSE_BASE-19,10,19,'#ffd98a'); }   // door open: warm kitchen light
   }
   // player
   const moving=state!=='shop' && (keys.left||keys.right||keys.up||keys.down);   // arrows only drive the menu while shopping
@@ -1495,13 +1539,50 @@ const MYHOUSE_X = W*0.60;                 // matches drawMyHouse(W*0.60, …)
 const CABIN_DOOR_Y = SEATOP+10+70+20;     // where you stand at the bottom of the porch steps
 const CABIN = { x0:60, x1:420, wallY:52, floorY:120, y1:300, doorX:W/2,
   bed:[88,124,140,168], stand:[148,126,166,146], bunk:[330,244,388,292], pots:[[76,284],[404,284],[404,136]], table:[318,176,386,212], board:[346,56,366,118] };
-function atCabinSteps(){ return beach.screen===SCR.MYHOUSE && Math.abs(player.x-MYHOUSE_X)<26 && player.y>=CABIN_DOOR_Y-14 && player.y<=CABIN_DOOR_Y+30; }
-function enterCabin(){ state='cabin'; player.x=CABIN.doorX; player.y=CABIN.y1-26; player.facing=1; beep(520,.08,'triangle'); }
-function leaveCabin(){ beach.doorOpen=false; state='beach'; beach.screen=SCR.MYHOUSE; player.x=MYHOUSE_X; player.y=CABIN_DOOR_Y+6; beep(440,.08,'triangle'); }
+// every house you can walk into. sx/sy = where you stand outside to open the door; enter = arrow to walk in
+let room='myplace';
+const ROOMS = {
+  myplace:{ label:'🏠 MY PLACE',  screen:SCR.MYHOUSE,  sx:MYHOUSE_X, sy:CABIN_DOOR_Y,   enter:'up' },
+  rcva:   { label:'🏄 RCVA HOUSE',screen:SCR.HOUSE,    sx:RCVA_X,    sy:SEATOP+10+82,   enter:'up' },
+  cove:   { label:'🎣 DA COVE',   screen:SCR.COVEDOWN, sx:W*0.38,    sy:SEATOP+10+82,   enter:'up' },
+  trail:  { label:"🍌 AUNTIE'S",  screen:SCR.HOUSE,    sx:W/2,       sy:TRAIL_HOUSE_BASE-54, enter:'down' },
+};
+function atDoorSpot(){
+  if(state!=='beach' || !IS_DOWN(beach.screen)) return null;
+  for(const id in ROOMS){ const r=ROOMS[id]; if(r.screen!==beach.screen) continue;
+    const okY = r.enter==='up' ? (player.y>=r.sy-14 && player.y<=r.sy+30) : (player.y>=r.sy-24 && player.y<=r.sy+14);
+    if(Math.abs(player.x-r.sx)<26 && okY) return id; }
+  return null;
+}
+function atCabinSteps(){ return atDoorSpot()==='myplace'; }
+function enterRoom(id){ room=id; state='cabin'; player.x=CABIN.doorX; player.y=CABIN.y1-26; player.facing=1; beep(520,.08,'triangle'); }
+function enterCabin(){ enterRoom('myplace'); }
+function leaveCabin(){ const r=ROOMS[room]; beach.doorOpen=false; state='beach'; beach.screen=r.screen;
+  player.x=r.sx; player.y = r.enter==='up' ? r.sy+6 : r.sy-10; beach.scrLock=10; beep(440,.08,'triangle'); }
+// stairs drawn in front of a house: from yTop (porch / floor level) down to yBot (the yard)
+function drawFrontStairs(cx,yTop,yBot,n,open){
+  const stepH=(yBot-yTop)/n;
+  px(cx-13,yTop,2,yBot-yTop,'#4a3418'); px(cx+11,yTop,2,yBot-yTop,'#4a3418');           // stringers / rails
+  for(let i=0;i<n;i++){ const y=yTop+i*stepH, w=20+i*2;
+    px(cx-w/2,y,w,Math.max(2,stepH-1),'#8a6238'); px(cx-w/2,y,w,1,'#b08050'); px(cx-w/2,y+stepH-2,w,1,'#4a3418'); }
+  if(open){ ctx.save(); ctx.globalAlpha=.35; ctx.fillStyle='#ffd98a'; ctx.fillRect(cx-10,yTop-14,20,14); ctx.restore(); }  // light spilling out
+}
+// solid furniture per room (x0,y0,x1,y1)
+const RCVA_ROOM  = { couch:[84,170,196,206], coffee:[112,222,170,242], tv:[262,120,322,146], fridge:[384,120,412,170], stairs:[350,196,412,292], andy:{x:140,y:186} };
+const COVE_ROOM  = { crates:[[76,124,116,160],[76,160,100,184]], cot:[316,124,404,158], table:[196,196,262,224], barrel:[382,250,404,282], lantern:{x:229,y:186} };
+const AUNTIE_ROOM= { counter:[70,120,214,150], table:[250,190,330,226], chair:[356,236,402,282], auntie:{x:150,y:166} };
 function cabinSolids(){
-  const c=CABIN, f=r=>[r[0],r[1],r[2],r[3]];
+  const f=r=>[r[0],r[1],r[2],r[3]];
+  if(room==='rcva'){ const r=RCVA_ROOM; return [f(r.couch),f(r.coffee),f(r.tv),f(r.fridge),f(r.stairs)]; }
+  if(room==='cove'){ const r=COVE_ROOM; return [...r.crates.map(f),f(r.cot),f(r.table),f(r.barrel)]; }
+  if(room==='trail'){ const r=AUNTIE_ROOM; return [f(r.counter),f(r.table),f(r.chair),[r.auntie.x-6,r.auntie.y+6,r.auntie.x+6,r.auntie.y+14]]; }
+  const c=CABIN;
   return [f(c.bed), f(c.stand), f(c.table), f(c.bunk), ...c.pots.map(([x,y])=>[x-8,y-4,x+8,y+8])];
 }
+// Andy Irons (real name as a label on a generic original sprite) chills in da RCVA house and wants gifts
+let gifts=0, npcCool=0;
+function nearAndy(){ return room==='rcva' && near(player.x,player.y,RCVA_ROOM.andy.x,RCVA_ROOM.andy.y+24,38); }
+function nearAuntie(){ return room==='trail' && near(player.x,player.y,AUNTIE_ROOM.auntie.x,AUNTIE_ROOM.auntie.y+14,34); }
 function updCabin(){
   const sp=1.5, ox=player.x, oy=player.y;
   if(consume('inspect')) doInspect();
@@ -1518,64 +1599,80 @@ function updCabin(){
   // out the door: walk down into it, or press B standing on it
   const atDoor=atCabinDoor();
   if(atDoor && (keys.down || consume('b'))){ leaveCabin(); return; }
-  // B next to the bed = sleep till morning
-  if(nearCabinBed() && consume('b')){ sleepTilMorning(); }
+  // B next to the bed = sleep till morning (your own place only)
+  if(room==='myplace' && nearCabinBed() && consume('b')){ sleepTilMorning(); }
+  if(npcCool>0) npcCool--;
+  if(nearAndy()){
+    if(consume('b')){
+      if(gifts>0){ gifts--; score+=50; floatScore('+50',player.x,player.y-18,C.gold); npcCool=300; beep(880,.1);
+        setMsg("Andy Irons: 'Shave ice?! Now we talking. You can stay, brah.'",240); }
+      else { npcCool=300; beep(300,.08,'triangle'); setMsg("Andy Irons: 'Empty hands? Go get me one shave ice from town, brah.'",240); }
+    } else if(npcCool===0){ npcCool=600; beep(520,.07,'triangle'); setMsg("Andy Irons: 'What gifts have you brought me?'",240); }
+  }
+  if(nearAuntie() && npcCool===0){ npcCool=600; beep(560,.07,'triangle');
+    setMsg(pickLine('auntie-talk',["Auntie: 'Eat, eat! You stay too skinny, boy.'","Auntie: 'Banana bread fresh out da oven. Take two.'","Auntie: 'You went surf again? Wash your feet first!'"]),240); }
 }
-function drawCabin(){
+const ROOM_PAL = {
+  myplace:{ frame:'#6b4a2e', frameHi:'#9a7048', frameSh:'#3e2a18', block:'#5e4028', wall:'#d8c49a', wallHi:'#e8d8b2', wain:'#9a6e44', wainHi:'#b8885a', wainLn:'#7e5634', tileA:'#b48a5a', tileB:'#ad8454', tileHi:'#c29868', tileLn:'#9c7448' },
+  rcva:   { frame:'#5a5a58', frameHi:'#8a8a86', frameSh:'#2e2e2c', block:'#4a4a48', wall:'#c8d2d6', wallHi:'#dce4e8', wain:'#7c7a70', wainHi:'#9a988c', wainLn:'#5e5c54', tileA:'#a89c88', tileB:'#a29682', tileHi:'#b8ac98', tileLn:'#8e8270' },
+  cove:   { frame:'#4e3a26', frameHi:'#7a5e40', frameSh:'#2a1e12', block:'#3e2e1e', wall:'#9a8058', wallHi:'#ac926a', wain:'#6a5236', wainHi:'#846848', wainLn:'#4e3a26', tileA:'#8a7050', tileB:'#846a4a', tileHi:'#9a805e', tileLn:'#6e5840' },
+  trail:  { frame:'#7a5a34', frameHi:'#a88050', frameSh:'#4a3418', block:'#6a4a28', wall:'#f2dc94', wallHi:'#fae8b0', wain:'#c8a060', wainHi:'#dcb878', wainLn:'#a88048', tileA:'#e2d2b4', tileB:'#dccaa8', tileHi:'#eee0c6', tileLn:'#c8b690' },
+};
+function drawRoomShell(P){
   const c=CABIN, lit=isNight();
-  px(0,0,W,H,'#0e0a08');                                                     // dark outside the room
-  // ---- cozy top-down cottage room (original art, classic 16-bit RPG home feel) ----
-  // thick bevelled outer walls framing the whole room
+  px(0,0,W,H,'#0e0a08');
   const T=14, ox0=c.x0-T, ox1=c.x1+T, oy0=c.wallY-10, oy1=c.y1+T;
-  px(ox0,oy0,ox1-ox0,oy1-oy0,'#6b4a2e');                                     // wall mass
-  px(ox0,oy0,ox1-ox0,2,'#9a7048'); px(ox0,oy0,2,oy1-oy0,'#8a6240');          // outer lit rim
-  px(ox1-2,oy0,2,oy1-oy0,'#3e2a18'); px(ox0,oy1-2,ox1-ox0,2,'#3e2a18');      // outer shadow rim
-  for(let x=ox0+6; x<ox1-6; x+=18){ px(x,oy0+3,12,5,'#5e4028'); px(x,oy0+3,12,1,'#7e5a38'); }   // top-wall timber blocks
-  for(let y=c.wallY+6; y<oy1-6; y+=18){ px(ox0+3,y,9,12,'#5e4028'); px(ox1-12,y,9,12,'#5e4028');
-    px(ox0+3,y,9,1,'#7e5a38'); px(ox1-12,y,9,1,'#7e5a38'); }                 // side-wall timber blocks
-  // back wall: soft plaster with a wood wainscot
-  px(c.x0,c.wallY,c.x1-c.x0,c.floorY-c.wallY,'#d8c49a');
-  px(c.x0,c.wallY,c.x1-c.x0,3,'#e8d8b2');                                    // lit top
-  px(c.x0,c.floorY-26,c.x1-c.x0,26,'#9a6e44'); px(c.x0,c.floorY-26,c.x1-c.x0,2,'#b8885a'); // wainscot + cap
-  for(let x=c.x0+8; x<c.x1; x+=20) px(x,c.floorY-22,1,20,'#7e5634');         // wainscot panels
-  px(c.x0,c.floorY-3,c.x1-c.x0,3,'#5a3c22');                                 // baseboard
-  // window with curtains: sky by day, stars by night
-  const wx=232, wy=c.wallY+8;
+  px(ox0,oy0,ox1-ox0,oy1-oy0,P.frame);
+  px(ox0,oy0,ox1-ox0,2,P.frameHi); px(ox0,oy0,2,oy1-oy0,P.frameHi);
+  px(ox1-2,oy0,2,oy1-oy0,P.frameSh); px(ox0,oy1-2,ox1-ox0,2,P.frameSh);
+  for(let x=ox0+6; x<ox1-6; x+=18){ px(x,oy0+3,12,5,P.block); px(x,oy0+3,12,1,P.frameHi); }
+  for(let y=c.wallY+6; y<oy1-6; y+=18){ px(ox0+3,y,9,12,P.block); px(ox1-12,y,9,12,P.block); px(ox0+3,y,9,1,P.frameHi); px(ox1-12,y,9,1,P.frameHi); }
+  px(c.x0,c.wallY,c.x1-c.x0,c.floorY-c.wallY,P.wall); px(c.x0,c.wallY,c.x1-c.x0,3,P.wallHi);
+  px(c.x0,c.floorY-26,c.x1-c.x0,26,P.wain); px(c.x0,c.floorY-26,c.x1-c.x0,2,P.wainHi);
+  for(let x=c.x0+8; x<c.x1; x+=20) px(x,c.floorY-22,1,20,P.wainLn);
+  px(c.x0,c.floorY-3,c.x1-c.x0,3,P.frameSh);
+  for(let y=c.floorY, r=0; y<c.y1; y+=16, r++) for(let x=c.x0, k=0; x<c.x1; x+=16, k++){
+    const w=Math.min(16,c.x1-x), h=Math.min(16,c.y1-y);
+    px(x,y,w,h,(r+k)%2?P.tileA:P.tileB); px(x,y,w,1,P.tileHi); px(x,y,1,h,P.tileHi);
+    px(x,y+h-1,w,1,P.tileLn); px(x+w-1,y,1,h,P.tileLn); }
+  ctx.save(); ctx.globalAlpha=0.22; ctx.fillStyle='#2a1a0c';
+  ctx.fillRect(c.x0,c.floorY,c.x1-c.x0,6); ctx.fillRect(c.x0,c.floorY,6,c.y1-c.floorY); ctx.restore();
+  px(c.doorX-18,c.y1,36,T,lit?'#1a2238':'#cfe8c0');
+  px(c.doorX-20,c.y1-2,2,T+2,P.frameSh); px(c.doorX+18,c.y1-2,2,T+2,P.frameSh);
+  px(c.doorX-14,c.y1-10,28,9,'#4a7a5a'); px(c.doorX-14,c.y1-10,28,1,'#6a9a7a');
+}
+function drawRoomWindow(wx,curtain){
+  const c=CABIN, lit=isNight(), wy=c.wallY+8;
   px(wx-3,wy-3,54,36,'#7e5634'); px(wx,wy,48,30,lit?'#141a3a':'#9ad6f0');
   if(lit){ px(wx+8,wy+6,1,1,'#fff'); px(wx+30,wy+10,1,1,'#fff'); px(wx+20,wy+20,1,1,'#fff'); px(wx+36,wy+4,4,4,'#dfe6ff'); }
   else { px(wx,wy+21,48,9,'#3a9ab8'); px(wx+30,wy+4,7,7,'#ffe27a'); }
-  px(wx+23,wy,2,30,'#7e5634'); px(wx,wy+14,48,2,'#7e5634');                  // muntins
-  px(wx-8,wy-4,9,38,'#c0503a'); px(wx+47,wy-4,9,38,'#c0503a');               // curtains
-  px(wx-8,wy-4,9,2,'#d8705a'); px(wx+47,wy-4,9,2,'#d8705a'); px(wx-10,wy-6,70,3,'#5a3c22'); // curtain rod
-  // surfboard hung on the wall
+  px(wx+23,wy,2,30,'#7e5634'); px(wx,wy+14,48,2,'#7e5634');
+  if(curtain){ px(wx-8,wy-4,9,38,curtain); px(wx+47,wy-4,9,38,curtain); px(wx-10,wy-6,70,3,'#5a3c22'); }
+}
+function drawCabin(){
+  drawRoomShell(ROOM_PAL[room]);
+  if(room==='rcva') drawRcvaRoom(); else if(room==='cove') drawCoveRoom(); else if(room==='trail') drawAuntieRoom(); else drawMyPlaceRoom();
+  // player (board stays leaning outside by the door)
+  const moving=keys.left||keys.right||keys.up||keys.down;
+  softShadow(player.x, player.y+13, 10);
+  drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
+  if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
+}
+function drawMyPlaceRoom(){
+  const c=CABIN, lit=isNight();
+  drawRoomWindow(232,'#c0503a');
   drawWallBoard(...c.board);
-  // a little framed photo of a wave
   px(176,c.wallY+14,24,18,'#5a3c22'); px(178,c.wallY+16,20,14,'#9ad6f0'); px(178,c.wallY+25,20,5,'#3a9ab8'); px(181,c.wallY+23,9,2,'#fff');
-  // floor: warm square tiles, LOW contrast (soft grout, gentle checker)
-  for(let y=c.floorY, r=0; y<c.y1; y+=16, r++) for(let x=c.x0, k=0; x<c.x1; x+=16, k++){
-    const w=Math.min(16,c.x1-x), h=Math.min(16,c.y1-y);
-    px(x,y,w,h,(r+k)%2?'#b48a5a':'#ad8454');
-    px(x,y,w,1,'#c29868'); px(x,y,1,h,'#bc9262');                            // soft top/left highlight
-    px(x,y+h-1,w,1,'#9c7448'); px(x+w-1,y,1,h,'#a27a4c');                    // soft grout
-  }
-  ctx.save(); ctx.globalAlpha=0.22; ctx.fillStyle='#2a1a0c';                 // walls cast a soft shadow on the floor
-  ctx.fillRect(c.x0,c.floorY,c.x1-c.x0,6); ctx.fillRect(c.x0,c.floorY,6,c.y1-c.floorY); ctx.restore();
-  // round rug in the middle: red with a gold border
   ctx.fillStyle='#8a2e2a'; ctx.beginPath(); ctx.ellipse(245,228,62,32,0,0,Math.PI*2); ctx.fill();
   ctx.fillStyle='#b8423a'; ctx.beginPath(); ctx.ellipse(245,228,58,29,0,0,Math.PI*2); ctx.fill();
   ctx.strokeStyle='#e0b050'; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(245,228,48,22,0,0,Math.PI*2); ctx.stroke();
   ctx.fillStyle='#e0b050'; ctx.beginPath(); ctx.ellipse(245,228,8,4,0,0,Math.PI*2); ctx.fill();
-  // clay pots in the corners
   for(const [qx,qy] of CABIN.pots){
     softShadow(qx,qy+8,8);
     ctx.fillStyle='#8a4a2a'; ctx.beginPath(); ctx.ellipse(qx,qy,8,8,0,0,Math.PI*2); ctx.fill();
     ctx.fillStyle='#a85e36'; ctx.beginPath(); ctx.ellipse(qx-2,qy-2,5,5,0,0,Math.PI*2); ctx.fill();
-    px(qx-5,qy-9,10,3,'#6a3820'); px(qx-4,qy-9,8,1,'#c07a4a');                // rim
+    px(qx-5,qy-9,10,3,'#6a3820'); px(qx-4,qy-9,8,1,'#c07a4a');
   }
-  // front wall with the doorway (a mat + daylight / night outside)
-  px(c.doorX-18,c.y1,36,T,lit?'#1a2238':'#cfe8c0');
-  px(c.doorX-20,c.y1-2,2,T+2,'#3e2a18'); px(c.doorX+18,c.y1-2,2,T+2,'#3e2a18');   // jambs
-  px(c.doorX-14,c.y1-10,28,9,'#4a7a5a'); px(c.doorX-14,c.y1-10,28,1,'#6a9a7a');   // doormat
   // BED: headboard on the wall, pillow, patterned quilt
   { const [b0,b1,b2,b3]=c.bed;
     px(b0-2,b1-14,b2-b0+4,16,'#5a3a1a'); px(b0-2,b1-14,b2-b0+4,2,'#7a5228');     // headboard
@@ -1595,14 +1692,62 @@ function drawCabin(){
     px(t0+38,t1-4,16,5,'#c98a3a'); px(t0+52,t1-3,10,2,'#5a3a1a'); px(t0+42,t1-3,3,3,'#3a2412');       // ukulele lying on top
     px(t2+6,t1+2,14,4,'#7a5228'); px(t2+6,t1-14,3,16,'#7a5228'); px(t2+8,t1+6,3,12,'#5a3a1a'); px(t2+17,t1+6,3,12,'#5a3a1a'); } // chair
   drawBunkBeds();
-  // player (board stays leaning outside by the door)
-  const moving=keys.left||keys.right||keys.up||keys.down;
-  softShadow(player.x, player.y+13, 10);
-  drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
-  if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
+}
+// RCVA surf house: board quiver on the wall, couch, TV, fridge, stairs up to da lanai — and Andy Irons
+function drawRcvaRoom(){
+  const r=RCVA_ROOM, c=CABIN;
+  drawRoomWindow(170,null);
+  drawWallBoard(76,58,94,116,'#ffd23f'); drawWallBoard(100,54,118,116,'#ff5d5d'); drawWallBoard(124,60,140,116,'#9a6aff');
+  px(236,c.wallY+10,48,16,'#14233a'); ctx.fillStyle=C.gold; ctx.font='bold 8px monospace'; ctx.textAlign='center'; ctx.fillText('R C V A',260,c.wallY+21); ctx.textAlign='left';
+  px(330,c.wallY+12,22,30,'#e0563a'); px(332,c.wallY+14,18,12,'#2f8aa8'); px(334,c.wallY+30,14,2,'#fff');
+  { const [a,b2,c2,d]=r.tv; px(a,b2+14,c2-a,d-b2-14,'#3a2a1a'); px(a+6,b2-10,c2-a-12,24,'#1a1a1a'); px(a+8,b2-8,c2-a-16,20,(frame>>3)%2?'#3a8ab8':'#2f7aa8'); px(a+8,b2+2,c2-a-16,2,'#fff'); }
+  { const [a,b2,c2,d]=r.fridge; px(a,b2-24,c2-a,d-b2+24,'#e8ece8'); px(a,b2-24,c2-a,2,'#ffffff'); px(a,b2+4,c2-a,1,'#b0b4b0'); px(c2-6,b2-14,2,10,'#8a8e8a'); px(c2-6,b2+10,2,14,'#8a8e8a');
+    px(a+4,b2-18,6,6,'#ffd23f'); px(a+12,b2-12,8,5,'#ff6b8a'); }
+  { const [a,b2,c2,d]=r.stairs; for(let i=0;i<8;i++){ const y=d-(i+1)*12; px(a,y,c2-a,12,i%2?'#8a7a66':'#9a8a74'); px(a,y,c2-a,1,'#b4a48c'); }
+    px(a-3,b2-4,3,d-b2+4,'#5e5c54'); ctx.fillStyle='#eee'; ctx.font='6px monospace'; ctx.fillText('LANAI',a+16,b2+8); }
+  ctx.fillStyle='#2f6a8a'; ctx.beginPath(); ctx.ellipse(142,232,54,22,0,0,Math.PI*2); ctx.fill();
+  { const [a,b2,c2,d]=r.coffee; px(a,b2,c2-a,d-b2,'#7a5228'); px(a,b2,c2-a,2,'#9a6a38'); px(a+8,b2+4,14,10,'#e0563a'); px(a+10,b2+6,14,10,'#f2ead8'); px(a+36,b2+6,8,8,'#ffd23f'); }
+  { const [a,b2,c2,d]=r.couch; px(a,b2,c2-a,d-b2,'#3a5a8a'); px(a,b2,c2-a,8,'#4a6a9a'); px(a,b2,8,d-b2,'#2e4a74'); px(c2-8,b2,8,d-b2,'#2e4a74');
+    const hw=(c2-a-20)/2; px(a+10,b2+10,hw-2,14,'#4a6aa0'); px(a+10+hw+2,b2+10,hw-2,14,'#4a6aa0'); }
+  const A=r.andy; drawDude(A.x,A.y,'#c88a4e','#2a2a2a',1,'stand',0);
+  px(A.x-4,A.y-4,9,8,'#ffffff'); px(A.x-4,A.y-4,9,2,'#e8e8e8'); px(A.x-4,A.y-13,8,3,'#3a2414');
+  nameTag('ANDY IRONS',A.x,A.y-18,C.gold);
+}
+// Da Cove shack: nets, mounted fish, lantern, crates, a cot, a bait barrel
+function drawCoveRoom(){
+  const r=COVE_ROOM, lit=isNight(), c=CABIN;
+  drawRoomWindow(300,null);
+  for(let i=0;i<9;i++){ pxLine(80+i*14,c.wallY+6,80+i*14+20,c.floorY-30,'#c8b890',1); pxLine(80+i*14+20,c.wallY+6,80+i*14,c.floorY-30,'#c8b890',1); }
+  px(80,c.wallY+4,140,2,'#5a4430');
+  px(240,c.wallY+20,34,12,'#6aa0b8'); px(270,c.wallY+23,6,6,'#6aa0b8'); px(244,c.wallY+24,2,2,'#111');
+  for(const cr of r.crates){ const [a,b2,c2,d]=cr; px(a,b2,c2-a,d-b2,'#8a6a40'); px(a,b2,c2-a,2,'#a8844e'); pxLine(a,b2,c2,d,'#6a4e2c',1); pxLine(c2,b2,a,d,'#6a4e2c',1); }
+  { const [a,b2,c2,d]=r.cot; px(a,b2,c2-a,d-b2,'#6a5a3a'); px(a+4,b2+3,c2-a-8,d-b2-6,'#b8a878'); px(a+6,b2+5,16,10,'#e8dcc0'); }
+  { const [a,b2,c2,d]=r.table; px(a,b2,c2-a,8,'#6a5236'); px(a+4,b2+8,4,d-b2-8,'#4e3a26'); px(c2-8,b2+8,4,d-b2-8,'#4e3a26');
+    const L=r.lantern; px(L.x-4,L.y-8,8,10,lit?'#ffd98a':'#d8c890'); px(L.x-5,L.y-10,10,2,'#3a2a1a');
+    if(lit){ ctx.save(); ctx.globalAlpha=.2; ctx.fillStyle='#ffd98a'; ctx.beginPath(); ctx.arc(L.x,L.y-4,60,0,Math.PI*2); ctx.fill(); ctx.restore(); } }
+  { const [a,b2,c2,d]=r.barrel; px(a,b2,c2-a,d-b2,'#7a5230'); px(a,b2+6,c2-a,2,'#4a3a2a'); px(a,d-8,c2-a,2,'#4a3a2a'); px(a+2,b2,c2-a-4,3,'#5a8a8a'); }
+  px(330,240,40,3,'#5a3c22'); px(334,226,3,30,'#5a3c22');
+}
+// Auntie's little yellow house: kitchen, banana bread, flowers, Auntie herself
+function drawAuntieRoom(){
+  const r=AUNTIE_ROOM, c=CABIN;
+  drawRoomWindow(262,'#ff8cc0');
+  { const [a,b2,c2,d]=r.counter; px(a,b2-10,c2-a,d-b2+10,'#b88a5a'); px(a,b2-10,c2-a,3,'#e8dcc0');
+    px(a+10,b2-8,26,10,'#3a3a3a'); px(a+12,b2-6,8,6,'#5a5a5a'); px(a+24,b2-6,8,6,'#5a5a5a');
+    px(a+50,b2-18,14,10,'#c0503a'); px(a+52,b2-20,10,2,'#e8e8e8');
+    px(a+80,b2-14,22,6,'#f2ead8'); px(a+110,b2-16,8,8,'#ffd23f'); }
+  { const [a,b2,c2,d]=r.table; px(a,b2,c2-a,8,'#8a5a30'); px(a,b2,c2-a,2,'#a8743e'); px(a+4,b2+8,4,d-b2-8,'#5a3a1a'); px(c2-8,b2+8,4,d-b2-8,'#5a3a1a');
+    px(a+10,b2-8,26,9,'#9a5a28'); px(a+10,b2-8,26,3,'#b8743a'); for(let i=0;i<4;i++) px(a+12+i*6,b2-5,1,5,'#6a3a18');
+    px(a+50,b2-14,8,12,'#7ad9ff'); px(a+46,b2-20,6,6,'#ff6b8a'); px(a+54,b2-22,6,6,'#ffd23f'); px(a+50,b2-24,5,5,'#ff5d5d'); }
+  { const [a,b2,c2,d]=r.chair; px(a,b2,c2-a,d-b2,'#7a9a5a'); px(a,b2,c2-a,10,'#8aaa6a'); px(a+6,b2+12,c2-a-12,d-b2-18,'#9aba7a'); }
+  ctx.fillStyle='#c8a0d8'; ctx.beginPath(); ctx.ellipse(250,262,48,20,0,0,Math.PI*2); ctx.fill();
+  const A=r.auntie; drawDude(A.x,A.y,'#b07a44','#d8506a',1,'stand',0);
+  px(A.x-5,A.y-4,11,14,'#e8608a'); px(A.x-5,A.y-4,11,2,'#ff8cc0'); px(A.x-3,A.y,2,2,'#fff'); px(A.x+1,A.y+5,2,2,'#fff');
+  px(A.x-4,A.y-14,9,4,'#d8d0c8'); px(A.x+3,A.y-15,4,4,'#ff6b8a');
+  nameTag('AUNTIE',A.x,A.y-19,C.gold);
 }
 // surfboard hung on the wall, seen from the FRONT (deck view): pointed nose, round tail, stringer
-function drawWallBoard(x0,y0,x1,y1){
+function drawWallBoard(x0,y0,x1,y1,deck){
   const cx=(x0+x1)/2, hw=(x1-x0)/2, h=y1-y0;
   const shape=(inset)=>{ const w=hw-inset, t=y0+inset, b=y1-inset;
     ctx.beginPath(); ctx.moveTo(cx,t);
@@ -1611,10 +1756,11 @@ function drawWallBoard(x0,y0,x1,y1){
     ctx.bezierCurveTo(cx-w*0.45,b, cx-w,b-h*0.08, cx-w,b-h*0.3);
     ctx.bezierCurveTo(cx-w,t+h*0.42, cx-w*0.9,t+h*0.18, cx,t); ctx.closePath(); };
   ctx.save(); ctx.globalAlpha=.25; ctx.fillStyle='#000'; ctx.translate(2,2); shape(0); ctx.fill(); ctx.restore(); // wall shadow
-  ctx.fillStyle='#1f8a7e'; shape(0); ctx.fill();                       // rail (outline)
-  ctx.fillStyle='#2fbfae'; shape(1.5); ctx.fill();                     // deck
+  const dk=deck||'#2fbfae';
+  ctx.fillStyle=shade(dk,-40); shape(0); ctx.fill();                  // rail (outline)
+  ctx.fillStyle=dk; shape(1.5); ctx.fill();                            // deck
   ctx.save(); shape(1.5); ctx.clip();
-  ctx.fillStyle='#6fe8d8'; ctx.fillRect(cx-hw,y0,hw*0.55,h);            // lit left rail
+  ctx.fillStyle=shade(dk,50); ctx.fillRect(cx-hw,y0,hw*0.55,h);         // lit left rail
   ctx.fillStyle='#ffd23f'; ctx.fillRect(cx-hw,y0+h*0.30,hw*2,3);        // racing stripe
   ctx.fillStyle='#e0563a'; ctx.fillRect(cx-hw,y0+h*0.30+3,hw*2,1);
   ctx.fillStyle='#2a3a3a'; ctx.fillRect(cx-hw,y1-h*0.22,hw*2,h*0.22);   // tail traction pad
@@ -1625,7 +1771,7 @@ function drawWallBoard(x0,y0,x1,y1){
   px(x0-3,y0+h*0.35,4,3,'#5a3c22'); px(x1-1,y0+h*0.35,4,3,'#5a3c22'); // wall pegs holding it
 }
 /* ---- INSPECT (I) + context key hints ---- */
-function nearCabinBed(){ const b=CABIN.bed; return player.x>b[0]-12 && player.x<b[2]+16 && player.y<b[3]+14; }
+function nearCabinBed(){ if(room!=='myplace') return false; const b=CABIN.bed; return player.x>b[0]-12 && player.x<b[2]+16 && player.y<b[3]+14; }
 function atCabinDoor(){ return Math.abs(player.x-CABIN.doorX)<16 && player.y>=CABIN.y1-18; }
 // bunk beds with two sleeping visitors (original art)
 function drawBunkBeds(){
@@ -1651,6 +1797,39 @@ function pickLine(id,lines){ const i=(INSPECT_COUNTER[id]||0)%lines.length; INSP
 // everything you can look at, for wherever you are right now: {id, x, y, r, lines}
 function inspectables(){
   const out=[], add=(id,x,y,r,lines)=>out.push({id,x,y,r,lines});
+  if(state==='cabin' && room==='rcva'){
+    const r=RCVA_ROOM;
+    add('andy',r.andy.x,r.andy.y+24,38,["Andy Irons, chilling on da couch. Three-time world champ.","He stay watching surf videos... of himself.","He's eyeing your hands. Did you bring one gift?","Pipe Masters trophy on da shelf. He no let nobody touch 'um."]);
+    add('quiver',108,124,40,["Da RCVA quiver. Guns fo' big days, fish fo' small.","Fresh wax on every board. Smells like coconut.","One of these could be yours if you ask nice. Don't ask."]);
+    add('tv',292,150,30,["Surf movie on loop. Somebody getting barreled, again.","Rewinding da same wave fo' da tenth time.","Old VHS of Pipe '87. Classic."]);
+    add('fridge',398,176,26,["Fridge: POG, poke, and somebody's leftover plate lunch.","Stickers all ovah. One says 'NO KOOKS'.","Empty except fo' one lonely musubi. Hands off."]);
+    add('stairs',380,200,30,["Stairs up to da lanai. Best view of da lineup.","Can hear da boys talking story upstairs.","Sandy footprints all da way up."]);
+    add('coffee',140,240,28,["Stack of surf mags. Andy's on most of da covers.","Coffee table stay sticky from shave ice.","Somebody left one fin key here."]);
+    add('poster',340,124,24,["Surf poster: one big day at Sunset.","Signed by da boys.","Faded from da sun through da window."]);
+    add('door',CABIN.doorX,CABIN.y1-14,22,["Front door. Sand everywhere, as usual.","You can hear da surf from here.","Da boys never lock 'um."]);
+    return out;
+  }
+  if(state==='cabin' && room==='cove'){
+    const lit=isNight();
+    add('net',150,124,50,["Old fishing net. Uncle mends 'um every Sunday.","Tangled wit' seaweed and one lost lure.","Smells like da ocean, 100%."]);
+    add('fish',257,124,24,["Mounted mahi mahi. 'Caught 1979,' says da tag.","Uncle says it was bigger. It's always bigger.","Da glass eye stay watching you."]);
+    add('crates',96,170,30,["Crates of fishing gear and old floats.","One crate full of slippahs. Lost and found.","Stamped 'HALEIWA'."]);
+    add('cot',360,166,36,["Little cot fo' when da fishing goes late.","Wool blanket, sandy as ever.","Somebody's been napping here. Still warm."]);
+    add('lantern',229,206,30,lit?["Lantern glowing warm. Moths dancing.","Kerosene smell. Old school.","Light enough fo' read one tide chart."]:["Lantern, off till dark.","Glass a bit sooty.","Uncle lights 'um every night at sunset."]);
+    add('barrel',393,276,24,["Bait barrel. Do NOT open.","You opened 'um. Mistake.","Uncle's secret chum recipe. Stays secret."]);
+    add('door',CABIN.doorX,CABIN.y1-14,22,["Door to da cove. Waves lapping outside.","Da hinges squeak like one seagull.","Fresh salt air coming in."]);
+    return out;
+  }
+  if(state==='cabin' && room==='trail'){
+    const r=AUNTIE_ROOM;
+    add('auntie',r.auntie.x,r.auntie.y+14,34,["Auntie. Feeds da whole North Shore.","She's humming one old Hawaiian song.","She already packed you one plate. Of course she did."]);
+    add('bread',272,210,30,["Banana bread, still warm. Best on da island.","Auntie's secret: extra butter. Don't tell.","You take one slice. Then another."]);
+    add('stove',100,150,30,["Stew bubbling on da stove. Smells ono.","Kalua pig in da oven. Sunday dinner.","Don't touch da pot. Auntie watching."]);
+    add('flowers',304,206,22,["Plumeria and hibiscus from da yard.","Fresh every morning.","Smells like one lei."]);
+    add('chair',379,280,28,["Uncle's chair. Nobody sits in Uncle's chair.","Still has da shape of Uncle in it.","Remote control stuck in da cushion."]);
+    add('door',CABIN.doorX,CABIN.y1-14,22,["Front door. 'Shoes off!' says da sign.","Slippahs lined up outside.","Da screen door bangs every time."]);
+    return out;
+  }
   if(state==='cabin'){
     const c=CABIN, lit=isNight();
     add('bunks',359,268,44,["Brah visiting from da mainland, sleeping all day.","Your cuz from town. Snoring like one shorebreak.","Dey surfed 6am dawn patrol. Now dey dead to da world.","Mainland brah stay sunburnt like one lobster. Let him sleep."]);
@@ -1670,6 +1849,7 @@ function inspectables(){
   const b=beach, scr=b.screen;
   if(!IS_DOWN(scr)){
     add('shoreline',player.x,SHORE+6,12,["Whitewater fizzing ovah your toes.","Wet sand. Good fo' check da swell from here.","One crab wen' run sideways from you."]);
+    if(!isNight()) for(const sb of SUNBATHERS[scr]||[]) add(sb.id,sb.x,sb.y-6,26,sb.lines);
     for(const [pxl] of BEACH_PALMS[scr]) add('palm',pxl+3,H-22,18,["Coconut palm. Watch out fo' falling coconuts, brah.","Palm stay leaning toward da ocean, like you.","Somebody carved initials in da trunk."]);
     if(b.kelly) add('kelly',b.kelly.x,b.kelly.y,24,["Kelly Slater. Eleven world titles and he'll tell you about every one.","He's checking his reflection in da wet sand.","He looks at your board, sighs, and keeps walking.","Bald, tan, and somehow still younger than you."]);
     if(b.tourist) add('tourist',b.tourist.x,b.tourist.y,22,["Tourist wit' one camera. Asking where's Pipeline.","Sunburnt already. Day one.","He stay wearing socks wit' slippahs."]);
@@ -1719,10 +1899,11 @@ function doInspect(){
 function drawKeyHint(){
   if(state!=='beach' && state!=='cabin') return;
   let act=null;
-  if(state==='cabin'){ if(atCabinDoor()) act=['↓','walk out']; else if(nearCabinBed()) act=['B','sleep']; }
+  if(state==='cabin'){ if(atCabinDoor()) act=['↓','walk out']; else if(nearCabinBed()) act=['B','sleep']; else if(nearAndy()) act=['B','give gift']; }
   else {
     const b=beach;
-    if(atCabinSteps()) act = b.doorOpen ? ['↑','walk in'] : ['B','open door'];
+    const rid=atDoorSpot();
+    if(rid) act = b.doorOpen===rid ? [ROOMS[rid].enter==='up'?'↑':'↓','walk in'] : ['B','open door'];
     else if(b.screen===SCR.MYHOUSE){ const HM=myHammock(); if(near(player.x,player.y,HM.x,HM.y,40)) act=['B','sleep']; }
     else if(b.screen===SCR.TOWN && near(player.x,player.y,b.iceShop.x,b.iceShop.y,24)) act=['B','shop'];
   }
@@ -1762,7 +1943,7 @@ function drawMyHouse(x,y){
   for(let i=0;i<3;i++){ const sy=porchY+14+i*4, sw=20+i*4;
     px(x-sw/2,sy,sw,4,'#7a5a32'); px(x-sw/2,sy,sw,1,'#a07a48'); px(x-sw/2,sy+3,sw,1,'#4a3418'); }
   // dutch door + shuttered windows (warm glow at night)
-  if(beach.doorOpen){   // door swung open: warm room light inside, door slab against the jamb
+  if(beach.doorOpen==='myplace'){   // door swung open: warm room light inside, door slab against the jamb
     px(x-6,topY+26,12,24,'#3a2412'); px(x-5,topY+28,10,22,'#ffd98a'); px(x-5,topY+44,10,6,'#b98a52');
     px(x+6,topY+26,3,24,'#2a3a2a'); px(x+6,topY+26,1,24,'#4a5a4a');
   } else { px(x-6,topY+26,12,24,'#2a3a2a'); px(x+3,topY+36,2,2,'#ffd23f'); }
@@ -1806,7 +1987,16 @@ function drawCoveShack(x,y){
 }
 function drawProp(p){
   if(p.k==='slipper'){ px(p.x-5,p.y,10,4,'#2e6bbf'); px(p.x-1,p.y-2,2,3,'#1a4a8a'); }
-  else if(p.k==='honu'){ px(p.x-7,p.y-3,14,8,'#3f7a3a'); px(p.x-9,p.y,3,3,'#3f7a3a'); px(p.x+6,p.y,3,3,'#3f7a3a'); px(p.x-2,p.y-5,4,3,'#4f8a4a'); }
+  else if(p.k==='honu'){   // green sea turtle resting: domed patterned shell, head, four flippers
+    const x=p.x, y=p.y, breathe=((frame>>5)%4===0)?1:0;
+    px(x-12,y-2,5,3,'#7a8a5a'); px(x+7,y-2,5,3,'#7a8a5a');          // front flippers
+    px(x-10,y+3,4,2,'#7a8a5a'); px(x+6,y+3,4,2,'#7a8a5a');          // back flippers
+    px(x-3-breathe,y-8,6,5,'#8a9a6a'); px(x-2-breathe,y-7,1,1,'#111');  // head + eye
+    ctx.fillStyle='#5a4a2a'; ctx.beginPath(); ctx.ellipse(x,y,9,6,0,0,Math.PI*2); ctx.fill();      // shell rim
+    ctx.fillStyle='#7a6a3a'; ctx.beginPath(); ctx.ellipse(x,y-0.5,7.5,4.8,0,0,Math.PI*2); ctx.fill();
+    px(x-2,y-3,4,3,'#9a8a4a'); px(x-6,y-1,3,3,'#9a8a4a'); px(x+3,y-1,3,3,'#9a8a4a'); px(x-2,y+1,4,2,'#9a8a4a'); // scutes
+    px(x-5,y-4,4,1,'#b0a060');                                        // shell shine
+  }
   else { px(p.x-6,p.y-5,12,9,'#d13a3a'); px(p.x-6,p.y-7,12,3,'#eee'); }
 }
 function drawPhotog(x,y){
@@ -1967,7 +2157,7 @@ function drawHUD(){
   ctx.font='bold 11px "Courier New",monospace'; ctx.textAlign='left';
   ctx.fillStyle=C.gold; ctx.fillText('SCORE '+score,6,12);
   ctx.textAlign='right'; ctx.fillStyle=C.good; ctx.fillText('BEST '+high,W-6,12);
-  ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText(state==='beach'?'🏖 BEACH':state==='shop'?'🍧 SHOP':state==='cabin'?'🏠 MY PLACE':'🌊 LINEUP',W/2,12);
+  ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText(state==='beach'?'🏖 BEACH':state==='shop'?'🍧 SHOP':state==='cabin'?ROOMS[room].label:'🌊 LINEUP',W/2,12);
   ctx.textAlign='left'; ctx.fillStyle=C.gold; ctx.font='bold 10px "Courier New",monospace';
   ctx.fillText('🪙 '+coins, 92, 12);
   ctx.font='bold 11px "Courier New",monospace';
