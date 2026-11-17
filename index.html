@@ -633,8 +633,6 @@ function updBeach(){
       player.x=W-10; // eastern-most screen: wall
     }
     player.x=clamp(player.x,10,W-10);
-    if(b.screen===SCR.TOWN) player.x=Math.max(player.x,JETTY_W+8);     // town jetty = west wall
-    if(b.screen===SCR.COVE) player.x=Math.min(player.x,W-JETTY_W-8);   // cove jetty = east wall
     // from the SURF beach, walk DOWN off the bottom → pop out AT the RCVA house (down top).
     // from any beach screen, walk DOWN off the bottom → pop out at its down-scene (top).
     if(DOWN_MAP[b.screen]!==undefined && player.y>=H-14 && keys.down && b.scrLock===0){
@@ -725,8 +723,8 @@ function buggyLX(){
 }
 function tickBuggy(){
   const b=beach; if(!beachBuilt) return;
-  // ONE ATV for the whole coast: it drives in WORLD x from behind the town jetty,
-  // across TOWN → SURF → COVE, and out behind the cove jetty. Each screen shows it only while it's there.
+  // ONE ATV for the whole coast: it drives in WORLD x from off the west end of town,
+  // across TOWN → SURF → COVE, and out past the east end of the cove. Each screen shows it only while it's there.
   if(b.buggyT>0)b.buggyT--; else if(!b.buggy){ b.buggy={wx:-30}; }
   if(b.buggy){ b.buggy.wx+=1.4; const bx=buggyLX();
     if(b.buggy.wx>3*W+30){ b.buggy=null; b.buggyT=ri(600,1100); }
@@ -833,10 +831,6 @@ function updWater(){
   if(paddling){ if(keys.up)player.y-=1.2; if(keys.down)player.y+=1.2; }
   player.x=clamp(player.x,14,W-14);
   player.y=clamp(player.y,SEATOP+6,SEABOT);
-  if(player.y>JETTY_TIP-6){   // the jetty sticks part-way out — can't paddle through the rocks
-    if(beach.screen===SCR.TOWN) player.x=Math.max(player.x,JETTY_W+10);
-    if(beach.screen===SCR.COVE) player.x=Math.min(player.x,W-JETTY_W-10);
-  }
 
   // go to beach from the inside
   if(!w.surfing && keys.down && player.y>=SEABOT-1){ enterBeach(player.injured?"Limp in fo' heal, braddah":"Pau surf. Back on da sand."); return; }
@@ -1067,7 +1061,6 @@ function drawBeachProps(){
       px(K.x-nw/2,K.y-24,nw,7,'#111'); ctx.fillStyle=C.gold; ctx.font='7px monospace'; ctx.textAlign='center';
       ctx.fillText(nm,K.x,K.y-18); ctx.textAlign='left'; }
   }
-  drawJetties();
   ctx.textAlign='left';
 }
 // surf shack / home — original pixel building
@@ -1148,39 +1141,6 @@ function drawBeach(){
     if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
     if(player.injured) px(player.x-3,player.y-20,6,3,C.bad);
   }
-}
-// ---- JETTIES: rock groins at the two ends of the coast (west edge of TOWN, east edge of COVE) ----
-const JETTY_W=34, JETTY_TIP=SHORE-58;   // width at the sand; how far out into the water the tip reaches
-function drawJetties(){
-  if(beach.screen===SCR.TOWN) drawJetty(1);
-  if(beach.screen===SCR.COVE) drawJetty(-1);
-}
-function drawJetty(side){   // side 1 = left edge, -1 = right edge
-  // a tidy rock groin: rounded, outlined boulders in rows, big near the viewer, shrinking out to the tip,
-  // drawn far-to-near so nearer rocks overlap. Rocks in the water get a wet sheen and a foam collar.
-  const edge = side>0 ? 0 : W;
-  const tones=[['#7d776e','#a39d92','#57524b'], ['#8a847a','#b0aa9e','#605a52'], ['#726d65','#98928a','#4f4a44']];
-  const rows=9, yNear=H-10, yFar=JETTY_TIP+4;
-  for(let r=rows-1; r>=0; r--){
-    const t=r/(rows-1), y=yNear+(yFar-yNear)*t, sc=1-0.45*t;    // t=0 near (big), t=1 tip (small)
-    const wdt=JETTY_W*sc, rx=9.5*sc, ry=7*sc, wet=y<SHORE+2;
-    const n = r%2 ? 2 : 3;                                        // alternate 3/2 rocks for a brick-like stack
-    for(let k=0;k<n;k++){
-      const off = n===3 ? (k+0.5)*wdt/3 : (k+1)*wdt/3;
-      const cx = edge + side*off, cy = y - (k%2)*2*sc;
-      const [base,hi,sh] = tones[(r*3+k)%3];
-      if(wet){ ctx.fillStyle=((frame>>4)+r+k)%3?'rgba(255,255,255,.85)':'rgba(230,245,250,.7)';   // foam collar
-        ctx.beginPath(); ctx.ellipse(cx,cy+ry*0.65,rx*1.15,ry*0.45,0,0,Math.PI*2); ctx.fill(); }
-      ctx.fillStyle='#2e2b28'; ctx.beginPath(); ctx.ellipse(cx,cy,rx+1,ry+1,0,0,Math.PI*2); ctx.fill();   // outline
-      ctx.fillStyle=wet?shade(base,-14):base; ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle=sh; ctx.beginPath(); ctx.ellipse(cx+side*rx*0.15,cy+ry*0.35,rx*0.85,ry*0.5,0,0,Math.PI); ctx.fill();  // shaded underside
-      ctx.fillStyle=wet?shade(hi,-6):hi; ctx.beginPath(); ctx.ellipse(cx-rx*0.3,cy-ry*0.4,rx*0.45,ry*0.3,0,0,Math.PI*2); ctx.fill(); // sun-lit top
-      if(wet) px(cx-rx*0.5,cy-ry*0.55,2,1,'#e8f4f8');            // glint on wet rock
-    }
-  }
-  // spray off the tip every so often
-  const ph=frame%90; if(ph<14){ const tx=edge+side*JETTY_W*0.3, ty=yFar-4-ph;
-    px(tx-3,ty,2,2,'#fff'); px(tx+2,ty+3,2,2,'#fff'); px(tx,ty-3,1,1,'#fff'); }
 }
 // ---- solid obstacles: the player's FEET box can't enter these (x0,y0,x1,y1 in screen coords) ----
 const HOUSE_ROAD_Y = SEATOP+92;   // keep in sync with drawHouseScreen's roadY
