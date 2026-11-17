@@ -1714,23 +1714,30 @@ function doInspect(){
   else setMsg("Nothing much fo' look at here.",70);
 }
 // small tag above your head: what B does here, plus I if there's something to look at
+// small key LEGEND, always in the bottom-right corner (just above the message bar).
+// Each row lights up gold when that key does something right here; otherwise it stays dim.
 function drawKeyHint(){
   if(state!=='beach' && state!=='cabin') return;
   let act=null;
-  if(state==='cabin'){ if(atCabinDoor()) act='↓ walk out'; else if(nearCabinBed()) act='B to sleep'; }
+  if(state==='cabin'){ if(atCabinDoor()) act=['↓','walk out']; else if(nearCabinBed()) act=['B','sleep']; }
   else {
     const b=beach;
-    if(atCabinSteps()) act = b.doorOpen ? '↑ walk in' : 'B to enter';
-    else if(b.screen===SCR.MYHOUSE){ const HM=myHammock(); if(near(player.x,player.y,HM.x,HM.y,40)) act='B to sleep'; }
-    else if(b.screen===SCR.TOWN && near(player.x,player.y,b.iceShop.x,b.iceShop.y,24)) act='B to shop';
+    if(atCabinSteps()) act = b.doorOpen ? ['↑','walk in'] : ['B','open door'];
+    else if(b.screen===SCR.MYHOUSE){ const HM=myHammock(); if(near(player.x,player.y,HM.x,HM.y,40)) act=['B','sleep']; }
+    else if(b.screen===SCR.TOWN && near(player.x,player.y,b.iceShop.x,b.iceShop.y,24)) act=['B','shop'];
   }
-  const look=nearestInspectable();
-  const hint = act && look ? act+' · I look' : act ? act : look ? 'I to inspect' : null;
-  if(!hint) return;
-  // bottom of the screen: in the message-bar slot, or just above it while a message is showing
-  const hw=hint.length*5+12, hx=W/2, hy=(msgT>0&&msg) ? H-28 : H-11;
-  ctx.save(); ctx.globalAlpha=.85; px(hx-hw/2,hy-9,hw,13,'#0a0618'); ctx.restore(); px(hx-hw/2,hy-9,hw,1,C.gold);
-  ctx.fillStyle=C.gold; ctx.font='bold 8px monospace'; ctx.textAlign='center'; ctx.fillText(hint,hx,hy); ctx.textAlign='left';
+  const look=!!nearestInspectable();
+  const rows=[ act ? [act[0],act[1],true] : ['B','open / use',false], ['I','inspect',look] ];
+  ctx.font='bold 7px monospace';
+  const bw=Math.ceil(Math.max(...rows.map(r=>ctx.measureText(r[1]).width)))+22, bh=rows.length*10+4;
+  const bx=W-bw-4, by=H-26-bh;
+  ctx.save(); ctx.globalAlpha=.78; px(bx,by,bw,bh,'#0a0618'); ctx.restore();
+  rows.forEach(([k,label,on],i)=>{
+    const y=by+10+i*10, col=on?C.gold:'#b4b2cc';
+    px(bx+3,y-7,9,9,on?'#3a2a08':'#1a1830'); px(bx+3,y-7,9,1,col);     // little keycap
+    ctx.fillStyle=col; ctx.textAlign='center'; ctx.fillText(k,bx+7.5,y); ctx.textAlign='left';
+    ctx.fillText(label,bx+16,y);
+  });
 }
 // YOUR place — a teal plantation cottage with a covered porch + a big hammock to sleep in
 function drawMyHouse(x,y){
