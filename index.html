@@ -1452,12 +1452,12 @@ function drawSterling(BB){
 const MYHOUSE_X = W*0.60;                 // matches drawMyHouse(W*0.60, …)
 const CABIN_DOOR_Y = SEATOP+10+70+20;     // where you stand at the bottom of the porch steps
 const CABIN = { x0:60, x1:420, wallY:52, floorY:120, y1:300, doorX:W/2,
-  bed:[88,124,140,168], stand:[148,126,166,146], table:[318,176,386,212], board:[350,58,362,116] };
+  bed:[88,124,140,168], stand:[148,126,166,146], pots:[[76,284],[404,284],[404,136]], table:[318,176,386,212], board:[350,58,362,116] };
 function enterCabin(){ state='cabin'; player.x=CABIN.doorX; player.y=CABIN.y1-26; player.facing=1; beep(520,.08,'triangle'); }
 function leaveCabin(){ beach.doorOpen=false; state='beach'; beach.screen=SCR.MYHOUSE; player.x=MYHOUSE_X; player.y=CABIN_DOOR_Y+6; beep(440,.08,'triangle'); }
 function cabinSolids(){
   const c=CABIN, f=r=>[r[0],r[1],r[2],r[3]];
-  return [f(c.bed), f(c.stand), f(c.table)];
+  return [f(c.bed), f(c.stand), f(c.table), ...c.pots.map(([x,y])=>[x-8,y-4,x+8,y+8])];
 }
 function updCabin(){
   const sp=1.5, ox=player.x, oy=player.y;
@@ -1480,30 +1480,59 @@ function updCabin(){
 }
 function drawCabin(){
   const c=CABIN, lit=isNight();
-  px(0,0,W,H,'#120c08');                                                     // dark outside the room
-  // back wall: knotty-pine planks
-  px(c.x0,c.wallY,c.x1-c.x0,c.floorY-c.wallY,'#b98a52');
-  for(let x=c.x0; x<c.x1; x+=14){ px(x,c.wallY,1,c.floorY-c.wallY,'#8a5e30'); px(x+5,c.wallY+((x*7)%40)+8,2,2,'#7a4e22'); }
-  px(c.x0,c.floorY-4,c.x1-c.x0,4,'#6a4422');                                 // baseboard
-  // window on the back wall: sky by day, stars by night
-  const wx=232, wy=c.wallY+12;
-  px(wx-2,wy-2,52,38,'#f2ead8'); px(wx,wy,48,34,lit?'#141a3a':'#8fd0ef');
-  if(lit){ px(wx+8,wy+6,1,1,'#fff'); px(wx+30,wy+10,1,1,'#fff'); px(wx+20,wy+22,1,1,'#fff'); px(wx+36,wy+4,4,4,'#dfe6ff'); }
-  else { px(wx,wy+24,48,10,'#2f8aa8'); px(wx+30,wy+4,8,8,'#ffe27a'); }
-  px(wx+23,wy,2,34,'#f2ead8'); px(wx,wy+16,48,2,'#f2ead8');                  // window cross
+  px(0,0,W,H,'#0e0a08');                                                     // dark outside the room
+  // ---- cozy top-down cottage room (original art, classic 16-bit RPG home feel) ----
+  // thick bevelled outer walls framing the whole room
+  const T=14, ox0=c.x0-T, ox1=c.x1+T, oy0=c.wallY-10, oy1=c.y1+T;
+  px(ox0,oy0,ox1-ox0,oy1-oy0,'#6b4a2e');                                     // wall mass
+  px(ox0,oy0,ox1-ox0,2,'#9a7048'); px(ox0,oy0,2,oy1-oy0,'#8a6240');          // outer lit rim
+  px(ox1-2,oy0,2,oy1-oy0,'#3e2a18'); px(ox0,oy1-2,ox1-ox0,2,'#3e2a18');      // outer shadow rim
+  for(let x=ox0+6; x<ox1-6; x+=18){ px(x,oy0+3,12,5,'#5e4028'); px(x,oy0+3,12,1,'#7e5a38'); }   // top-wall timber blocks
+  for(let y=c.wallY+6; y<oy1-6; y+=18){ px(ox0+3,y,9,12,'#5e4028'); px(ox1-12,y,9,12,'#5e4028');
+    px(ox0+3,y,9,1,'#7e5a38'); px(ox1-12,y,9,1,'#7e5a38'); }                 // side-wall timber blocks
+  // back wall: soft plaster with a wood wainscot
+  px(c.x0,c.wallY,c.x1-c.x0,c.floorY-c.wallY,'#d8c49a');
+  px(c.x0,c.wallY,c.x1-c.x0,3,'#e8d8b2');                                    // lit top
+  px(c.x0,c.floorY-26,c.x1-c.x0,26,'#9a6e44'); px(c.x0,c.floorY-26,c.x1-c.x0,2,'#b8885a'); // wainscot + cap
+  for(let x=c.x0+8; x<c.x1; x+=20) px(x,c.floorY-22,1,20,'#7e5634');         // wainscot panels
+  px(c.x0,c.floorY-3,c.x1-c.x0,3,'#5a3c22');                                 // baseboard
+  // window with curtains: sky by day, stars by night
+  const wx=232, wy=c.wallY+8;
+  px(wx-3,wy-3,54,36,'#7e5634'); px(wx,wy,48,30,lit?'#141a3a':'#9ad6f0');
+  if(lit){ px(wx+8,wy+6,1,1,'#fff'); px(wx+30,wy+10,1,1,'#fff'); px(wx+20,wy+20,1,1,'#fff'); px(wx+36,wy+4,4,4,'#dfe6ff'); }
+  else { px(wx,wy+21,48,9,'#3a9ab8'); px(wx+30,wy+4,7,7,'#ffe27a'); }
+  px(wx+23,wy,2,30,'#7e5634'); px(wx,wy+14,48,2,'#7e5634');                  // muntins
+  px(wx-8,wy-4,9,38,'#c0503a'); px(wx+47,wy-4,9,38,'#c0503a');               // curtains
+  px(wx-8,wy-4,9,2,'#d8705a'); px(wx+47,wy-4,9,2,'#d8705a'); px(wx-10,wy-6,70,3,'#5a3c22'); // curtain rod
   // surfboard hung on the wall
   { const [bx0,by0,bx1,by1]=c.board; px(bx0,by0+3,bx1-bx0,by1-by0-6,'#2fbfae'); px(bx0+1,by0,bx1-bx0-2,4,'#6fe'); px(bx0+1,by1-4,bx1-bx0-2,4,'#2fbfae'); px(bx0+5,by0+3,1,by1-by0-6,'#fff'); }
   // a little framed photo of a wave
-  px(140,c.wallY+16,26,20,'#5a3a1a'); px(142,c.wallY+18,22,16,'#8fd0ef'); px(142,c.wallY+28,22,6,'#2f8aa8'); px(146,c.wallY+26,10,3,'#fff');
-  // floor: wide wood boards
-  gradBand(c.x0,c.floorY,c.x1-c.x0,c.y1-c.floorY,'#8a5a30','#6a4422',4);
-  for(let y=c.floorY+10; y<c.y1; y+=12) px(c.x0,y,c.x1-c.x0,1,'#5a3a1a');
-  // woven lauhala rug in the middle
-  px(190,196,110,62,'#c9a35a'); for(let i=0;i<6;i++) px(194,202+i*9,102,2,'#a07a3a'); px(190,196,110,2,'#e0bc72');
-  // side walls + door gap in the front wall
-  px(c.x0-8,c.wallY,8,c.y1-c.wallY+8,'#5a3a1a'); px(c.x1,c.wallY,8,c.y1-c.wallY+8,'#5a3a1a');
-  px(c.x0-8,c.y1,c.doorX-20-(c.x0-8),8,'#5a3a1a'); px(c.doorX+20,c.y1,c.x1+8-(c.doorX+20),8,'#5a3a1a');
-  px(c.doorX-20,c.y1,40,8,lit?'#1a2238':'#cfe8c0');                          // open doorway: the yard outside
+  px(176,c.wallY+14,24,18,'#5a3c22'); px(178,c.wallY+16,20,14,'#9ad6f0'); px(178,c.wallY+25,20,5,'#3a9ab8'); px(181,c.wallY+23,9,2,'#fff');
+  // floor: warm square tiles, LOW contrast (soft grout, gentle checker)
+  for(let y=c.floorY, r=0; y<c.y1; y+=16, r++) for(let x=c.x0, k=0; x<c.x1; x+=16, k++){
+    const w=Math.min(16,c.x1-x), h=Math.min(16,c.y1-y);
+    px(x,y,w,h,(r+k)%2?'#b48a5a':'#ad8454');
+    px(x,y,w,1,'#c29868'); px(x,y,1,h,'#bc9262');                            // soft top/left highlight
+    px(x,y+h-1,w,1,'#9c7448'); px(x+w-1,y,1,h,'#a27a4c');                    // soft grout
+  }
+  ctx.save(); ctx.globalAlpha=0.22; ctx.fillStyle='#2a1a0c';                 // walls cast a soft shadow on the floor
+  ctx.fillRect(c.x0,c.floorY,c.x1-c.x0,6); ctx.fillRect(c.x0,c.floorY,6,c.y1-c.floorY); ctx.restore();
+  // round rug in the middle: red with a gold border
+  ctx.fillStyle='#8a2e2a'; ctx.beginPath(); ctx.ellipse(245,228,62,32,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#b8423a'; ctx.beginPath(); ctx.ellipse(245,228,58,29,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#e0b050'; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(245,228,48,22,0,0,Math.PI*2); ctx.stroke();
+  ctx.fillStyle='#e0b050'; ctx.beginPath(); ctx.ellipse(245,228,8,4,0,0,Math.PI*2); ctx.fill();
+  // clay pots in the corners
+  for(const [qx,qy] of CABIN.pots){
+    softShadow(qx,qy+8,8);
+    ctx.fillStyle='#8a4a2a'; ctx.beginPath(); ctx.ellipse(qx,qy,8,8,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#a85e36'; ctx.beginPath(); ctx.ellipse(qx-2,qy-2,5,5,0,0,Math.PI*2); ctx.fill();
+    px(qx-5,qy-9,10,3,'#6a3820'); px(qx-4,qy-9,8,1,'#c07a4a');                // rim
+  }
+  // front wall with the doorway (a mat + daylight / night outside)
+  px(c.doorX-18,c.y1,36,T,lit?'#1a2238':'#cfe8c0');
+  px(c.doorX-20,c.y1-2,2,T+2,'#3e2a18'); px(c.doorX+18,c.y1-2,2,T+2,'#3e2a18');   // jambs
+  px(c.doorX-14,c.y1-10,28,9,'#4a7a5a'); px(c.doorX-14,c.y1-10,28,1,'#6a9a7a');   // doormat
   // BED: headboard on the wall, pillow, patterned quilt
   { const [b0,b1,b2,b3]=c.bed;
     px(b0-2,b1-14,b2-b0+4,16,'#5a3a1a'); px(b0-2,b1-14,b2-b0+4,2,'#7a5228');     // headboard
