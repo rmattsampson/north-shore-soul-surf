@@ -693,17 +693,13 @@ function updBeach(){
   if(b.screen===SCR.SURF || b.screen===SCR.COVE){
     for(const p of b.props){ if(!p.got && near(player.x,player.y,p.x,p.y,15)){
       p.got=true; score+=5; beep(760,.06); floatScore('+5',p.x,p.y-10,C.good);
-      if(p.k==='slipper') setMsg("Found one lost slippah. Classic North Shore.",90);
-      if(p.k==='honu') setMsg("A honu restin'. Give 'um space, yeah.",90);
-      if(p.k==='cooler') setMsg("Cooler stay empty. Somebody wen' drink all da grindz.",90);
+      propFound(p);
     }}
   }
   if(false){
   for(const p of b.props){ if(!p.got && near(player.x,player.y,p.x,p.y,15)){
     p.got=true; score+=5; beep(760,.06); floatScore('+5',p.x,p.y-10,C.good);
-    if(p.k==='slipper') setMsg("Found one lost slippah. Classic North Shore.",90);
-    if(p.k==='honu') setMsg("A honu restin'. Give 'um space, yeah.",90);
-    if(p.k==='cooler') setMsg("Cooler stay empty. Somebody wen' drink all da grindz.",90);
+    propFound(p);
   }}
   }
   // photographer: out only ~20% of the time. When his timer elapses, ROLL:
@@ -797,6 +793,21 @@ function drawTourist(T){
 }
 
 // a local walks down the beach every ~1 min and leaves a couple things behind
+// what you find when you walk over a beach item — messages stay up ~4 s so you can read 'um
+const COOLER_FINDS=[
+  {msg:"Cooler stay empty — somebody wen' drink all da drinks already. Only melted ice.", pts:0},
+  {msg:"Cooler get one cold POG inside! Ono. +15", pts:15},
+  {msg:"Spam musubi in da cooler, still good! Grindz. +15", pts:15},
+  {msg:"Cooler full of ice and one lonely li hing gummy. +10", pts:10},
+  {msg:"Cooler stay empty... except one note: 'NO TOUCH — UNCLE'S'.", pts:0},
+];
+function propFound(p){
+  if(p.k==='slipper') setMsg("Found one lost slippah. Classic North Shore — somebody going home wit' one foot.",240);
+  if(p.k==='honu') setMsg("A honu restin' on da sand. Give 'um space, yeah.",240);
+  if(p.k==='cooler'){ const f=COOLER_FINDS[ri(0,COOLER_FINDS.length-1)];
+    if(f.pts){ score+=f.pts; floatScore('+'+f.pts,p.x,p.y-18,C.gold); }
+    setMsg(f.msg,240); }
+}
 function tickLocal(){
   const b=beach; if(!beachBuilt) return;
   if(!b.local){
@@ -805,16 +816,16 @@ function tickLocal(){
     const fromLeft=Math.random()<0.5;
     b.local={ x: fromLeft?-20:W+20, dir: fromLeft?1:-1,
       y: SHORE + ri(24, H-SHORE-20),
-      drops: ri(1,2), nextDrop: ri(40,110) };
+      drops: Math.random()<0.5?1:0, nextDrop: ri(40,110) };   // only sometimes drops one thing
   } else {
     const L=b.local; L.x += 0.9*L.dir;
-    // drop a thing as they walk (sandal or cooler), becomes a pickup — max 3 of each kind
+    // drop a thing as they walk (sandal or cooler), becomes a pickup — max ONE of each kind on da sand
     if(L.drops>0){ L.nextDrop--; if(L.nextDrop<=0){
       const countNotGot = k => b.props.filter(p=>p.k===k && !p.got).length;
       const want = Math.random()<0.5 ? 'slipper' : 'cooler';
       const other = want==='slipper' ? 'cooler' : 'slipper';
       // pick the preferred kind if under cap, else the other if under cap, else skip
-      const k = countNotGot(want)<3 ? want : countNotGot(other)<3 ? other : null;
+      const k = countNotGot(want)<1 ? want : countNotGot(other)<1 ? other : null;
       if(k){ b.props.push({ k, x:clearOfPalms(clamp(L.x,24,W-24)), y:L.y+6 }); beep(600,.05,'triangle'); }
       L.drops--; L.nextDrop=ri(80,160); } }
     if(L.x<-30||L.x>W+30){ b.local=null; b.localT=ri(2400,3600); }  // gone; next in ~1 min
