@@ -465,7 +465,7 @@ function buildBeach(){
     cars:[], road:[], scrLock:0,      // road traffic behind the house
     screen:1 };                       // 0=TOWN  1=SURF  2=COVE  3=RCVA HOUSE  (start on surf)
   const kinds=['slipper','honu','cooler'];
-  for(let i=0;i<3;i++) beach.props.push({k:kinds[i],x:rnd(90,W-90),y:rnd(H-70,H-24)});
+  for(let i=0;i<3;i++) beach.props.push({k:kinds[i],x:clearOfPalms(rnd(90,W-90)),y:rnd(H-70,H-24)});
   beachBuilt=true;
 }
 // which screen owns which flair
@@ -638,7 +638,7 @@ function updBeach(){
     // from the SURF beach, walk DOWN off the bottom → pop out AT the RCVA house (down top).
     // from any beach screen, walk DOWN off the bottom → pop out at its down-scene (top).
     if(DOWN_MAP[b.screen]!==undefined && player.y>=H-14 && keys.down && b.scrLock===0){
-      b.screen=DOWN_MAP[b.screen]; b.scrLock=10; player.x=W/2-80; player.y=SEATOP+18;
+      b.screen=DOWN_MAP[b.screen]; b.scrLock=10; player.x=(b.screen===SCR.HOUSE)?W/2:W/2-80; player.y=SEATOP+18;
       beep(560,.07,'triangle'); return;
     }
   }
@@ -680,7 +680,7 @@ function updBeach(){
   if(b.sterlingCool>0) b.sterlingCool--;
   if(b.screen===SCR.HOUSE && b.sterling===0 && b.sterlingCool===0){
     const BB=billabongLayout();
-    if(player.x>=296 && player.x<=350 && player.y>=BB.ft && player.y<=BB.fb+14){
+    if(player.x>=BB.p1-6 && player.x<=BB.f0+30 && player.y>=BB.ft && player.y<=BB.fb+14){
       b.sterling=150; b.sterlingCool=600; beep(640,.08,'triangle');
       setMsg("Sterling Spencer: 'You know da rulez!!'",150);
     }
@@ -708,8 +708,8 @@ function updBeach(){
   if(b.photoT>0) b.photoT--;
   else if(!b.photographer){
     if(Math.random()<0.20){ b.photographer={x:rnd(140,340),y:H-60,t:ri(300,520)};
-      // only announce it when you're actually standing on a beach screen
-      if(state==='beach' && !IS_DOWN(b.screen)){ setMsg("📷 Photographer on da beach — go score waves fo' DOUBLE points!",150); beep(880,.1); } }
+      // he only works da COVE — only announce it when you're standing on that beach
+      if(state==='beach' && b.screen===SCR.COVE){ setMsg("📷 Photographer on da beach — go score waves fo' DOUBLE points!",150); beep(880,.1); } }
     else b.photoT=ri(260,520);   // keep him off the beach, try again later
   }
   if(b.photographer){ b.photographer.t--; if(b.photographer.t<0){ b.photographer=null; b.photoT=ri(300,560); } }
@@ -736,7 +736,7 @@ function tickBuggy(){
       setMsg("💥 LIFEGUARD ATV wen' run you ovah!",180); } }
 }
 
-function photographerOut(){ return beach && beach.photographer; }
+function photographerOut(){ return beach && beach.photographer && beach.screen===SCR.COVE; }   // only counts surfing da cove
 
 // cars + cyclists on the road behind the RCVA house (original simple vehicles)
 function tickRoad(){
@@ -811,7 +811,7 @@ function tickLocal(){
       const other = want==='slipper' ? 'cooler' : 'slipper';
       // pick the preferred kind if under cap, else the other if under cap, else skip
       const k = countNotGot(want)<3 ? want : countNotGot(other)<3 ? other : null;
-      if(k){ b.props.push({ k, x:clamp(L.x,24,W-24), y:L.y+6 }); beep(600,.05,'triangle'); }
+      if(k){ b.props.push({ k, x:clearOfPalms(clamp(L.x,24,W-24)), y:L.y+6 }); beep(600,.05,'triangle'); }
       L.drops--; L.nextDrop=ri(80,160); } }
     if(L.x<-30||L.x>W+30){ b.local=null; b.localT=ri(2400,3600); }  // gone; next in ~1 min
   }
@@ -1017,7 +1017,7 @@ function drawHelp(){
     'Z cutback · X off-da-lip · Z + X  BARREL',
     '',
     'score = reading waves. longer + tricks = mo betta.',
-    '📷 photographer out? ride = DOUBLE points.',
+    '📷 photographer at da cove? ride there = DOUBLE.',
     '',
     'HUI knock you off. messy wave close you out.',
     'PRO surfers snake your wave (no damage, just annoying).',
@@ -1054,7 +1054,7 @@ function drawBeachProps(){
   }
   // roamers appear on the beach screens (not the house yard)
   if(b.screen!==SCR.HOUSE){
-    if(b.photographer) drawPhotog(b.photographer.x,b.photographer.y);
+    if(b.photographer && b.screen===SCR.COVE) drawPhotog(b.photographer.x,b.photographer.y);
     { const bx=buggyLX(); if(bx!==null){ softShadow(bx,SHORE+28,18); drawBuggy(bx,SHORE+16); } }
     if(b.local){ const L=b.local; softShadow(L.x,L.y+13,9);
       drawDude(L.x,L.y,'#b07a44','#8a4a6a',L.dir,(frame>>2)%2?'walk':'stand',frame); }
@@ -1112,18 +1112,28 @@ function drawBeachBoard(x,y,facing,moving){
     px(bx-3,y+8,6,3,C.sandWet);                 // little sand divot at the tail
   }
 }
+// palms per beach screen [x, baseY] — kept clear of Chandler's hale, the surf shack, the shave-ice stand
+// and the jetties (a palm's fronds span about x-22 … x+28)
+const BEACH_PALMS = {
+  [SCR.TOWN]: [[54,H-6],[262,H-10],[W-20,H-6]],      // shack ~88-144, shave ice ~386-434
+  [SCR.SURF]: [[150,H-6],[W-30,H-6]],                // Chandler's hale ~34-92
+  [SCR.COVE]: [[22,H-8],[110,H-14],[W/2+40,H-12],[W-70,H-6]],
+};
+// nudge a beach prop's x so it isn't hidden under a palm on the SURF or COVE screens
+function clearOfPalms(x){
+  for(let pass=0; pass<3; pass++){
+    let moved=false;
+    for(const scr of [SCR.SURF,SCR.COVE]) for(const [pxl] of BEACH_PALMS[scr]){
+      const c=pxl+3; if(Math.abs(x-c)<30){ x = (x<c && c-34>40) || c+34>W-40 ? c-34 : c+34; moved=true; } }
+    if(!moved) break;
+  }
+  return clamp(x,40,W-40);
+}
 function drawBeach(){
   if(IS_DOWN(beach.screen)){ drawHouseScreen(); return; }
   drawBeachProps();
   drawWaves();   // swell keeps rolling in while you're on the sand
-  // palms vary by screen: 2 on the main SURF screen, 3–5 on town/cove
-  if(beach.screen===SCR.SURF){
-    drawPalm(30,H-6); drawPalm(W-30,H-6);
-  } else if(beach.screen===SCR.TOWN){
-    drawPalm(54,H-6); drawPalm(108,H-12); drawPalm(W/2+10,H-8); drawPalm(W-30,H-6);
-  } else { // COVE — 5 palms, lushest
-    drawPalm(26,H-8); drawPalm(84,H-14); drawPalm(W/2-40,H-6); drawPalm(W/2+70,H-12); drawPalm(W-54,H-6);
-  }
+  for(const [x,by] of BEACH_PALMS[beach.screen]) drawPalm(x,by);
   if(player.knockT>0){
     softShadow(player.x, player.y+12, 11);
     drawBeachBoard(player.x,player.y,player.facing,false);
@@ -1146,24 +1156,31 @@ function drawJetties(){
   if(beach.screen===SCR.COVE) drawJetty(-1);
 }
 function drawJetty(side){   // side 1 = left edge, -1 = right edge
+  // a tidy rock groin: rounded, outlined boulders in rows, big near the viewer, shrinking out to the tip,
+  // drawn far-to-near so nearer rocks overlap. Rocks in the water get a wet sheen and a foam collar.
   const edge = side>0 ? 0 : W;
-  const rocks=['#6e6a64','#857f76','#5a5650','#9a948a'];
-  // boulders stacked from the back of the sand out to the tip, narrowing as they go out
-  for(let i=0;i<26;i++){
-    const t=i/25, y=H-4-(H-4-JETTY_TIP)*t;                    // bottom of sand → tip in the water
-    const wdt=JETTY_W*(1-0.45*t);
-    const h=(i*37)%7, r=7+(h%4);
-    const cx=edge+side*((h*5)%Math.max(4,wdt-r)+r*0.6);
-    const col=rocks[h%4];
-    px(cx-r,y-r*0.7,r*2,r*1.4,col);                            // boulder body
-    px(cx-r+1,y-r*0.7,r*2-3,2,shade(col,26));                  // sun-lit top
-    px(cx-r,y+r*0.7-2,r*2,2,shade(col,-30));                   // shadow underside
-    if(y<SHORE){ const f=(frame>>3)+i;                         // whitewater slapping the rocks
-      px(cx+side*(r-1)-1,y+r*0.5,3,2,f%3?'#fff':C.foam);
-      if(f%4===0) px(cx+side*(r+2),y-2,2,2,'#fff'); }
+  const tones=[['#7d776e','#a39d92','#57524b'], ['#8a847a','#b0aa9e','#605a52'], ['#726d65','#98928a','#4f4a44']];
+  const rows=9, yNear=H-10, yFar=JETTY_TIP+4;
+  for(let r=rows-1; r>=0; r--){
+    const t=r/(rows-1), y=yNear+(yFar-yNear)*t, sc=1-0.45*t;    // t=0 near (big), t=1 tip (small)
+    const wdt=JETTY_W*sc, rx=9.5*sc, ry=7*sc, wet=y<SHORE+2;
+    const n = r%2 ? 2 : 3;                                        // alternate 3/2 rocks for a brick-like stack
+    for(let k=0;k<n;k++){
+      const off = n===3 ? (k+0.5)*wdt/3 : (k+1)*wdt/3;
+      const cx = edge + side*off, cy = y - (k%2)*2*sc;
+      const [base,hi,sh] = tones[(r*3+k)%3];
+      if(wet){ ctx.fillStyle=((frame>>4)+r+k)%3?'rgba(255,255,255,.85)':'rgba(230,245,250,.7)';   // foam collar
+        ctx.beginPath(); ctx.ellipse(cx,cy+ry*0.65,rx*1.15,ry*0.45,0,0,Math.PI*2); ctx.fill(); }
+      ctx.fillStyle='#2e2b28'; ctx.beginPath(); ctx.ellipse(cx,cy,rx+1,ry+1,0,0,Math.PI*2); ctx.fill();   // outline
+      ctx.fillStyle=wet?shade(base,-14):base; ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=sh; ctx.beginPath(); ctx.ellipse(cx+side*rx*0.15,cy+ry*0.35,rx*0.85,ry*0.5,0,0,Math.PI); ctx.fill();  // shaded underside
+      ctx.fillStyle=wet?shade(hi,-6):hi; ctx.beginPath(); ctx.ellipse(cx-rx*0.3,cy-ry*0.4,rx*0.45,ry*0.3,0,0,Math.PI*2); ctx.fill(); // sun-lit top
+      if(wet) px(cx-rx*0.5,cy-ry*0.55,2,1,'#e8f4f8');            // glint on wet rock
+    }
   }
-  // wet dark line where the rocks meet the waterline
-  px(side>0?0:W-JETTY_W, SHORE-2, JETTY_W, 2, 'rgba(20,30,40,.35)');
+  // spray off the tip every so often
+  const ph=frame%90; if(ph<14){ const tx=edge+side*JETTY_W*0.3, ty=yFar-4-ph;
+    px(tx-3,ty,2,2,'#fff'); px(tx+2,ty+3,2,2,'#fff'); px(tx,ty-3,1,1,'#fff'); }
 }
 // ---- solid obstacles: the player's FEET box can't enter these (x0,y0,x1,y1 in screen coords) ----
 const HOUSE_ROAD_Y = SEATOP+92;   // keep in sync with drawHouseScreen's roadY
@@ -1174,13 +1191,14 @@ function solidsNow(){
   if(IS_DOWN(b.screen)){
     const houseBand=SEATOP+10, roadY=SEATOP+140;
     // the home on this land screen (matches drawHouseScreen's building x per screen)
-    if(b.screen===SCR.HOUSE)      out.push([W/2-52, houseBand+18, W/2+52, houseBand+70]);   // RCVA (centered)
+    if(b.screen===SCR.HOUSE)      out.push([RCVA_X-52, houseBand+18, RCVA_X+52, houseBand+70],   // RCVA (left)
+                                           [W/2-40, TRAIL_HOUSE_BASE-36, W/2+40, TRAIL_HOUSE_BASE+2]); // house across the trail
     else if(b.screen===SCR.MYHOUSE) out.push([W*0.60-52, houseBand+20, W*0.60+52, houseBand+92]);   // house + porch
     else /* COVEDOWN */            out.push([W*0.38-35, houseBand+36, W*0.38+35, houseBand+70]);
     // the stone walls along the sidewalk (drawn on every land screen; gate gap in the middle stays open)
     { const wy=roadY-12;
       if(b.screen===SCR.HOUSE){ const BB=billabongLayout();
-        out.push([16,wy,W/2-22,wy+12], [W/2+16,wy,BB.p0,wy+12], [BB.p1,wy,W-16,wy+12]);   // path gap to Billabong
+        out.push([16,wy,W/2-22,wy+12], [W/2+16,wy,W-16,wy+12]);   // one gate: the center path
         out.push([BB.x-42, houseBand+30, BB.x+42, houseBand+70]);                          // Billabong house (fence is walk-through)
       } else out.push([16,wy,W/2-22,wy+12], [W/2+16,wy,W-16,wy+12]); }
   }
@@ -1279,14 +1297,14 @@ function drawHouseScreen(){
     for(let i=0;i<70;i++){ const x=(i*71)%W, yy=houseBand+4+((i*37)%(roadY-houseBand-6)); px(x,yy,1,2,'#246a30'); }
   }
   // tall palms flanking the house (the RCVA screen's right side holds the Billabong yard instead)
-  drawTallPalm(64, roadY-4, 70); if(beach.screen!==SCR.HOUSE) drawTallPalm(W-70, roadY-2, 78);
+  if(beach.screen===SCR.HOUSE) drawTallPalm(26, roadY-4, 70);
+  else { drawTallPalm(64, roadY-4, 70); drawTallPalm(W-70, roadY-2, 78); }
   // the building depends on which down-screen this is (RCVA stays centered; others offset)
   if(beach.screen===SCR.HOUSE){
-    drawRCVAHouse(W/2, houseBand+70);
+    drawRCVAHouse(RCVA_X, houseBand+70);
     const BB=billabongLayout();
-    // dirt path running between the RCVA and Billabong houses, down to the sidewalk
-    px(BB.p0,houseBand,BB.p1-BB.p0,roadY-houseBand,'#b58a52'); px(BB.p0,houseBand,2,roadY-houseBand,'#c99a62');
-    for(let i=0;i<16;i++) px(BB.p0+3+((i*7)%(BB.p1-BB.p0-6)), houseBand+6+i*8, 2,1,'#9a743e');
+    // dirt path right down the middle: sand → between the houses → through the gate → the trail
+    drawDirtPath(BB.p0,BB.p1,houseBand,roadY);
     drawBillabongYard(BB);
   }
   else if(beach.screen===SCR.MYHOUSE) drawMyHouse(W*0.60, houseBand+70);
@@ -1301,8 +1319,7 @@ function drawHouseScreen(){
       px(x0,wy+11,x1-x0,1,'#6a6456');                            // base shadow
     };
     seg(16,gx0);
-    if(beach.screen===SCR.HOUSE){ const BB=billabongLayout(); seg(gx1,BB.p0); seg(BB.p1,W-16); }  // second gap where the path meets the sidewalk
-    else seg(gx1,W-16);
+    seg(gx1,W-16);
     for(const gx of [gx0-6,gx1]){ px(gx,wy-6,6,18,'#8f8776'); px(gx-1,wy-8,8,3,'#cfc8b6'); px(gx,wy-6,1,18,'#b5ad9a'); }  // gate pillars
   }
   // --- a DIRT sidewalk path running across ---
@@ -1315,6 +1332,10 @@ function drawHouseScreen(){
   gradBand(0,walkTop,W,H-walkTop, '#3f8a4a', '#2f7a3c', 6);                                 // lawn
   for(let i=0;i<140;i++){ const x=(i*67)%W, yy=walkTop+6+((i*41)%(H-walkTop-8)); px(x,yy,1,2,'#246a30'); }
   for(let i=0;i<14;i++){ const x=(i*97+23)%W, yy=walkTop+12+((i*53)%(H-walkTop-16)); px(x,yy,2,2,i%2?'#f4e27a':'#f2f2f2'); } // little flowers
+  if(beach.screen===SCR.HOUSE){   // the center path carries on across the trail to the house on the other side
+    drawDirtPath(W/2-12, W/2+12, walkTop, TRAIL_HOUSE_BASE-30);
+    drawTrailHouse(W/2, TRAIL_HOUSE_BASE);
+  }
   // player
   const moving=keys.left||keys.right||keys.up||keys.down;
   if(player.knockT>0){
@@ -1376,12 +1397,33 @@ function drawRCVAHouse(x,y){
   ctx.fillText('R C V A', x, topY+13);
   ctx.fillStyle=C.good; ctx.font='7px monospace'; ctx.fillText('SURF HOUSE', x, y+16); ctx.textAlign='left';
 }
+const RCVA_X = 128;                 // RCVA house sits on the LEFT of its screen
+const TRAIL_HOUSE_BASE = H-4;       // ground line of the house across the trail (bottom of the RCVA screen)
+function drawDirtPath(x0,x1,y0,y1){
+  px(x0,y0,x1-x0,y1-y0,'#b58a52'); px(x0,y0,2,y1-y0,'#c99a62'); px(x1-2,y0,2,y1-y0,'#9a743e');
+  for(let y=y0+5,i=0; y<y1-2; y+=8,i++) px(x0+3+((i*7)%(x1-x0-6)), y, 2,1,'#9a743e');   // pebbles
+}
+// an original little plantation cottage across the trail, facing the path
+function drawTrailHouse(x,y){
+  softShadow(x,y+2,40);
+  const wall='#e8c96a', wallSh='#c9a84c', trim='#f6f0de', roof='#5a7a4a', roofHi='#6f9459';
+  const wW=76, topY=y-30;
+  px(x-wW/2,topY,wW,30,wall); px(x+wW/2-10,topY,10,30,wallSh);
+  for(let bx=x-wW/2+5; bx<x+wW/2-10; bx+=8) px(bx,topY,1,30,wallSh);              // board-and-batten
+  ctx.fillStyle=roof; ctx.beginPath(); ctx.moveTo(x-wW/2-6,topY+1); ctx.lineTo(x-wW/2+10,topY-12); ctx.lineTo(x+wW/2-10,topY-12); ctx.lineTo(x+wW/2+6,topY+1); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=roofHi; ctx.fillRect(x-wW/2+10,topY-12,wW-20,3);                  // lit ridge
+  px(x-wW/2-6,topY,wW+12,2,'#3f5a34');                                            // eave shadow
+  px(x-6,topY+10,12,20,trim); px(x-5,topY+11,10,19,'#7a4a2a'); px(x+2,topY+20,1,2,'#ffd23f'); // front door
+  px(x-30,topY+9,16,10,'#8fb0bf'); px(x+14,topY+9,16,10,'#8fb0bf');               // windows
+  px(x-31,topY+8,18,1,trim); px(x+13,topY+8,18,1,trim); px(x-31,topY+19,18,2,trim); px(x+13,topY+19,18,2,trim);
+  px(x-30,topY+21,16,3,'#ff6b8a'); px(x+14,topY+21,16,3,'#ffd23f');               // flower boxes
+}
 // Billabong house + picket-fenced yard, right of the RCVA house (shared by drawing, collision and Sterling)
 function billabongLayout(){
   const houseBand=SEATOP+10, roadY=SEATOP+140;
-  return { x:405, base:houseBand+70,                 // house center + ground line
-           p0:310, p1:334,                           // dirt path between the two houses
-           f0:346, f1:466, ft:houseBand+16, fb:roadY-18 }; // fence box: left/right/top/bottom
+  return { x:382, base:houseBand+70,                 // house center + ground line
+           p0:W/2-12, p1:W/2+12,                     // dirt path down the middle of the screen
+           f0:292, f1:466, ft:houseBand+16, fb:roadY-18 }; // fence box: left/right/top/bottom
 }
 function drawBillabongYard(BB){
   const fence='#efe6d2', fenceSh='#b8ae96';
@@ -1576,7 +1618,7 @@ function drawWater(){
   // the beach strip stays alive while you surf: Chandler + props + photographer + buggy
   // are the SAME persistent beach, drawn on the shore at the bottom of the water view.
   drawBeachProps();
-  drawPalm(beach.screen===SCR.TOWN?54:30,H-6); drawPalm(beach.screen===SCR.COVE?W-54:W-30,H-6);
+  for(const [x,by] of BEACH_PALMS[beach.screen]||[]) drawPalm(x,by);
   // waves — curved crest with a breaking foam lip + shaded face
   drawWaves();
   if(w.shark) drawShark(w.shark.x,w.shark.y);
