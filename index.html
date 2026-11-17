@@ -511,9 +511,17 @@ function enterWater(){
 function tickWaves(){
   const w=water;
   if(w.waveT>0)w.waveT--; else {
-    const messy=Math.random()<0.26;
-    w.waves.push({ y:SEATOP+10, x:rnd(60,W-60), len:rnd(70,150), spd:rnd(0.16,0.32), messy, rode:false });
-    w.waveT=ri(90,180);
+    // once in a while a ROGUE wave: 3-4x da size, clean and ridable, and it just washes up harmless
+    const rogue = !w.waves.some(v=>v.big) && Math.random()<0.05;
+    if(rogue){
+      w.waves.push({ y:SEATOP+10, x:W/2+rnd(-60,60), len:rnd(300,420), spd:rnd(0.14,0.2), messy:false, rode:false, big:rnd(3,4) });
+      if(state==='water' || (state==='beach' && !IS_DOWN(beach.screen))){ setMsg("🌊 ROGUE WAVE! Da big one stay coming — go catch 'um!",200); beep(110,.5,'triangle',.06); }
+      w.waveT=ri(240,360);
+    } else {
+      const messy=Math.random()<0.26;
+      w.waves.push({ y:SEATOP+10, x:rnd(60,W-60), len:rnd(70,150), spd:rnd(0.16,0.32), messy, rode:false });
+      w.waveT=ri(90,180);
+    }
   }
   // waves that reach the shoreline CRASH: spawn a whitewater burst, then remove them
   for(const wv of w.waves){
@@ -2118,18 +2126,20 @@ function drawWaves(){
   const w=water;
   for(const wv of w.waves){
     const half=wv.len/2, x0=wv.x-half;
-    const riding=w.surfing&&w.cur===wv;
+    const riding=w.surfing&&w.cur===wv, k=wv.big||1;   // k = size: 1 normal, 3-4 for a rogue wave
     // sample a gentle arc so the crest curves instead of a flat bar
     for(let i=0;i<wv.len;i+=3){
       const t=i/wv.len;                    // 0..1 across the wave
-      const arc=Math.sin(t*Math.PI)*3;     // peak in the middle
+      const arc=Math.sin(t*Math.PI)*3*k;   // peak in the middle
       const x=x0+i, yc=wv.y-arc;
       const faceCol = wv.messy ? '#6fa6b8' : (riding?'#6fd6e6':C.sea3);
       const lipCol  = wv.messy ? '#dfeef2' : C.foam;
-      px(x, yc+2, 3, 5, shade(faceCol,-18));  // lower face (shadow)
-      px(x, yc,   3, 3, faceCol);             // mid face
-      px(x, yc-2, 3, 2, lipCol);              // breaking lip
-      if(!wv.messy && (i%9===0)) px(x, yc-4, 2, 2, '#fff');  // foam flecks on the crest
+      px(x, yc+2*k, 3, 5*k, shade(faceCol,-18));  // lower face (shadow)
+      px(x, yc,     3, 3*k, faceCol);             // mid face
+      if(k>1) px(x, yc+k, 3, k, shade(faceCol,14)); // a lit band across da big face
+      px(x, yc-2*k, 3, 2*k, lipCol);              // breaking lip
+      if(!wv.messy && (i%9===0)) px(x, yc-4*k, 2, 2, '#fff');  // foam flecks on the crest
+      if(k>1 && (i+frame)%11===0) px(x+1, yc-4*k-2-((frame+i)%5), 2, 2, '#fff');  // spray blowing off da top
     }
     if(wv.messy){ // whitewater chop on a closeout
       for(let i=-half;i<half;i+=7) px(wv.x+i, wv.y-6+Math.sin((i+frame)*0.3)*2, 5, 3, '#fff');
