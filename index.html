@@ -985,7 +985,7 @@ function render(){
   // night wash over the whole world (beach + water), lifts near dawn
   if(isNight() && state!=='shop'){ ctx.save(); ctx.globalAlpha=0.34; ctx.fillStyle='#0a0f2a'; ctx.fillRect(0,0,W,H); ctx.restore(); }
   if(sleepFade>0){ const a=sleepFade>35?(70-sleepFade)/35:sleepFade/35; ctx.save(); ctx.globalAlpha=Math.min(1,a*1.2); ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H); ctx.restore(); sleepFade--; }
-  drawHUD(); drawBanner();
+  drawHUD(); drawBanner(); drawKeyHint();
 }
 
 function drawSplash(){
@@ -1152,7 +1152,6 @@ function drawBeach(){
     if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
     if(player.injured) px(player.x-3,player.y-20,6,3,C.bad);
   }
-  drawKeyHint();
 }
 // ---- solid obstacles: the player's FEET box can't enter these (x0,y0,x1,y1 in screen coords) ----
 const HOUSE_ROAD_Y = SEATOP+92;   // keep in sync with drawHouseScreen's roadY
@@ -1325,7 +1324,6 @@ function drawHouseScreen(){
   drawBeachBoard(player.x,player.y,player.facing,moving);
   drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
   if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
-  drawKeyHint();
 }
 function drawTallPalm(x,by,h){
   // slender curved trunk rising high, drooping fronds — original
@@ -1461,7 +1459,7 @@ function drawSterling(BB){
 const MYHOUSE_X = W*0.60;                 // matches drawMyHouse(W*0.60, …)
 const CABIN_DOOR_Y = SEATOP+10+70+20;     // where you stand at the bottom of the porch steps
 const CABIN = { x0:60, x1:420, wallY:52, floorY:120, y1:300, doorX:W/2,
-  bed:[88,124,140,168], stand:[148,126,166,146], bunk:[330,244,388,292], pots:[[76,284],[404,284],[404,136]], table:[318,176,386,212], board:[350,58,362,116] };
+  bed:[88,124,140,168], stand:[148,126,166,146], bunk:[330,244,388,292], pots:[[76,284],[404,284],[404,136]], table:[318,176,386,212], board:[346,56,366,118] };
 function atCabinSteps(){ return beach.screen===SCR.MYHOUSE && Math.abs(player.x-MYHOUSE_X)<26 && player.y>=CABIN_DOOR_Y-14 && player.y<=CABIN_DOOR_Y+30; }
 function enterCabin(){ state='cabin'; player.x=CABIN.doorX; player.y=CABIN.y1-26; player.facing=1; beep(520,.08,'triangle'); }
 function leaveCabin(){ beach.doorOpen=false; state='beach'; beach.screen=SCR.MYHOUSE; player.x=MYHOUSE_X; player.y=CABIN_DOOR_Y+6; beep(440,.08,'triangle'); }
@@ -1515,7 +1513,7 @@ function drawCabin(){
   px(wx-8,wy-4,9,38,'#c0503a'); px(wx+47,wy-4,9,38,'#c0503a');               // curtains
   px(wx-8,wy-4,9,2,'#d8705a'); px(wx+47,wy-4,9,2,'#d8705a'); px(wx-10,wy-6,70,3,'#5a3c22'); // curtain rod
   // surfboard hung on the wall
-  { const [bx0,by0,bx1,by1]=c.board; px(bx0,by0+3,bx1-bx0,by1-by0-6,'#2fbfae'); px(bx0+1,by0,bx1-bx0-2,4,'#6fe'); px(bx0+1,by1-4,bx1-bx0-2,4,'#2fbfae'); px(bx0+5,by0+3,1,by1-by0-6,'#fff'); }
+  drawWallBoard(...c.board);
   // a little framed photo of a wave
   px(176,c.wallY+14,24,18,'#5a3c22'); px(178,c.wallY+16,20,14,'#9ad6f0'); px(178,c.wallY+25,20,5,'#3a9ab8'); px(181,c.wallY+23,9,2,'#fff');
   // floor: warm square tiles, LOW contrast (soft grout, gentle checker)
@@ -1567,7 +1565,29 @@ function drawCabin(){
   softShadow(player.x, player.y+13, 10);
   drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame);
   if(player.shirt!=='none') px(player.x-4,player.y-4,9,8,player.shirt), px(player.x-4,player.y-4,9,2,shade(player.shirt,30));
-  drawKeyHint();
+}
+// surfboard hung on the wall, seen from the FRONT (deck view): pointed nose, round tail, stringer
+function drawWallBoard(x0,y0,x1,y1){
+  const cx=(x0+x1)/2, hw=(x1-x0)/2, h=y1-y0;
+  const shape=(inset)=>{ const w=hw-inset, t=y0+inset, b=y1-inset;
+    ctx.beginPath(); ctx.moveTo(cx,t);
+    ctx.bezierCurveTo(cx+w*0.9,t+h*0.18, cx+w,t+h*0.42, cx+w,b-h*0.3);
+    ctx.bezierCurveTo(cx+w,b-h*0.08, cx+w*0.45,b, cx,b);
+    ctx.bezierCurveTo(cx-w*0.45,b, cx-w,b-h*0.08, cx-w,b-h*0.3);
+    ctx.bezierCurveTo(cx-w,t+h*0.42, cx-w*0.9,t+h*0.18, cx,t); ctx.closePath(); };
+  ctx.save(); ctx.globalAlpha=.25; ctx.fillStyle='#000'; ctx.translate(2,2); shape(0); ctx.fill(); ctx.restore(); // wall shadow
+  ctx.fillStyle='#1f8a7e'; shape(0); ctx.fill();                       // rail (outline)
+  ctx.fillStyle='#2fbfae'; shape(1.5); ctx.fill();                     // deck
+  ctx.save(); shape(1.5); ctx.clip();
+  ctx.fillStyle='#6fe8d8'; ctx.fillRect(cx-hw,y0,hw*0.55,h);            // lit left rail
+  ctx.fillStyle='#ffd23f'; ctx.fillRect(cx-hw,y0+h*0.30,hw*2,3);        // racing stripe
+  ctx.fillStyle='#e0563a'; ctx.fillRect(cx-hw,y0+h*0.30+3,hw*2,1);
+  ctx.fillStyle='#2a3a3a'; ctx.fillRect(cx-hw,y1-h*0.22,hw*2,h*0.22);   // tail traction pad
+  for(let yy=y1-h*0.22+2; yy<y1; yy+=3) { ctx.fillStyle='#3a4a4a'; ctx.fillRect(cx-hw,yy,hw*2,1); }
+  ctx.restore();
+  px(cx,y0+3,1,h-6,'#f2ead8');                                         // wooden stringer down the middle
+  px(cx-1,y1-5,3,2,'#111');                                            // leash plug
+  px(x0-3,y0+h*0.35,4,3,'#5a3c22'); px(x1-1,y0+h*0.35,4,3,'#5a3c22'); // wall pegs holding it
 }
 /* ---- INSPECT (I) + context key hints ---- */
 function nearCabinBed(){ const b=CABIN.bed; return player.x>b[0]-12 && player.x<b[2]+16 && player.y<b[3]+14; }
@@ -1672,8 +1692,9 @@ function drawKeyHint(){
   const look=nearestInspectable();
   const hint = act && look ? act+' · I look' : act ? act : look ? 'I to inspect' : null;
   if(!hint) return;
-  const hw=hint.length*5+10, hx=clamp(player.x,hw/2+2,W-hw/2-2), hy=player.y-30;
-  px(hx-hw/2,hy-8,hw,11,'#111'); px(hx-hw/2,hy-8,hw,1,C.gold);
+  // bottom of the screen: in the message-bar slot, or just above it while a message is showing
+  const hw=hint.length*5+12, hx=W/2, hy=(msgT>0&&msg) ? H-28 : H-11;
+  ctx.save(); ctx.globalAlpha=.85; px(hx-hw/2,hy-9,hw,13,'#0a0618'); ctx.restore(); px(hx-hw/2,hy-9,hw,1,C.gold);
   ctx.fillStyle=C.gold; ctx.font='bold 8px monospace'; ctx.textAlign='center'; ctx.fillText(hint,hx,hy); ctx.textAlign='left';
 }
 // YOUR place — a teal plantation cottage with a covered porch + a big hammock to sleep in
