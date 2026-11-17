@@ -456,7 +456,7 @@ const GREETS = [
   "'Pau hana soon — come grind wit' us later, yeah?'"
 ];
 
-let beach={}, water={ waves:[], huis:[], pro:null, shark:null, surfing:false, cur:null, spray:[], crashes:[],
+let beach={}, water={ waves:[], huis:[], pro:null, shark:null, surfing:false, cur:null, spray:[], crashes:[], surges:[],
   ride:0, combo:0, waveT:30, sharkT:9999, huiT:9999, proT:9999, style:0 };
 let beachBuilt=false;
 
@@ -528,12 +528,15 @@ function tickWaves(){
     if(!wv.crashed && wv.y>=SHORE-6){
       wv.crashed=true;
       spawnCrash(wv.x, wv.len, wv.messy);
+      if(wv.big){ (w.surges||(w.surges=[])).push({x:wv.x, len:wv.len*0.9, t:0, dur:150, reach:26}); }   // rogue: whitewater runs up da sand, then pulls back
       beep(wv.messy?150:220, .18, 'sawtooth', .03);   // shorebreak thud
     }
   }
   for(const wv of w.waves) wv.y+=wv.spd*(w.surfing&&w.cur===wv?1.4:1);
   w.waves=w.waves.filter(wv=>wv.y<SHORE-4);           // gone once it breaks on the sand
-  // advance crash foam
+  // advance crash foam + run-up surges
+  for(const g of (w.surges||[])) g.t++;
+  w.surges=(w.surges||[]).filter(g=>g.t<g.dur);
   for(const c of w.crashes){ c.life--; c.r+=1.4; }
   w.crashes=w.crashes.filter(c=>c.life>0);
 }
@@ -893,10 +896,10 @@ function updWater(){
   if(player.downT>0){ player.downT--; if(player.downT===0 && player.y>SEABOT-4) { } return; }
 
   const paddling=!w.surfing;
-  const sp=w.surfing?2.4:1.25;   // paddling is a bit slower than walking (1.5)
+  const sp=w.surfing?2.4:1.1;    // paddling is slower than walking (1.5)
   if(keys.left){ player.x-=sp; if(paddling)player.facing=-1; }
   if(keys.right){ player.x+=sp; if(paddling)player.facing=1; }
-  if(paddling){ if(keys.up)player.y-=1.2; if(keys.down)player.y+=1.2; }
+  if(paddling){ if(keys.up)player.y-=1.05; if(keys.down)player.y+=1.05; }
   player.x=clamp(player.x,14,W-14);
   player.y=clamp(player.y,SEATOP+6,SEABOT);
 
@@ -1135,7 +1138,6 @@ function drawBeachProps(){
   const b=beach;
   // TOWN screen: shave-ice shop, surf shack, locals
   if(b.screen===SCR.TOWN){
-    drawShack(b.shack.x, b.shack.y);
     drawIceShop(b.iceShop.x, b.iceShop.y);
     for(const f of b.folks){ softShadow(f.x,f.y+12,10);
       drawDude(f.x,f.y,'#a86a34','#2f8a6a',1,'stand',frame); }
@@ -1229,8 +1231,8 @@ function clearOfPalms(x){
 }
 function drawBeach(){
   if(IS_DOWN(beach.screen)){ drawHouseScreen(); return; }
+  drawWaves();   // swell keeps rolling in while you're on the sand (drawn first so people + stands sit on top of da foam)
   drawBeachProps();
-  drawWaves();   // swell keeps rolling in while you're on the sand
   for(const [x,by] of BEACH_PALMS[beach.screen]) drawPalm(x,by);
   if(player.knockT>0){
     softShadow(player.x, player.y+12, 11);
@@ -1945,7 +1947,6 @@ function inspectables(){
     if(b.local) add('local',b.local.x,b.local.y,22,["Local uncle walking his beach. Respect.","He drops stuff everywhere. Free souvenirs.","Uncle's been surfing here since before you was born."]);
     { const bx=buggyLX(); if(bx!==null) add('atv',bx,SHORE+16,28,["Lifeguard ATV. Dey own dis beach.","Lifeguards on patrol. Stay outta da way.","Red cross on da back. No mess wit' 'um."]); }
     if(scr===SCR.TOWN){
-      add('shack',b.shack.x,b.shack.y,34,["Surf shack. Wax, leashes, and one old couch.","Smells like coconut wax and coffee.","Board rental: 'No kooks, no refunds.'"]);
       add('shaveice',b.iceShop.x,b.iceShop.y,30,["Shave ice stand. Rainbow wit' ice cream on da bottom.","Line stay long, but worth it.","Li hing mui flavor. Da best."]);
       for(const f of b.folks) add('folk',f.x,f.y,20,["Local folks talking story.","Dey stay planning one beach party.","Auntie wen' offer you one plate lunch."]);
     }
@@ -2124,9 +2125,13 @@ function drawBuggy(x,y){
 
 function drawWaves(){
   const w=water;
+  ctx.save(); ctx.beginPath(); ctx.rect(0,0,W,SHORE-2); ctx.clip();   // wave faces stay in da water, never over da sand
   for(const wv of w.waves){
     const half=wv.len/2, x0=wv.x-half;
-    const riding=w.surfing&&w.cur===wv, k=wv.big||1;   // k = size: 1 normal, 3-4 for a rogue wave
+    // a rogue wave stands tall out back, then shrinks as it reaches da shallows and turns to whitewater
+    const near=Math.max(0,Math.min(1,(SHORE-40-wv.y)/90));
+    const riding=w.surfing&&w.cur===wv, k=wv.big ? 1+(wv.big-1)*near : 1;
+    const breaking = wv.big && near<0.6;
     // sample a gentle arc so the crest curves instead of a flat bar
     for(let i=0;i<wv.len;i+=3){
       const t=i/wv.len;                    // 0..1 across the wave
@@ -2141,12 +2146,26 @@ function drawWaves(){
       if(!wv.messy && (i%9===0)) px(x, yc-4*k, 2, 2, '#fff');  // foam flecks on the crest
       if(k>1 && (i+frame)%11===0) px(x+1, yc-4*k-2-((frame+i)%5), 2, 2, '#fff');  // spray blowing off da top
     }
+    if(breaking){ // da big one breaking: a tumbling wall of whitewater rolling in
+      for(let i=-half;i<half;i+=6){ const bob=Math.sin((i+frame)*0.25)*2;
+        px(wv.x+i, wv.y-4*k+bob, 6, 3+k, '#ffffff'); px(wv.x+i+2, wv.y-6*k+bob, 3, 2, '#e8f6fa'); }
+    }
     if(wv.messy){ // whitewater chop on a closeout
       for(let i=-half;i<half;i+=7) px(wv.x+i, wv.y-6+Math.sin((i+frame)*0.3)*2, 5, 3, '#fff');
     }
     if(riding){ // lit-up ridable face glowing under the board
       px(x0,wv.y+5,wv.len,2,'#aef'); px(x0,wv.y+7,wv.len,1,'#6cf');
     }
+  }
+  ctx.restore();
+  // rogue-wave SURGE: a thin sheet of foam runs up da sand and slides back (harmless, see-through)
+  for(const g of (w.surges||[])){
+    const u=g.t/g.dur, reach=g.reach*Math.sin(Math.PI*Math.min(1,u*1.4));
+    if(reach<=0.5) continue;
+    ctx.save(); ctx.globalAlpha=0.55*(1-u*0.6);
+    for(let i=-g.len/2;i<g.len/2;i+=4){ const r=reach*(0.75+0.25*Math.sin(i*0.21+g.t*0.05));
+      px(g.x+i, SHORE-2, 4, r, '#eaf6f8'); px(g.x+i, SHORE-2+r-2, 4, 2, '#ffffff'); }
+    ctx.restore();
   }
   // shorebreak CRASH foam — bursts along the sand where waves broke
   for(const c of w.crashes){
@@ -2161,10 +2180,10 @@ function drawWater(){
   const w=water;
   // the beach strip stays alive while you surf: Chandler + props + photographer + buggy
   // are the SAME persistent beach, drawn on the shore at the bottom of the water view.
+  // waves first (they stay in da water), then da beach strip on top
+  drawWaves();
   drawBeachProps();
   for(const [x,by] of BEACH_PALMS[beach.screen]||[]) drawPalm(x,by);
-  // waves — curved crest with a breaking foam lip + shaded face
-  drawWaves();
   if(w.shark) drawShark(w.shark.x,w.shark.y);
   for(const h of w.huis){ softShadow(h.x, h.y+9, 11); drawHui(h.x,h.y,h.surf); }
   if(w.pro){ const L=w.pro; softShadow(L.x, L.y+9, 12); drawBoard(L.x,L.y+4,C.sea1,-1); drawDude(L.x,L.surf?L.y-5:L.y+1,C.skin,'#111',-1,L.surf?'surf':'paddle',frame);
