@@ -1630,6 +1630,8 @@ function updCabin(){
   const sp=1.5, ox=player.x, oy=player.y;
   if(consume('inspect')) doInspect();
   if(player.waxing>0){                      // helping Turtle wax da board — hands busy, no walking
+    if(consume('b')){ player.waxing=0; beep(380,.07,'triangle');            // B again = put da wax down and stop
+      setMsg("You put da wax down. Turtle: 'No worries, brah. Come back anytime.'",180); return; }
     player.waxing--;
     if(player.waxing===120) setMsg("Turtle: 'Small circles, brah. Like da tide coming in.'",120);
     if(player.waxing===60)  setMsg("Turtle: 'Get da rails too! Chee, you got da touch.'",120);
@@ -2005,7 +2007,7 @@ function doInspect(){
 function drawKeyHint(){
   if(state!=='beach' && state!=='cabin') return;
   let act=null;
-  if(state==='cabin'){ if(atCabinDoor()) act=['↓','walk out']; else if(nearCabinBed()) act=['B','sleep']; else if(nearAndy()) act=['B','give gift']; else if(player.waxing>0) act=['B','waxing...']; else if(nearBlank()) act=['B','help Turtle wax']; }
+  if(state==='cabin'){ if(atCabinDoor()) act=['↓','walk out']; else if(nearCabinBed()) act=['B','sleep']; else if(nearAndy()) act=['B','give gift']; else if(player.waxing>0) act=['B','stop waxing']; else if(nearBlank()) act=['B','help Turtle wax']; }
   else {
     const b=beach;
     const rid=atDoorSpot();
