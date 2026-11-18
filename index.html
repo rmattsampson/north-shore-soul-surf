@@ -463,7 +463,7 @@ let beachBuilt=false;
 function buildBeach(){
   beach={ photographer:null, buggy:null, chandler:{x:58,y:H-54}, local:null, tourist:null,
     props:[], photoT:ri(160,340), buggyT:ri(400,800), chatCool:60, localT:ri(2400,3600), touristT:ri(400,900),
-    kelly:null, kellyT:ri(4200,7200), sterling:0, sterlingCool:0,
+    kelly:null, kellyT:ri(2400,4200), sterling:0, sterlingCool:0, stroller:null, strollerT:ri(900,1800), lastStroller:-1,
     // fixed Hawaiian-flair buildings
     iceShop:{x:W-70, y:SHORE+22},     // shave-ice stand = the SHOP (town screen)
     shack:{x:118, y:SHORE+20},        // surf shack / home (town screen)
@@ -562,6 +562,7 @@ function update(){
   if(beachBuilt) tickLocal();  // a local strolls the beach ~1/min and drops stuff
   if(beachBuilt) tickTourist();  // a lone original tourist wanders by
   if(beachBuilt) tickKelly();    // Kelly Slater cameo on the beach
+  if(beachBuilt) tickStroller(); // other North Shore names strolling da sand (friendly, not surfing)
   if(beachBuilt) tickRoad();     // clothed walkers + cyclists stroll the dirt sidewalk
   if(state==='splash'){ if(consume('enter')){ state='help'; beep(660,.1);} else if(consume('space')){ enterBeach(); } return; }
   if(state==='help'){ if(consume('enter')||consume('space')){ enterBeach(); } return; }
@@ -801,6 +802,47 @@ const KELLY_LINES=[
   "Where's Sterling? I need somebody fo' beat.",
 ];
 let kellyIdx = Math.floor(Math.random()*KELLY_LINES.length);
+// North Shore names out of da water, just strolling da sand and saying a couple things (all FRIENDLY;
+// Kelly is da only one who talks trash). Real names are labels on generic original sprites.
+const STROLLERS = [
+  { name:"JAMIE O'BRIEN", say:"Jamie O'Brien",   skin:'#d9a070', trunks:'#1f3a6a', shirt:'#ff8a2a', hair:'#e8d27a',
+    lines:["Get psyched!","Pipe's pumping — GET PSYCHED, brah!","Get psyched, get barreled!"],
+    look:["Jamie O'Brien, stoked as usual. Get psyched!","He's filming everything on one little camera.","Grew up right here at Pipe."] },
+  { name:"STERLING SPENCER", say:"Sterling Spencer", skin:'#c88a4e', trunks:'#c0392b', shirt:'#2b6cb0', hair:'#e8d27a',
+    lines:["You know da rulez!!","Respect da locals, braddah.","Aloha, brah. Have fun out dea."],
+    look:["Sterling Spencer, off da fence for once.","He knows every rule on dis beach.","Big smile, firm handshake."] },
+  { name:"BETHANY HAMILTON", say:"Bethany Hamilton", skin:'#e0b08a', trunks:'#2f8aa8', shirt:null, hair:'#e8c860',
+    lines:["Never give up, yeah!","Go get one wave — you got dis!","Be grateful fo' every session."],
+    look:["Bethany Hamilton. Pure aloha and grit.","She's waving at da keiki on da beach.","Tougher than any shorebreak."] },
+  { name:"MASON HO", say:"Mason Ho",        skin:'#b07a44', trunks:'#ffd23f', shirt:'#2fbfae', hair:'#2a1a10',
+    lines:["Ho! Look at dat little ramp!","Just having fun, brah!","Dis wave stay perfect fo' one air!"],
+    look:["Mason Ho, laughing at something only he saw.","Board under one arm, shaka wit' da other.","Da most fun guy on da North Shore."] },
+];
+function tickStroller(){
+  const b=beach; if(!beachBuilt) return;
+  if(!b.stroller){
+    if(b.strollerT>0){ b.strollerT--; return; }
+    let i=ri(0,STROLLERS.length-1); if(i===b.lastStroller) i=(i+1)%STROLLERS.length;
+    b.lastStroller=i;
+    const fromLeft=Math.random()<0.5;
+    b.stroller={ i, x:fromLeft?-20:W+20, dir:fromLeft?1:-1, y:SHORE+ri(30,H-SHORE-22), said:0, base:ri(0,2) };   // 2 different lines per walk
+  } else {
+    const S=b.stroller, who=STROLLERS[S.i]; S.x+=0.6*S.dir;
+    const prog = S.dir>0 ? S.x/W : 1-S.x/W, stops=[0.3,0.7];
+    while(S.said<stops.length && prog>=stops[S.said]){
+      if(state==='beach' && !IS_DOWN(b.screen)){
+        setMsg(who.say+": '"+who.lines[(S.base+S.said)%who.lines.length]+"'",200); beep(600,.07,'triangle'); }
+      S.said++; }
+    if(S.x<-30||S.x>W+30){ b.stroller=null; b.strollerT=ri(1800,3000); }   // next one in ~30-50 s
+  }
+}
+function drawStroller(){
+  const S=beach.stroller; if(!S) return; const who=STROLLERS[S.i];
+  softShadow(S.x,S.y+13,9);
+  drawDude(S.x,S.y,who.skin,who.trunks,S.dir,(frame>>2)%2?'walk':'stand',frame,who.shirt);
+  px(S.x-3,S.y-12,7,2,who.hair);
+  nameTag(who.name,S.x,S.y-18,C.gold);
+}
 // Kelly Slater (real name only, generic original sprite) strolls the beach now and then
 function tickKelly(){
   const b=beach; if(!beachBuilt) return;
@@ -816,7 +858,7 @@ function tickKelly(){
       if(state==='beach' && !IS_DOWN(b.screen)){
         setMsg("Kelly Slater: '"+KELLY_LINES[kellyIdx%KELLY_LINES.length]+"'",200); kellyIdx++; beep(520,.08,'triangle'); }
       K.said++; }
-    if(K.x<-30||K.x>W+30){ b.kelly=null; b.kellyT=ri(6000,9600); }   // back in ~2-3 min
+    if(K.x<-30||K.x>W+30){ b.kelly=null; b.kellyT=ri(3600,6000); }   // back in ~1-1.5 min
   }
 }
 // a lone beach tourist (original character) occasionally strolls across
@@ -1168,6 +1210,7 @@ function drawBeachProps(){
       px(K.x-4,K.y-4,9,8,'#f2f2f2'); px(K.x-4,K.y-4,9,2,'#ffffff');           // white tee
       px(K.x-3,K.y-12,7,2,'#2a2a2a');                                          // cap
       nameTag('KELLY SLATER',K.x,K.y-18,C.gold); }
+    drawStroller();
   }
   ctx.textAlign='left';
 }
@@ -1960,6 +2003,7 @@ function inspectables(){
     add('shoreline',player.x,SHORE+6,12,["Whitewater fizzing ovah your toes.","Wet sand. Good fo' check da swell from here.","One crab wen' run sideways from you."]);
     if(!isNight()) for(const sb of SUNBATHERS[scr]||[]) add(sb.id,sb.x,sb.y-6,26,sb.lines);
     for(const [pxl] of BEACH_PALMS[scr]) add('palm',pxl+3,H-22,18,["Coconut palm. Watch out fo' falling coconuts, brah.","Palm stay leaning toward da ocean, like you.","Somebody carved initials in da trunk."]);
+    if(b.stroller){ const S=b.stroller, who=STROLLERS[S.i]; add('stroller-'+S.i,S.x,S.y,24,who.look); }
     if(b.kelly) add('kelly',b.kelly.x,b.kelly.y,24,["Kelly Slater. Eleven world titles and he'll tell you about every one.","He's checking his reflection in da wet sand.","He looks at your board, sighs, and keeps walking.","Bald, tan, and somehow still younger than you."]);
     if(b.tourist) add('tourist',b.tourist.x,b.tourist.y,22,["Tourist wit' one camera. Asking where's Pipeline.","Sunburnt already. Day one.","He stay wearing socks wit' slippahs."]);
     if(b.local) add('local',b.local.x,b.local.y,22,["Local uncle walking his beach. Respect.","He drops stuff everywhere. Free souvenirs.","Uncle's been surfing here since before you was born."]);
