@@ -942,7 +942,7 @@ const KELLY_LINES=[
   "I'm fifty-something and still getting barreled. What's your excuse?",
   "Nice board. Shape 'um in one Tempe wave tank?",
   "Pipe's flat. I'll make it break.",
-  "I don't paddle out. Da ocean comes to me.",
+  "Watch me paddle out. Take notes, kook.",
   "Signed my own autograph on dat cooler. You're welcome.",
   "Where's Sterling? I need somebody fo' beat.",
 ];
@@ -1015,8 +1015,14 @@ function tickKelly(){
       if(state==='beach' && onMyBeach(K)){
         setMsg("Kelly Slater: '"+KELLY_LINES[kellyIdx%KELLY_LINES.length]+"'",200); kellyIdx++; beep(520,.08,'triangle'); }
       K.said++; }
+    // done talkin' on his last beach? he grabs his board and paddles out to show everybody how it's done
+    if(K.hops<=0 && K.said>=stops.length && (K.dir>0?K.x>W*0.88:K.x<W*0.12)){ kellyPaddleOut(BEACH_ROW[K.s]); b.kelly=null; b.kellyT=ri(3600,6000); }
   }
 }
+function kellyPaddleOut(sc){ const LU=lineup(sc); if(LU.pro && LU.pro.bit) return;
+  const line="'"+KELLY_LINES[kellyIdx%KELLY_LINES.length]+"'"; kellyIdx++;
+  LU.pro={ name:'Kelly Slater', line, kelly:true, female:false, x:rnd(60,W-60), y:SEATOP+12, t:ri(900,1400), surf:false, wave:null };
+  if(beach.screen===sc && (state==='beach'||state==='water')){ setMsg("Kelly Slater grabs his board: "+line+" Watch an' learn, kooks.",180); beep(520,.1,'triangle'); } }
 // a lone beach tourist (original character) occasionally strolls across
 function tickTourist(){
   const b=beach; if(!beachBuilt) return;
@@ -1145,7 +1151,7 @@ function updWater(){
 }
 
 // da lineup at each beach keeps living while you're on da sand: Hui + pros keep surfing, sharks stay
-function lineup(){ const w=water; w.lineups=w.lineups||{}; const k=beach.screen;
+function lineup(sc){ const w=water; w.lineups=w.lineups||{}; const k=(sc===undefined?beach.screen:sc);
   return w.lineups[k] || (w.lineups[k]={ huis:[], pro:null, shark:null, huiT:ri(260,480), proT:ri(360,700), sharkT:ri(620,1100) }); }
 function tickLineup(){
   if(!beachBuilt || IS_DOWN(beach.screen) || (state!=='beach' && state!=='water')) return;
@@ -1182,7 +1188,8 @@ function tickLineup(){
   // FAMOUS SURFER — one at a time (Laird is in the roster). Cocky, snakes your wave, no damage.
   if(LU.proT>0)LU.proT--; else if(!LU.pro){
     const p=PROS[ri(0,PROS.length-1)];
-    LU.pro={ name:p.name, line:p.line, female:!!p.female, x:rnd(60,W-60), y:SEATOP+12, t:ri(360,560), surf:false, wave:null };
+    const kl = p.name==='Kelly Slater' ? "'"+KELLY_LINES[(kellyIdx++)%KELLY_LINES.length]+"'" : p.line;
+    LU.pro={ name:p.name, line:kl, female:!!p.female, kelly:p.name==='Kelly Slater', x:rnd(60,W-60), y:SEATOP+12, t:ri(360,560), surf:false, wave:null };
     setMsg(p.name+" paddling out — "+p.line,140); beep(520,.1,'triangle'); }
   if(LU.pro){ const L=LU.pro; L.t--;
     if(L.bit){ L.surf=false; L.wave=null; L.y+=0.45; }   // shark got 'em: paddlin' straight to shore
@@ -1201,7 +1208,7 @@ function tickLineup(){
         if(bd<14 && Math.random()<0.85){ L.surf=true; L.wave=best; setMsg(L.name+" droppin' in — "+L.line,110); } }
     }
     if(!L.bit && inSea && near(player.x,player.y,L.x,L.y,15)&&w.surfing){
-      setMsg(L.name+" SNAKED your wave! 'Did you see that one?!'",110);
+      setMsg(L.name+" SNAKED your wave! "+(L.kelly?"'My wave, kook. Always was.'":"'Did you see that one?!'"),110);
       player.x=clamp(player.x+(player.x<L.x?-22:22),20,W-20); }
     if((L.t<0&&!L.bit)||L.y>SEABOT){ LU.pro=null; LU.proT=ri(260,520); } }
 
