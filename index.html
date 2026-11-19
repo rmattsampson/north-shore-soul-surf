@@ -449,11 +449,11 @@ const RIDE_FEEL=[ [9,3,0.03], [12,6,0.04], [15,9,0.05], [18,12,0.06] ];
 const TRICKS=[
   { id:'cut',   name:'Cutback!',     keys:'Z',      pts:40,  rank:0, pose:'cut'  },
   { id:'lip',   name:'Off-da-lip!',  keys:'X',      pts:45,  rank:0, pose:'lip'  },
-  { id:'snap',  name:'Snap!',        keys:'↓ + Z',  pts:55,  rank:1, pose:'cut'  },
-  { id:'float', name:'Floater!',     keys:'↑ + Z',  pts:60,  rank:1, pose:'surf' },
-  { id:'barrel',name:'BARREL!!',     keys:'Z + X',  pts:120, rank:1, pose:'barrel' },
-  { id:'round', name:'Roundhouse!',  keys:'↓ + X',  pts:75,  rank:2, pose:'cut'  },
-  { id:'air',   name:'AIR!!',        keys:'↑ + X',  pts:90,  rank:2, pose:'lip'  },
+  { id:'snap',  name:'Snap!',        keys:'DOWN+Z', pts:55,  rank:1, pose:'cut'  },
+  { id:'float', name:'Floater!',     keys:'UP+Z',   pts:60,  rank:1, pose:'surf' },
+  { id:'barrel',name:'BARREL!!',     keys:'Z+X',    pts:120, rank:1, pose:'barrel' },
+  { id:'round', name:'Roundhouse!',  keys:'DOWN+X', pts:75,  rank:2, pose:'cut'  },
+  { id:'air',   name:'AIR!!',        keys:'UP+X',   pts:90,  rank:2, pose:'lip'  },
 ];
 // Chandler's soul-surf lessons (talk to Chandler wit' B on da Surf beach)
 const LESSONS=[
@@ -1327,10 +1327,14 @@ function drawQuestLog(){
   else line("✓ Chandler's lessons done — you ride Chandler's Gun",C.good);
   line((gifts>0?'▶ ':'○ ')+"Bring Andy Irons a shave ice (RCVA house)"+(gifts>0?'  — you have '+gifts:''), gifts>0?C.good:C.txt);
   line("○ Surf in front of da photog at da Cove fo' coins",C.txt);
-  line("Breaks: "+LEVELS.map(sc=>(levelDone(sc)?'✓ ':'○ ')+BREAK[sc].name).join('   ')+"   (ride 3+ s at each)", C.txt);
-  line(quest.champ?"✓ PIPE MASTERS CHAMPION — trophy at your place":(pipeReady()?"▶ FINAL: Pipe Masters — talk to da head judge at Pipeline (B)":"○ FINAL: Pipeline + Pipe Masters (needs every break, lessons, PIPE INVITE)"), quest.champ||pipeReady()?C.good:C.txt);
-  y+=4; ctx.font='bold 9px "Courier New",monospace'; line('TRICKS (while riding)',C.gold); ctx.font='9px "Courier New",monospace';
-  for(const T of TRICKS){ const ok=T.rank<=r; line((ok?'  ':'🔒')+' '+T.keys.padEnd(7)+' '+T.name.replace(/!/g,'')+(ok?'':'  ('+RANKS[T.rank].n+')'), ok?C.txt:'#7a7890'); }
+  line("Breaks: "+LEVELS.map(sc=>(levelDone(sc)?'✓ ':'○ ')+BREAK[sc].name).join('   ')+"   (3+ s each)", C.txt);
+  line(quest.champ?"✓ PIPE MASTERS CHAMPION — trophy at your place":(pipeReady()?"▶ FINAL: Pipe Masters — talk to da head judge at Pipeline (B)":"○ FINAL: Pipe Masters (needs all breaks, lessons, PIPE INVITE)"), quest.champ||pipeReady()?C.good:C.txt);
+  y+=4; ctx.font='bold 9px "Courier New",monospace'; line('TRICKS (while riding)  — hold arrow, tap Z / X',C.gold);
+  ctx.font='bold 10px "Courier New",monospace';
+  TRICKS.forEach((T,i)=>{ const ok=T.rank<=r, cx=bx+12+(i%2)*(bw/2-6), cy=y+Math.floor(i/2)*14;   // 2 columns, bigger + bolder
+    ctx.fillStyle=ok?C.gold:'#8a88a0'; ctx.fillText(T.keys,cx,cy);
+    ctx.fillStyle=ok?C.txt:'#8a88a0'; ctx.fillText(T.name.replace(/!/g,'')+(ok?'':' 🔒'+RANKS[T.rank].n),cx+54,cy); });
+  y+=Math.ceil(TRICKS.length/2)*14;
   ctx.textAlign='center'; ctx.fillStyle=C.good; ctx.fillText('Q / B to close',W/2,by+bh-8); ctx.textAlign='left';
 }
 /* ===================== PROLOGUE: da Arizona wave tank =====================
@@ -1448,7 +1452,7 @@ function drawTank(){
   // HUD
   px(0,0,W,16,'#00000059'); ctx.font='bold 10px "Courier New",monospace'; ctx.fillStyle=C.gold; ctx.textAlign='left';
   ctx.fillText('🌵 ARIZONA — rides '+T.rides+'/'+T.need,6,12);
-  ctx.textAlign='right'; ctx.fillStyle=C.txt; ctx.font='bold 8px "Courier New",monospace'; ctx.fillText('SPACE catch ←→ steer ↑ kick out ENTER skip',W-6,11); ctx.textAlign='left';
+  ctx.textAlign='right'; ctx.fillStyle=C.txt; ctx.font='bold 8px "Courier New",monospace'; ctx.fillText('SPACE catch · L/R steer · UP kick out · ENTER skip',W-6,11); ctx.textAlign='left';
   if(T.end>0 && T.end<70){ ctx.save(); ctx.globalAlpha=1-T.end/70; px(0,0,W,H,'#000'); ctx.restore(); }
 }
 function drawSplash(){
@@ -3081,7 +3085,8 @@ function drawBanner(){
 }
 
 /* ---- loop ---- */
-function loop(){ update(); ctx.clearRect(0,0,W,H); render(); requestAnimationFrame(loop); }
+function loop(){ update(); for(const k in pressed) pressed[k]=false;   // drop stale taps so B only counts when pressed right there
+  ctx.clearRect(0,0,W,H); render(); requestAnimationFrame(loop); }
 loop();
 
 /* register the service worker so the game installs + plays offline (http/https only) */
