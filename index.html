@@ -1187,11 +1187,10 @@ function drawBeachProps(){
   }
   // SURF screen: Chandler + his hale
   if(b.screen===SCR.SURF){
+    drawChandlerHale(b.chandler.y);
     softShadow(b.chandler.x, b.chandler.y+12, 11);
-    px(38,b.chandler.y-10,46,18,'#6b4a2a'); px(34,b.chandler.y-15,54,6,'#8a5a2a');
-    px(38,b.chandler.y-15,54,2,'#a56a33');   // lit roof edge
     drawDude(b.chandler.x,b.chandler.y,'#a86a34',C.sea3,1,'stand',frame);
-    nameTag('CHANDLER',b.chandler.x,b.chandler.y-29,C.good);
+    nameTag('CHANDLER',b.chandler.x,b.chandler.y-50,C.good);
   }
   drawSunbathers();
   // props live on the SURF + COVE beaches
@@ -1213,6 +1212,30 @@ function drawBeachProps(){
     drawStroller();
   }
   ctx.textAlign='left';
+}
+// Chandler's beach hale: open-sided bamboo shelter with a thatched roof, lauhala mat, boards on a rack
+function drawChandlerHale(y){
+  const x0=26, x1=94, roofY=y-28, floorY=y+12;
+  softShadow(60,floorY+2,40);
+  // woven lauhala mat on the sand
+  px(x0+2,floorY-4,x1-x0-4,6,'#c9a35a'); for(let i=x0+4;i<x1-4;i+=6) px(i,floorY-4,3,6,'#b08a48'); px(x0+2,floorY-4,x1-x0-4,1,'#e0bc72');
+  // bamboo posts (back two thinner/darker, front two on top later)
+  for(const bx of [x0+4, x1-6]){ px(bx,roofY+2,3,floorY-roofY-4,'#8a7a40'); for(let j=roofY+6;j<floorY;j+=7) px(bx,j,3,1,'#6a5a2a'); }
+  // thatched roof: layered strands, peaked, with a ragged fringe
+  ctx.fillStyle='#9a7a3a'; ctx.beginPath(); ctx.moveTo(x0-8,roofY+4); ctx.lineTo(60,roofY-16); ctx.lineTo(x1+8,roofY+4); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#b8944a'; ctx.beginPath(); ctx.moveTo(x0-8,roofY+4); ctx.lineTo(60,roofY-16); ctx.lineTo(60,roofY+4); ctx.closePath(); ctx.fill();   // sun-lit side
+  for(let i=0;i<18;i++){ const sx=x0-6+i*4.6; pxLine(60,roofY-15,sx,roofY+3,i%2?'#7a5a2a':'#c8a45a',1); }    // thatch strands
+  for(let i=x0-8;i<x1+8;i+=3) px(i,roofY+4,2,3+((i*7)%3),'#8a6a30');                                   // ragged fringe
+  px(57,roofY-18,6,3,'#6a4a20');                                                                          // ridge cap
+  // front bamboo posts
+  for(const bx of [x0, x1-2]){ px(bx,roofY+4,4,floorY-roofY-2,'#a8984e'); px(bx,roofY+4,1,floorY-roofY-2,'#c8b86e'); for(let j=roofY+8;j<floorY;j+=7) px(bx,j,4,1,'#7a6a32'); }
+  // hand-painted sign hanging from da eave
+  px(40,roofY-7,40,8,'#6a4a28'); px(40,roofY-7,40,1,'#8a6a3a');                                       // plank sign nailed on da thatch
+  ctx.fillStyle='#ffe9a8'; ctx.font='bold 5px monospace'; ctx.textAlign='center'; ctx.fillText('SHAPED BY HAND',60,roofY-1); ctx.textAlign='left';
+  // two of his boards leaning on da back post, a coconut and a cooler of fresh water
+  px(x1-2,y-26,4,36,'#f2ead8'); px(x1-1,y-26,2,36,'#ffffff'); px(x1+3,y-22,4,32,'#ffd23f'); px(x1+4,y-22,1,32,'#fff6c0');
+  px(x0+8,floorY-9,6,5,'#5a3a1a'); px(x0+9,floorY-10,2,2,'#7a5a2a');                                   // coconut
+  px(x0+16,floorY-11,12,8,'#2f8aa8'); px(x0+16,floorY-11,12,2,'#e8e8e8');                              // little cooler
 }
 // surf shack / home — original pixel building
 function drawShack(x,y){
