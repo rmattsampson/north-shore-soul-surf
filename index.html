@@ -452,13 +452,13 @@ const TRICKS=[
 ];
 // Chandler's soul-surf lessons (talk to Chandler wit' B on da Surf beach)
 const LESSONS=[
-  { name:"Feel it",            goal:"Ride one wave fo' 200+ frames wit' NO tricks.", xp:15,
+  { name:"Feel it",            goal:"Stay on one wave fo' 3+ seconds wit' NO tricks.", xp:15,
     intro:"Chandler: 'First lesson: no tricks. Just ride. Feel da wave.'" },
   { name:"Read da set",        goal:"Catch 3 waves in one paddle-out without wiping out.", xp:15,
     intro:"Chandler: 'Read da ocean. Catch three in a row, no wipeouts.'" },
   { name:"Dawn patrol",        goal:"Catch a wave early in da morning (sleep, then go surf).", xp:20,
     intro:"Chandler: 'Da ocean stay glassy at dawn. Be out dea first.'" },
-  { name:"Respect da big one", goal:"Ride a ROGUE wave fo' 150+ frames.", xp:25,
+  { name:"Respect da big one", goal:"Ride a ROGUE wave fo' 2.5+ seconds.", xp:25,
     intro:"Chandler: 'When da big one comes, no run. Ride 'um wit' respect.'" },
 ];
 let quest=(()=>{ try{ return Object.assign({lesson:0,active:false,sess:0,gun:false}, JSON.parse(localStorage.getItem('nsss_quest')||'{}')); }catch(e){ return {lesson:0,active:false,sess:0,gun:false}; } })();
@@ -1160,7 +1160,7 @@ function endRide(){ const w=water; if(!w.surfing)return;
   if(rideLen>=60) gainXP(1+Math.floor(rideLen/120)+(combo>=2?1:0));     // XP fo' every real ride
   if(quest.active && quest.lesson===0 && rideLen>=200 && !usedTricks) lessonDone();
   else if(quest.active && quest.lesson===3 && onBig && rideLen>=150) lessonDone();
-  let bonus=Math.floor(w.ride*0.6)+w.style, note="Nice ride! "+w.ride+" frames";
+  let bonus=Math.floor(w.ride*0.6)+w.style, note="Nice ride! "+(w.ride/60).toFixed(1)+" seconds";
   if(photographerOut()){ bonus*=2; note="📷 Da photog got your shot!"; beep(990,.14); }
   score+=bonus;
   // COINS come ONLY from da photographer: he sells your shot when he catches you riding at da cove
@@ -2495,7 +2495,7 @@ function drawHUD(){
   ctx.fillText('🪙 '+coins, 6, 12);
   ctx.fillStyle=C.good; ctx.fillText(RANKS[rankIdx()].n+' · '+xp+' XP  (Q)', 60, 12);
   ctx.font='bold 11px "Courier New",monospace';
-  if(state==='water'&&water.surfing){ ctx.fillStyle=C.purp; ctx.fillText('RIDE '+water.ride+(water.combo>1?('  x'+water.combo):''),W/2,28); }
+  if(state==='water'&&water.surfing){ ctx.fillStyle=C.purp; ctx.fillText('RIDE '+(water.ride/60).toFixed(1)+'s'+(water.combo>1?('  x'+water.combo):''),W/2,28); }
   if(player.injured){ ctx.fillStyle=C.bad; ctx.textAlign='center'; ctx.fillText('🩹 HURT — heal at Chandler on da beach',W/2, state==='water'?44:28); }
   if(flashT>0&&flash){ ctx.fillStyle=flash.col; ctx.font='bold 11px monospace'; ctx.textAlign='center'; ctx.fillText(flash.txt,flash.x,flash.y); }
   ctx.textAlign='left';
