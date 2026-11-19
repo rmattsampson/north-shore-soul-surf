@@ -549,7 +549,7 @@ function buildBeach(){
     cars:[], road:[], scrLock:0,      // road traffic behind the house
     screen:1 };                       // 0=TOWN  1=SURF  2=COVE  3=RCVA HOUSE  (start on surf)
   const kinds=['slipper','honu','cooler'];
-  for(let i=0;i<3;i++) beach.props.push({k:kinds[i],x:clearOfPalms(rnd(90,W-90)),y:rnd(H-70,H-24)});
+  for(let i=0;i<3;i++) beach.props.push({k:kinds[i], s:BEACH_ROW.indexOf(kinds[i]==='honu'?SCR.COVE:SCR.SURF), x:clearOfPalms(rnd(90,W-90)),y:rnd(H-70,H-24)});
   beachBuilt=true;
 }
 // which screen owns which flair
@@ -568,13 +568,22 @@ const NEW_LAND=new Set([SCR.KAMHWY, SCR.CANE, SCR.HUIHALE, SCR.LOOKOUT]);
 const BREAK={
   [SCR.HALEIWA]:{ name:'HALEIWA',      rank:0, desc:"Mellow little peelers. Da place fo' learn.",
                   feel:{len:[60,110],  spd:[0.12,0.22], messy:0.10, rogue:0.00, gap:[110,200]} },
-  [SCR.WAIMEA]: { name:'WAIMEA BAY',   rank:3, desc:"Only breaks on giant days. Pipe Invite rank to paddle out.",
+  [SCR.WAIMEA]: { name:'WAIMEA BAY',   rank:2, desc:"Only breaks on giant days. Charger rank to paddle out.",
                   feel:{len:[150,230], spd:[0.14,0.22], messy:0.18, rogue:0.30, gap:[200,330]} },
-  [SCR.PIPE]:   { name:'PIPELINE',     rank:2, desc:"Fast and hollow ovah shallow reef. Charger rank to paddle out.",
+  [SCR.PIPE]:   { name:'PIPELINE',     rank:3, final:true, desc:"Da FINAL level. Conquer Haleiwa, Sunset and Waimea, finish Chandler's lessons, reach PIPE INVITE.",
                   feel:{len:[60,100],  spd:[0.30,0.42], messy:0.30, rogue:0.04, gap:[100,170]} },
   [SCR.SUNSET]: { name:'SUNSET BEACH', rank:1, desc:"Long, heavy walls. Local rank to paddle out.",
                   feel:{len:[170,260], spd:[0.16,0.26], messy:0.22, rogue:0.10, gap:[120,200]} },
 };
+// da levels you must conquer before Pipeline opens (ride 3+ seconds at each break)
+const LEVELS=[SCR.HALEIWA, SCR.SUNSET, SCR.WAIMEA];
+function levelDone(sc){ return !!(quest.passed && quest.passed[sc]); }
+function pipeMissing(){ const m=[];
+  for(const sc of LEVELS) if(!levelDone(sc)) m.push(BREAK[sc].name);
+  if(quest.lesson<LESSONS.length) m.push("Chandler's lessons");
+  if(rankIdx()<3) m.push('PIPE INVITE rank');
+  return m; }
+function pipeReady(){ return pipeMissing().length===0; }
 const DEFAULT_FEEL={len:[70,150], spd:[0.16,0.32], messy:0.26, rogue:0.05, gap:[90,180]};
 function waveFeel(){ const B=BREAK[beach&&beach.screen]; return B?B.feel:DEFAULT_FEEL; }
 // screen changes just chime — no on-screen direction text
@@ -665,6 +674,7 @@ function update(){
   if(state==='splash'){ if(consume('enter')){ state='help'; beep(660,.1);} else if(consume('space')){ startGame(); } return; }
   if(state==='help'){ if(consume('enter')||consume('space')){ startGame(); } return; }
   if(state==='tank'){ updTank(); return; }
+  if(state==='flight'){ updFlight(); return; }
   tickHeat();
   if(state==='gameover'){ if(consume('enter')||consume('space')){ score=0; state='splash'; } return; }
   if(state==='shop'){ updShop(); return; }
@@ -744,6 +754,9 @@ function updBeach(){
     if(b.scrLock>0){ b.scrLock--; }
     if(player.y<=SHORE+6 && keys.up && b.scrLock===0){
       const B=BREAK[b.screen];
+      if(B && B.final && !pipeReady() && !(typeof heat!=='undefined' && heat.on)){
+        b.scrLock=90; player.y=SHORE+14; beep(300,.12,'triangle');
+        setMsg("🛟 Lifeguard: 'Pipeline is da FINAL test, brah. Still need: "+pipeMissing().join(', ')+".'",300); return; }
       if(B && rankIdx()<B.rank && !(typeof heat!=='undefined' && heat.on)){
         b.scrLock=90; player.y=SHORE+14; beep(300,.12,'triangle');
         setMsg("🛟 Lifeguard: 'Eh, "+B.name+" too heavy fo' you right now. Come back when you're "+RANKS[B.rank].n+".'",240); return; }
@@ -791,7 +804,7 @@ function updBeach(){
   }
   if(b.screen===SCR.PIPE && near(player.x,player.y,JUDGE.x,JUDGE.y,26) && consume('b')){
     if(heat.on) setMsg("Head judge: 'Heat stay running — go surf! "+Math.ceil(heat.t/60)+" seconds left.'",160);
-    else if(rankIdx()<3) setMsg("Head judge: 'Pipe Masters is invite only, brah. Come back when you're one PIPE INVITE.'",240);
+    else if(!pipeReady()) setMsg("Head judge: 'Pipe Masters is da final. You still need: "+pipeMissing().join(', ')+".'",300);
     else startHeat();
   }
   if(b.screen===SCR.TOWN){
@@ -835,8 +848,9 @@ function updBeach(){
     }
   }
   // props can be picked up on whichever beach screen they're on (surf/cove)
-  if(b.screen===SCR.SURF || b.screen===SCR.COVE){
+  if(!IS_DOWN(b.screen)){
     for(const p of b.props){
+      if(BEACH_ROW[p.s]!==b.screen) continue;   // dis thing lies on a different beach
       if(p.k==='honu'){   // da honu (sea turtle) stays put resting — you just notice it once in a while
         if(p.cool>0) p.cool--;
         else if(near(player.x,player.y,p.x,p.y,22)){ p.cool=900; setMsg("A honu (sea turtle) restin' on da sand. Give 'um space, yeah.",240); beep(560,.06,'triangle'); }
@@ -941,6 +955,17 @@ const STROLLERS = [
     lines:["Ho! Look at dat little ramp!","Just having fun, brah!","Dis wave stay perfect fo' one air!"],
     look:["Mason Ho, laughing at something only he saw.","Board under one arm, shaka wit' da other.","Da most fun guy on da North Shore."] },
 ];
+// which beach (index in BEACH_ROW) you're on or under right now
+function curIdx(){ const sc=beach.screen; let i=BEACH_ROW.indexOf(sc); if(i<0) i=LAND_ROW.indexOf(sc); return Math.max(0,i); }
+// spawn a walker at da edge of YOUR current beach; after dat it lives on its own screen
+function spawnRoamer(o){ const fromLeft=Math.random()<0.5; return Object.assign(o,{ s:curIdx(), x:fromLeft?-20:W+20, dir:fromLeft?1:-1, hops:ri(1,3) }); }
+// move along; crossing a screen edge carries dem to da next beach. false = walked off da coast / done
+function roamStep(R,sp){ R.x+=sp*R.dir;
+  if(R.dir>0 && R.x>W+20){ if(R.s>=BEACH_ROW.length-1 || R.hops<=0) return false; R.s++; R.hops--; R.x=-20; R.said=0; }
+  if(R.dir<0 && R.x<-20){ if(R.s<=0 || R.hops<=0) return false; R.s--; R.hops--; R.x=W+20; R.said=0; }
+  return true; }
+// is dis walker on da beach you're looking at?
+function onMyBeach(R){ return !!R && !IS_DOWN(beach.screen) && BEACH_ROW[R.s]===beach.screen; }
 function tickStroller(){
   const b=beach; if(!beachBuilt) return;
   if(!b.stroller){
@@ -948,19 +973,19 @@ function tickStroller(){
     let i=ri(0,STROLLERS.length-1); if(i===b.lastStroller) i=(i+1)%STROLLERS.length;
     b.lastStroller=i;
     const fromLeft=Math.random()<0.5;
-    b.stroller={ i, x:fromLeft?-20:W+20, dir:fromLeft?1:-1, y:SHORE+ri(30,H-SHORE-22), said:0, base:ri(0,2) };   // 2 different lines per walk
+    b.stroller=spawnRoamer({ i, y:SHORE+ri(30,H-SHORE-22), said:0, base:ri(0,2) });   // 2 different lines per walk
   } else {
-    const S=b.stroller, who=STROLLERS[S.i]; S.x+=0.6*S.dir;
+    const S=b.stroller, who=STROLLERS[S.i];
+    if(!roamStep(S,0.6)){ b.stroller=null; b.strollerT=ri(1800,3000); return; }
     const prog = S.dir>0 ? S.x/W : 1-S.x/W, stops=[0.3,0.7];
     while(S.said<stops.length && prog>=stops[S.said]){
-      if(state==='beach' && !IS_DOWN(b.screen)){
+      if(state==='beach' && onMyBeach(S)){
         setMsg(who.say+": '"+who.lines[(S.base+S.said)%who.lines.length]+"'",200); beep(600,.07,'triangle'); }
       S.said++; }
-    if(S.x<-30||S.x>W+30){ b.stroller=null; b.strollerT=ri(1800,3000); }   // next one in ~30-50 s
   }
 }
 function drawStroller(){
-  const S=beach.stroller; if(!S) return; const who=STROLLERS[S.i];
+  const S=beach.stroller; if(!onMyBeach(S)) return; const who=STROLLERS[S.i];
   softShadow(S.x,S.y+13,9);
   drawDude(S.x,S.y,who.skin,who.trunks,S.dir,(frame>>2)%2?'walk':'stand',frame,who.shirt);
   px(S.x-3,S.y-12,7,2,who.hair);
@@ -972,16 +997,16 @@ function tickKelly(){
   if(!b.kelly){
     if(b.kellyT>0){ b.kellyT--; return; }
     const fromLeft=Math.random()<0.5;
-    b.kelly={ x:fromLeft?-20:W+20, dir:fromLeft?1:-1, y:SHORE+ri(26,H-SHORE-20), said:0 };
+    b.kelly=spawnRoamer({ y:SHORE+ri(26,H-SHORE-20), said:0 });
   } else {
-    const K=b.kelly; K.x+=0.55*K.dir;   // strolls slow so he can talk
+    const K=b.kelly;
+    if(!roamStep(K,0.55)){ b.kelly=null; b.kellyT=ri(3600,6000); return; }   // strolls slow so he can talk
     // he talks at three spots along his walk (a friendly parody of himself)
     const prog = K.dir>0 ? K.x/W : 1-K.x/W, stops=[0.18,0.5,0.82];
     while(K.said<stops.length && prog>=stops[K.said]){
-      if(state==='beach' && !IS_DOWN(b.screen)){
+      if(state==='beach' && onMyBeach(K)){
         setMsg("Kelly Slater: '"+KELLY_LINES[kellyIdx%KELLY_LINES.length]+"'",200); kellyIdx++; beep(520,.08,'triangle'); }
       K.said++; }
-    if(K.x<-30||K.x>W+30){ b.kelly=null; b.kellyT=ri(3600,6000); }   // back in ~1-1.5 min
   }
 }
 // a lone beach tourist (original character) occasionally strolls across
@@ -990,10 +1015,9 @@ function tickTourist(){
   if(!b.tourist){
     if(b.touristT>0){ b.touristT--; return; }
     const fromLeft=Math.random()<0.5;
-    b.tourist={ x:fromLeft?-20:W+20, dir:fromLeft?1:-1, y:SHORE+ri(20,H-SHORE-18) };
+    b.tourist=spawnRoamer({ y:SHORE+ri(20,H-SHORE-18) });
   } else {
-    const T=b.tourist; T.x+=0.8*T.dir;   // just strolls across, no banner
-    if(T.x<-30||T.x>W+30){ b.tourist=null; b.touristT=ri(1200,2400); }
+    if(!roamStep(b.tourist,0.8)){ b.tourist=null; b.touristT=ri(1200,2400); }   // just strolls on down da coast
   }
 }
 function drawTourist(T){
@@ -1033,11 +1057,10 @@ function tickLocal(){
     if(b.localT>0){ b.localT--; return; }
     // enter from a random side, carrying 1-2 things to drop as they stroll
     const fromLeft=Math.random()<0.5;
-    b.local={ x: fromLeft?-20:W+20, dir: fromLeft?1:-1,
-      y: SHORE + ri(24, H-SHORE-20),
-      drops: Math.random()<0.5?1:0, nextDrop: ri(40,110) };   // only sometimes drops one thing
+    b.local=spawnRoamer({ y: SHORE + ri(24, H-SHORE-20), drops: Math.random()<0.5?1:0, nextDrop: ri(40,110) });   // only sometimes drops one thing
   } else {
-    const L=b.local; L.x += 0.9*L.dir;
+    const L=b.local;
+    if(!roamStep(L,0.9)){ b.local=null; b.localT=ri(2400,3600); return; }
     // drop a thing as they walk (sandal or cooler), becomes a pickup — max ONE of each kind on da sand
     if(L.drops>0){ L.nextDrop--; if(L.nextDrop<=0){
       const countNotGot = k => b.props.filter(p=>p.k===k && !p.got).length;
@@ -1045,9 +1068,8 @@ function tickLocal(){
       const other = want==='slipper' ? 'cooler' : 'slipper';
       // pick the preferred kind if under cap, else the other if under cap, else skip
       const k = countNotGot(want)<1 ? want : countNotGot(other)<1 ? other : null;
-      if(k){ b.props.push({ k, x:clearOfPalms(clamp(L.x,24,W-24)), y:L.y+6 }); beep(600,.05,'triangle'); }
+      if(k && L.x>24 && L.x<W-24){ b.props.push({ k, s:L.s, x:clearOfPalms(L.x), y:L.y+6 }); if(onMyBeach(L)) beep(600,.05,'triangle'); }
       L.drops--; L.nextDrop=ri(80,160); } }
-    if(L.x<-30||L.x>W+30){ b.local=null; b.localT=ri(2400,3600); }  // gone; next in ~1 min
   }
 }
 
@@ -1192,6 +1214,10 @@ function endRide(){ const w=water; if(!w.surfing)return;
   const rideLen=w.ride, usedTricks=w.style>0, onBig=!!(w.cur&&w.cur.big), combo=w.combo;
   if(rideLen>=60) gainXP(1+Math.floor(rideLen/120)+(combo>=2?1:0));     // XP fo' every real ride
   if(heat.on && beach.screen===SCR.PIPE) heatRide(rideLen/60, w.style, combo);
+  if(rideLen>=180 && LEVELS.includes(beach.screen) && !levelDone(beach.screen)){
+    quest.passed=Object.assign({},quest.passed,{[beach.screen]:true}); saveQuest(); gainXP(15); beep(880,.15,'triangle');
+    const left=LEVELS.filter(sc=>!levelDone(sc)).map(sc=>BREAK[sc].name), nm=BREAK[beach.screen].name;
+    setTimeout(()=>setMsg("✅ You conquered "+nm+"! "+(left.length?"Still to go: "+left.join(', ')+".":"All breaks conquered — Pipeline is next."),300),1600); }
   if(quest.active && quest.lesson===0 && rideLen>=200 && !usedTricks) lessonDone();
   else if(quest.active && quest.lesson===3 && onBig && rideLen>=150) lessonDone();
   let bonus=Math.floor(w.ride*0.6)+w.style, note="Nice ride! "+(w.ride/60).toFixed(1)+" seconds";
@@ -1223,6 +1249,7 @@ function wipeout(reason){ const w=water;
 function render(){
   if(state==='splash') return drawSplash();
   if(state==='tank'){ drawTank(); drawBanner(); return; }
+  if(state==='flight'){ drawFlight(); return; }
   if(state==='help') return drawHelp();
   drawSky(); drawMountains();
   if(!(state==='beach' && IS_DOWN(beach.screen))){ drawSeaBands(); drawSand(); }
@@ -1253,7 +1280,8 @@ function drawQuestLog(){
   else line("✓ Chandler's lessons done — you ride Chandler's Gun",C.good);
   line((gifts>0?'▶ ':'○ ')+"Bring Andy Irons a shave ice (RCVA house)"+(gifts>0?'  — you have '+gifts:''), gifts>0?C.good:C.txt);
   line("○ Surf in front of da photog at da Cove fo' coins",C.txt);
-  line(quest.champ?"✓ PIPE MASTERS CHAMPION — trophy at your place":(rankIdx()>=3?"▶ Pipe Masters: talk to da head judge at Pipeline (B)":"○ Pipe Masters: reach PIPE INVITE, then see da judge at Pipeline"), quest.champ||rankIdx()>=3?C.good:C.txt);
+  line("Breaks: "+LEVELS.map(sc=>(levelDone(sc)?'✓ ':'○ ')+BREAK[sc].name).join('   ')+"   (ride 3+ s at each)", C.txt);
+  line(quest.champ?"✓ PIPE MASTERS CHAMPION — trophy at your place":(pipeReady()?"▶ FINAL: Pipe Masters — talk to da head judge at Pipeline (B)":"○ FINAL: Pipeline + Pipe Masters (needs every break, lessons, PIPE INVITE)"), quest.champ||pipeReady()?C.good:C.txt);
   y+=4; ctx.font='bold 9px "Courier New",monospace'; line('TRICKS (while riding)',C.gold); ctx.font='9px "Courier New",monospace';
   for(const T of TRICKS){ const ok=T.rank<=r; line((ok?'  ':'🔒')+' '+T.keys.padEnd(7)+' '+T.name.replace(/!/g,'')+(ok?'':'  ('+RANKS[T.rank].n+')'), ok?C.txt:'#7a7890'); }
   ctx.textAlign='center'; ctx.fillStyle=C.good; ctx.fillText('Q / B to close',W/2,by+bh-8); ctx.textAlign='left';
@@ -1269,10 +1297,47 @@ function startGame(){
   state='tank'; tank={ x:W/2, y:TANK.y1-14, facing:1, waves:[], t:40, riding:false, cur:null, ride:0, rides:0, need:3, end:0 };
   setMsg("ARIZONA. 112°F. Da only waves fo' 400 miles come out of one machine. Win da Desert Surf Classic: 3 clean rides!",360);
 }
-function finishTank(){
+function finishTank(){ state='flight'; flight={ t:0 }; msgT=0; beep(440,.2,'triangle'); }
+let flight=null;
+const FLIGHT_LEN=480;   // ~8 s
+function landInHawaii(){
   try{ localStorage.setItem('nsss_tank_done','1'); }catch(e){}
   enterBeach(); sleepFade=70;
   setMsg("✈️ Welcome to da North Shore, kook. Real waves no come from one machine. Go find Chandler.",360);
+}
+function updFlight(){ flight.t++; if(consume('enter') || flight.t>=FLIGHT_LEN) landInHawaii(); }
+function drawFlight(){
+  const t=flight.t, u=t/FLIGHT_LEN;
+  // sky: desert dusk at takeoff -> bright island morning
+  const mix=(a,b,k)=>'#'+[0,2,4].map(i=>Math.round(parseInt(a.substr(1+i,2),16)*(1-k)+parseInt(b.substr(1+i,2),16)*k).toString(16).padStart(2,'0')).join('');
+  gradBand(0,0,W,180,mix('#f2a65a','#6fc6ee',Math.min(1,u*1.6)),mix('#ffd9a0','#c8ecff',Math.min(1,u*1.6)),10);
+  // da Pacific below, swells rolling under you
+  gradBand(0,180,W,H-180,'#1f6a9a','#0f4a7a',6);
+  for(let i=0;i<40;i++){ const y=186+((i*29)%(H-190)), x=((i*97)-t*(0.6+((i*13)%5)*0.2))%(W+40); px((x+W+40)%(W+40)-20,y,14+(i%3)*6,1,'#4f9ac8'); }
+  // clouds drifting past at two speeds
+  for(let i=0;i<7;i++){ const cy=30+((i*41)%120), cx=((i*137)-t*(i%2?1.4:0.7))%(W+120); const X=(cx+W+120)%(W+120)-60;
+    ctx.save(); ctx.globalAlpha=0.85; ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.ellipse(X,cy,30+(i%3)*10,8,0,0,Math.PI*2); ctx.ellipse(X+18,cy-5,18,7,0,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+  // Oahu rising on da horizon near da end: green ridges + a strip of sand
+  if(u>0.55){ const k=Math.min(1,(u-0.55)/0.35), ix=W-60-k*140;
+    ctx.fillStyle='#2f6a3a'; ctx.beginPath(); ctx.moveTo(ix-120,182); ctx.lineTo(ix-70,150-k*12); ctx.lineTo(ix-30,162); ctx.lineTo(ix+10,140-k*16); ctx.lineTo(ix+60,160); ctx.lineTo(ix+120,182); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#3f8a4a'; ctx.beginPath(); ctx.moveTo(ix-70,150-k*12); ctx.lineTo(ix-40,168); ctx.lineTo(ix-90,178); ctx.closePath(); ctx.fill();
+    px(ix-120,180,240,3,'#e8d8a8'); }
+  // da plane: a little jet banking across, contrail behind
+  const plx=40+u*(W-120), ply=96+Math.sin(t*0.04)*6;
+  for(let i=1;i<26;i++){ ctx.save(); ctx.globalAlpha=0.5*(1-i/26); px(plx-30-i*7,ply+2,7,2,'#ffffff'); ctx.restore(); }
+  px(plx-28,ply,46,7,'#f2f2f2'); px(plx-28,ply,46,2,'#ffffff'); px(plx+18,ply+1,7,5,'#e8e8e8'); px(plx+22,ply+2,4,2,'#3a6a9a');   // fuselage + nose + cockpit
+  for(let k=0;k<6;k++) px(plx-20+k*6,ply+3,3,2,'#3a6a9a');                                                                       // windows
+  px(plx-34,ply-8,8,8,'#c0392b'); px(plx-6,ply+5,16,4,'#d8d8d8'); px(plx-10,ply-4,14,4,'#d8d8d8');                               // tail + wings
+  // captions
+  ctx.textAlign='center'; ctx.font='bold 13px "Courier New",monospace'; ctx.fillStyle='#14233a';
+  ctx.fillText('ARIZONA  ✈  HAWAII',W/2+1,41); ctx.fillStyle='#fff6d0'; ctx.fillText('ARIZONA  ✈  HAWAII',W/2,40);
+  const cap = u<0.33 ? "One-way ticket. One board. Zero clue." : u<0.66 ? "2,900 miles to da North Shore..." : "Oahu. Da real waves stay waiting.";
+  ctx.font='bold 10px "Courier New",monospace'; ctx.fillStyle='#000000aa'; px(W/2-150,H-34,300,16,'#00000088');
+  ctx.fillStyle='#fff2c0'; ctx.fillText(cap,W/2,H-22);
+  ctx.fillStyle='#ffffffaa'; ctx.font='8px "Courier New",monospace'; ctx.fillText('ENTER to skip',W/2,H-6); ctx.textAlign='left';
+  // fade in from da desert, fade out to da beach
+  const fa = t<30 ? 1-t/30 : t>FLIGHT_LEN-40 ? (t-(FLIGHT_LEN-40))/40 : 0;
+  if(fa>0){ ctx.save(); ctx.globalAlpha=fa; px(0,0,W,H,'#000'); ctx.restore(); }
 }
 function updTank(){
   const T=tank;
@@ -1434,17 +1499,15 @@ function drawBeachProps(){
   }
   drawSunbathers();
   // props live on the SURF + COVE beaches
-  if(b.screen===SCR.SURF || b.screen===SCR.COVE){
-    for(const p of b.props){ if(!p.got){ softShadow(p.x,p.y+4,7); drawProp(p); } }
-  }
+  for(const p of b.props){ if(!p.got && BEACH_ROW[p.s]===b.screen){ softShadow(p.x,p.y+4,7); drawProp(p); } }
   // roamers appear on the beach screens (not the house yard)
   if(b.screen!==SCR.HOUSE){
     if(b.photographer && b.screen===SCR.COVE) drawPhotog(b.photographer.x,b.photographer.y);
     { const bx=buggyLX(); if(bx!==null){ softShadow(bx,SHORE+28,18); drawBuggy(bx,SHORE+16); } }
-    if(b.local){ const L=b.local; softShadow(L.x,L.y+13,9);
+    if(onMyBeach(b.local)){ const L=b.local; softShadow(L.x,L.y+13,9);
       drawDude(L.x,L.y,'#b07a44','#8a4a6a',L.dir,(frame>>2)%2?'walk':'stand',frame); }
-    if(b.tourist) drawTourist(b.tourist);
-    if(b.kelly){ const K=b.kelly; softShadow(K.x,K.y+13,9);
+    if(onMyBeach(b.tourist)) drawTourist(b.tourist);
+    if(onMyBeach(b.kelly)){ const K=b.kelly; softShadow(K.x,K.y+13,9);
       drawDude(K.x,K.y,'#d9a070','#1f3a6a',K.dir,(frame>>2)%2?'walk':'stand',frame);
       px(K.x-4,K.y-4,9,8,'#f2f2f2'); px(K.x-4,K.y-4,9,2,'#ffffff');           // white tee
       px(K.x-3,K.y-12,7,2,'#2a2a2a');                                          // cap
@@ -1526,9 +1589,9 @@ const BEACH_PALMS = {
   [SCR.SURF]: [[150,H-6],[W-30,H-6]],                // Chandler's hale ~34-92
   [SCR.COVE]: [[22,H-8],[110,H-14],[W/2+40,H-12],[W-70,H-6]],
   [SCR.HALEIWA]: [[150,H-8],[W-36,H-6]],
-  [SCR.WAIMEA]:  [[200,H-6],[W-40,H-10]],
+  [SCR.WAIMEA]:  [[150,H-6],[W-40,H-10]],
   [SCR.PIPE]:    [[W-26,H-8]],
-  [SCR.SUNSET]:  [[60,H-8],[W/2+20,H-12]],
+  [SCR.SUNSET]:  [[60,H-8],[W-30,H-8]],
 };
 // nudge a beach prop's x so it isn't hidden under a palm on the SURF or COVE screens
 function clearOfPalms(x){
@@ -1554,11 +1617,13 @@ function drawLifeguardTower(x){
   px(x+13,top-20,1,14,'#ccc'); px(x+14,top-20,8,3,'#e0533a'); px(x+14,top-17,8,3,'#ffd23f');                     // red/yellow flag
 }
 function drawBeachSign(x,y,lines,face,ink){
-  const w=Math.max(...lines.map(l=>l.length))*4+8, h=lines.length*7+5;
+  ctx.font='bold 8px "Courier New",monospace';
+  const w=Math.ceil(Math.max(...lines.map(l=>ctx.measureText(l).width)))+12, h=lines.length*10+6;
   px(x-w/2+3,y,2,16,'#5a3a1a'); px(x+w/2-5,y,2,16,'#5a3a1a');                                                    // posts
   px(x-w/2,y-h,w,h,face||'#6a4a28'); px(x-w/2,y-h,w,1,shade(face||'#6a4a28',30)); px(x-w/2,y-1,w,1,shade(face||'#6a4a28',-30));
-  ctx.fillStyle=ink||'#ffe9a8'; ctx.font='bold 5px monospace'; ctx.textAlign='center';
-  lines.forEach((l,i)=>ctx.fillText(l,x,y-h+7+i*7)); ctx.textAlign='left';
+  ctx.textAlign='center';
+  lines.forEach((l,i)=>{ const ty=y-h+11+i*10; ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillText(l,x+1,ty+1); ctx.fillStyle=ink||'#fff2c0'; ctx.fillText(l,x,ty); });
+  ctx.textAlign='left';
 }
 function drawIronwood(x,base){   // wispy casuarina: dark needles in drooping tiers
   px(x-1,base-60,3,60,'#5a4030'); px(x,base-60,1,60,'#7a5a40');
@@ -1633,7 +1698,7 @@ function drawBreakScenery(){
     ctx.fillStyle='#5a524a'; ctx.beginPath(); ctx.moveTo(4,SHORE-34); ctx.lineTo(30,SHORE-46); ctx.lineTo(62,SHORE-38); ctx.lineTo(40,SHORE-28); ctx.closePath(); ctx.fill();
     for(let i=0;i<12;i++) px(6+i*9,SHORE-30+((i*7)%22),3,2,'#6a625a');
     for(let x=96;x<124;x+=4) px(x,SHORE-6+((x+frame>>3)%3),3,2,'#ffffff');
-    drawBeachSign(170,SHORE+22,['WAIMEA BAY','EXPERTS ONLY'],'#14233a','#ffd23f');
+    drawBeachSign(250,SHORE+22,['WAIMEA BAY','EXPERTS ONLY'],'#14233a','#ffd23f');
     drawLifeguardTower(330);
   }
   else if(sc===SCR.PIPE){
@@ -1662,7 +1727,7 @@ function breakLooks(sc){
   if(sc===SCR.WAIMEA){
     add('rock',60,SHORE+4,50,["Da big rock at Waimea. Kids jump off on flat days.","Black lava, hot from da sun.","On big days da whitewater explodes all ovah it."]);
     add('church',415,SEATOP+10,30,["Stone bell tower watching ovah da bay.","When da bay breaks, da whole island shows up.","Waimea: where big-wave surfing got started."]);
-    add('wsign',170,SHORE+16,24,["Big waves. Experts only. Dey mean it.","When Waimea stay on, even da pros get nervous.","Respect da ocean, braddah."]);
+    add('wsign',250,SHORE+16,24,["Big waves. Experts only. Dey mean it.","When Waimea stay on, even da pros get nervous.","Respect da ocean, braddah."]);
   }
   if(sc===SCR.PIPE){
     add('reef',240,SHORE-6,60,["Shallow reef right under da surface. Fall wrong and you hit 'um.","Dat's why Pipe barrels so perfect — and so heavy.","Da reef stay sharp like one knife."]);
@@ -1678,7 +1743,7 @@ function breakLooks(sc){
 }
 
 /* ===================== NEW LAND SCREENS (walk DOWN off each new beach) ===================== */
-const KAM={ store:[30,SEATOP+46,150,SEATOP+108], truck:[226,SEATOP+70,312,SEATOP+108], bus:[384,SEATOP+78,446,SEATOP+108], roadY:SEATOP+128 };
+const KAM={ store:[30,SEATOP+46,150,SEATOP+108], truck:[276,SEATOP+70,362,SEATOP+108], bus:[396,SEATOP+78,446,SEATOP+108], roadY:SEATOP+128 };   // trail runs W/2±12, clear
 const CANE_TRUCK=[W/2+30,SEATOP+108,W/2+96,SEATOP+132];
 const HUI={ x:W/2, base:SEATOP+100 };
 function landPlayer(){
@@ -1799,8 +1864,8 @@ function newLandLooks(sc){
   const L=[], add=(id,x,y,r,lines)=>L.push([id,x,y,r,lines]);
   if(sc===SCR.KAMHWY){
     add('store',90,SEATOP+116,40,["General store. Spam musubi, sunscreen, and one cold POG.","Uncle behind da counter knows everybody's name.","Board wax by da register. Every flavor of coconut."]);
-    add('shrimp',268,SEATOP+116,40,["Garlic shrimp truck. Da line stay long fo' one reason.","Smells so good you might paddle back in fo' lunch.","Plate lunch: shrimp, two scoop rice. Ono."]);
-    add('busstop',415,SEATOP+116,30,["Bus stop. Da bus to town comes... eventually.","Somebody left one boogie board on da bench.","Tourists waiting wit' dea surfboards. Kooks? Maybe."]);
+    add('shrimp',318,SEATOP+116,40,["Garlic shrimp truck. Da line stay long fo' one reason.","Smells so good you might paddle back in fo' lunch.","Plate lunch: shrimp, two scoop rice. Ono."]);
+    add('busstop',421,SEATOP+116,30,["Bus stop. Da bus to town comes... eventually.","Somebody left one boogie board on da bench.","Tourists waiting wit' dea surfboards. Kooks? Maybe."]);
     add('road',player.x,KAM.roadY+20,24,["Kam Highway. Da only road along da North Shore.","Traffic backs up fo' miles when da surf stay big.","Look both ways, brah. Then look again."]);
   }
   if(sc===SCR.CANE){
@@ -2592,10 +2657,10 @@ function inspectables(){
     add('shoreline',player.x,SHORE+6,12,["Whitewater fizzing ovah your toes.","Wet sand. Good fo' check da swell from here.","One crab wen' run sideways from you."]);
     if(!isNight()) for(const sb of SUNBATHERS[scr]||[]) add(sb.id,sb.x,sb.y-6,26,sb.lines);
     for(const [pxl] of BEACH_PALMS[scr]) add('palm',pxl+3,H-22,18,["Coconut palm. Watch out fo' falling coconuts, brah.","Palm stay leaning toward da ocean, like you.","Somebody carved initials in da trunk."]);
-    if(b.stroller){ const S=b.stroller, who=STROLLERS[S.i]; add('stroller-'+S.i,S.x,S.y,24,who.look); }
-    if(b.kelly) add('kelly',b.kelly.x,b.kelly.y,24,["Kelly Slater. Eleven world titles and he'll tell you about every one.","He's checking his reflection in da wet sand.","He looks at your board, sighs, and keeps walking.","Bald, tan, and somehow still younger than you."]);
-    if(b.tourist) add('tourist',b.tourist.x,b.tourist.y,22,["Tourist wit' one camera. Asking where's Pipeline.","Sunburnt already. Day one.","He stay wearing socks wit' slippahs."]);
-    if(b.local) add('local',b.local.x,b.local.y,22,["Local uncle walking his beach. Respect.","He drops stuff everywhere. Free souvenirs.","Uncle's been surfing here since before you was born."]);
+    if(onMyBeach(b.stroller)){ const S=b.stroller, who=STROLLERS[S.i]; add('stroller-'+S.i,S.x,S.y,24,who.look); }
+    if(onMyBeach(b.kelly)) add('kelly',b.kelly.x,b.kelly.y,24,["Kelly Slater. Eleven world titles and he'll tell you about every one.","He's checking his reflection in da wet sand.","He looks at your board, sighs, and keeps walking.","Bald, tan, and somehow still younger than you."]);
+    if(onMyBeach(b.tourist)) add('tourist',b.tourist.x,b.tourist.y,22,["Tourist wit' one camera. Asking where's Pipeline.","Sunburnt already. Day one.","He stay wearing socks wit' slippahs."]);
+    if(onMyBeach(b.local)) add('local',b.local.x,b.local.y,22,["Local uncle walking his beach. Respect.","He drops stuff everywhere. Free souvenirs.","Uncle's been surfing here since before you was born."]);
     { const bx=buggyLX(); if(bx!==null) add('atv',bx,SHORE+16,28,["Lifeguard ATV. Dey own dis beach.","Lifeguards on patrol. Stay outta da way.","Red cross on da back. No mess wit' 'um."]); }
     if(scr===SCR.TOWN){
       add('shaveice',b.iceShop.x,b.iceShop.y,30,["Shave ice stand. Rainbow wit' ice cream on da bottom.","Line stay long, but worth it.","Li hing mui flavor. Da best."]);
