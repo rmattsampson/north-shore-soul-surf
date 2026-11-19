@@ -532,7 +532,7 @@ function tickWaves(){
       beep(wv.messy?150:220, .18, 'sawtooth', .03);   // shorebreak thud
     }
   }
-  for(const wv of w.waves) wv.y+=wv.spd*(w.surfing&&w.cur===wv?1.4:1);
+  for(const wv of w.waves) wv.y+=wv.spd;   // same speed whether or not you're riding it
   w.waves=w.waves.filter(wv=>wv.y<SHORE-4);           // gone once it breaks on the sand
   // advance crash foam + run-up surges
   for(const g of (w.surges||[])) g.t++;
