@@ -597,6 +597,21 @@ function restorePos(sc){ const p=scrPos[sc]; if(!p) return false;
   return true;
 }
 
+// SEAMLESS screen change: walk off one edge, come out da OPPOSITE edge of da neighbor screen at da
+// same spot along dat edge (same y going left/right, same x going up/down). If something solid stands
+// right dea (a house, a truck, da river), slide to da nearest free spot instead of popping somewhere random.
+function goScreen(sc, x, y){
+  beach.screen=sc;
+  const land=IS_DOWN(sc), yLo=land?SEATOP+10:SHORE+4, yHi=land?H-10:H-14;
+  player.x=clamp(x,12,W-12); player.y=clamp(y,yLo,yHi);
+  const rs=solidsNow(); if(!feetHit(player.x,player.y,rs)) return;
+  const x0=player.x, y0=player.y;
+  for(let r=4;r<=120;r+=4){                                   // ring search, nearest first; stay off da trigger edges
+    for(const [dx,dy] of [[0,r],[0,-r],[r,0],[-r,0],[r,r],[-r,r],[r,-r],[-r,-r]]){
+      const nx=clamp(x0+dx,14,W-14), ny=clamp(y0+dy,yLo+4,yHi-4);
+      if(!feetHit(nx,ny,rs)){ player.x=nx; player.y=ny; return; } } }
+}
+
 function buildBeach(){
   beach={ photographer:null, buggy:null, chandler:{x:58,y:H-54}, local:null, tourist:null,
     props:[], photoT:ri(60,120), buggyT:ri(400,800), chatCool:60, localT:ri(2400,3600), touristT:ri(400,900),
@@ -799,16 +814,15 @@ function updBeach(){
     // Vertical down-scene: beach edge up top. UP walks back to the beach screen above it.
     player.y=clamp(player.y,SEATOP+10,H-10);
     if(b.scrLock>0){ b.scrLock--; }
-    else if(player.y<=SEATOP+12 && keys.up){ rememberPos(b.screen); b.screen=UP_FROM[b.screen]; b.scrLock=10;
-      if(!restorePos(b.screen)){ player.x=clamp(player.x,20,W-20); player.y=H-30; } beep(560,.07,'triangle'); return; }
-    // LAND row scrolls left/right too: MY PLACE ◀ RCVA HOUSE ▶ DA COVE (mirrors the beaches above)
+    else if(player.y<=SEATOP+12 && keys.up){ goScreen(UP_FROM[b.screen], player.x, H-22); b.scrLock=10; beep(560,.07,'triangle'); return; }
+    // LAND row scrolls left/right too, mirroring da beaches above
     const li=LAND_ROW.indexOf(b.screen);
     if(player.x<=10 && keys.left){
-      if(li>0){ rememberPos(b.screen); b.screen=LAND_ROW[li-1]; if(!restorePos(b.screen)) player.x=W-24; announceLand(); return; }
+      if(li>0){ goScreen(LAND_ROW[li-1], W-14, player.y); announceLand(); return; }
       player.x=10;
     }
     if(player.x>=W-10 && keys.right){
-      if(li<LAND_ROW.length-1){ rememberPos(b.screen); b.screen=LAND_ROW[li+1]; if(!restorePos(b.screen)) player.x=24; announceLand(); return; }
+      if(li<LAND_ROW.length-1){ goScreen(LAND_ROW[li+1], 14, player.y); announceLand(); return; }
       player.x=W-10;
     }
     player.x=clamp(player.x,10,W-10);
@@ -829,19 +843,17 @@ function updBeach(){
     // trigger when you walk INTO the edge (not a pixel-exact test)
     const bi=BEACH_ROW.indexOf(b.screen);
     if(player.x<=10 && keys.left){
-      if(bi>0){ rememberPos(b.screen); b.screen=BEACH_ROW[bi-1]; if(!restorePos(b.screen)) player.x=W-24; announceScreen(); return; }
+      if(bi>0){ goScreen(BEACH_ROW[bi-1], W-14, player.y); announceScreen(); return; }
       player.x=10;  // western-most screen: wall
     }
     if(player.x>=W-10 && keys.right){
-      if(bi<BEACH_ROW.length-1){ rememberPos(b.screen); b.screen=BEACH_ROW[bi+1]; if(!restorePos(b.screen)) player.x=24; announceScreen(); return; }
+      if(bi<BEACH_ROW.length-1){ goScreen(BEACH_ROW[bi+1], 14, player.y); announceScreen(); return; }
       player.x=W-10; // eastern-most screen: wall
     }
     player.x=clamp(player.x,10,W-10);
-    // from the SURF beach, walk DOWN off the bottom → pop out AT the RCVA house (down top).
-    // from any beach screen, walk DOWN off the bottom → pop out at its down-scene (top).
+    // from any beach screen, walk DOWN off the bottom → come out at da TOP of its land screen, same x
     if(DOWN_MAP[b.screen]!==undefined && player.y>=H-14 && keys.down && b.scrLock===0){
-      rememberPos(b.screen); b.screen=DOWN_MAP[b.screen]; b.scrLock=10;
-      if(!restorePos(b.screen)){ player.x=(b.screen===SCR.HOUSE||NEW_LAND.has(b.screen))?W/2:W/2-80; player.y=SEATOP+18; }
+      goScreen(DOWN_MAP[b.screen], player.x, SEATOP+18); b.scrLock=10;
       beep(560,.07,'triangle'); return;
     }
   }
@@ -2358,7 +2370,7 @@ function billabongLayout(){
   const houseBand=SEATOP+10, roadY=SEATOP+140;
   return { x:382, base:houseBand+70,                 // house center + ground line
            p0:W/2-12, p1:W/2+12,                     // dirt path down the middle of the screen
-           f0:292, f1:466, ft:houseBand+16, fb:roadY-18 }; // fence box: left/right/top/bottom
+           f0:292, f1:452, ft:houseBand+16, fb:roadY-18 }; // fence box: left/right/top/bottom (gap on da right so you can walk on to da Cove side)
 }
 function drawBillabongYard(BB){
   const fence='#efe6d2', fenceSh='#b8ae96';
@@ -2441,7 +2453,7 @@ function enterRoom(id){ if(id==='hui') {}
   room=id; state='cabin'; player.x=CABIN.doorX; player.y=CABIN.y1-26; player.facing=1; beep(520,.08,'triangle'); }
 function enterCabin(){ enterRoom('myplace'); }
 function leaveCabin(){ const r=ROOMS[room]; beach.doorOpen=false; state='beach'; beach.screen=r.screen;
-  if(!restorePos(r.screen)){ player.x=r.sx; player.y = r.enter==='up' ? r.sy+6 : r.sy-10; } beach.scrLock=10; beep(440,.08,'triangle'); }
+  player.x=r.sx; player.y = r.enter==='up' ? r.sy+6 : r.sy-10; beach.scrLock=10; beep(440,.08,'triangle'); }   // always step out da front door
 // a real front door: trim frame, two inset panels, brass knob, little lamp; open = warm room light + slab swung in
 function drawHouseDoor(cx,top,w,h,col,trim,open){
   const x0=Math.round(cx-w/2);
