@@ -462,7 +462,7 @@ let beachBuilt=false;
 
 function buildBeach(){
   beach={ photographer:null, buggy:null, chandler:{x:58,y:H-54}, local:null, tourist:null,
-    props:[], photoT:ri(160,340), buggyT:ri(400,800), chatCool:60, localT:ri(2400,3600), touristT:ri(400,900),
+    props:[], photoT:ri(60,120), buggyT:ri(400,800), chatCool:60, localT:ri(2400,3600), touristT:ri(400,900),
     kelly:null, kellyT:ri(2400,4200), sterling:0, sterlingCool:0, stroller:null, strollerT:ri(900,1800), lastStroller:-1,
     // fixed Hawaiian-flair buildings
     iceShop:{x:W-70, y:SHORE+22},     // shave-ice stand = the SHOP (town screen)
@@ -731,16 +731,16 @@ function updBeach(){
   }}
   }
   // photographer: out only ~20% of the time. When his timer elapses, ROLL:
-  // 60% he shows up (new spot, picked once), else he stays away for another window.
+  // 90% he shows up (new spot, picked once), else he stays away for another window.
   // While he IS out we never touch his position — just count down his visit.
   if(b.photoT>0) b.photoT--;
   else if(!b.photographer){
-    if(Math.random()<0.60){ b.photographer={x:rnd(140,340),y:H-60,t:ri(540,780)};
+    if(Math.random()<0.90){ b.photographer={x:rnd(140,340),y:H-60,t:ri(1200,1800)};
       // he only works da COVE — only announce it when you're standing on that beach
       if(state==='beach' && b.screen===SCR.COVE){ setMsg("📷 Photographer on da beach — surf in front of him and he'll sell your shot fo' coins!",180); beep(880,.1); } }
-    else b.photoT=ri(150,300);   // keep him off the beach, try again later
+    else b.photoT=ri(60,120);    // keep him off the beach, try again soon
   }
-  if(b.photographer){ b.photographer.t--; if(b.photographer.t<0){ b.photographer=null; b.photoT=ri(300,560); } }
+  if(b.photographer){ b.photographer.t--; if(b.photographer.t<0){ b.photographer=null; b.photoT=ri(120,240); } }
 }
 
 // the lifeguard ATV drives the beach independent of the scene, so it keeps
@@ -939,10 +939,10 @@ function updWater(){
 
   const paddling=!w.surfing;
   const wading = paddling && player.y>WADE_Y;     // knee-deep near da beach: you stand up and walk
-  const sp=w.surfing?2.4:wading?1.3:1.1;          // paddling is slower than walking (1.5); wading in between
+  const sp=w.surfing?2.4:wading?1.3:0.95;         // paddling is slower than walking (1.5); wading in between
   if(keys.left){ player.x-=sp; if(paddling)player.facing=-1; }
   if(keys.right){ player.x+=sp; if(paddling)player.facing=1; }
-  if(paddling){ const v=wading?1.3:1.05; if(keys.up)player.y-=v; if(keys.down)player.y+=v; }
+  if(paddling){ const v=wading?1.3:0.9; if(keys.up)player.y-=v; if(keys.down)player.y+=v; }
   player.x=clamp(player.x,14,W-14);
   player.y=clamp(player.y,SEATOP+6,SEABOT);
 
