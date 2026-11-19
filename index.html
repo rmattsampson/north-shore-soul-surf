@@ -599,7 +599,7 @@ function buy(item){
 }
 
 function updBeach(){
-  const b=beach, sp=1.5;
+  const b=beach, sp=1.3;   // walking pace (a little slower)
   if(player.hitCool>0) player.hitCool--;
   if(player.knockT>0){            // knocked out by the ATV — no control (buggy still rolls via tickBuggy)
     player.knockT--;
@@ -939,10 +939,10 @@ function updWater(){
 
   const paddling=!w.surfing;
   const wading = paddling && player.y>WADE_Y;     // knee-deep near da beach: you stand up and walk
-  const sp=w.surfing?2.4:wading?1.3:0.95;         // paddling is slower than walking (1.5); wading in between
+  const sp=w.surfing?2.4:wading?1.1:0.95;         // paddling is slower than walking (1.3); wading in between
   if(keys.left){ player.x-=sp; if(paddling)player.facing=-1; }
   if(keys.right){ player.x+=sp; if(paddling)player.facing=1; }
-  if(paddling){ const v=wading?1.3:0.9; if(keys.up)player.y-=v; if(keys.down)player.y+=v; }
+  if(paddling){ const v=wading?1.1:0.9; if(keys.up)player.y-=v; if(keys.down)player.y+=v; }
   player.x=clamp(player.x,14,W-14);
   player.y=clamp(player.y,SEATOP+6,SEABOT);
 
@@ -1670,7 +1670,7 @@ function nearTurtle(){ return room==='cove' && near(player.x,player.y,COVE_ROOM.
 function nearBlank(){ return room==='cove' && near(player.x,player.y,COVE_ROOM.blank.x,COVE_ROOM.blank.y+20,44); }
 function nearAuntie(){ return room==='trail' && near(player.x,player.y,AUNTIE_ROOM.auntie.x,AUNTIE_ROOM.auntie.y+14,34); }
 function updCabin(){
-  const sp=1.5, ox=player.x, oy=player.y;
+  const sp=1.3, ox=player.x, oy=player.y;
   if(consume('inspect')) doInspect();
   if(player.waxing>0){                      // helping Turtle wax da board — hands busy, no walking
     if(consume('b')){ player.waxing=0; beep(380,.07,'triangle');            // B again = put da wax down and stop
