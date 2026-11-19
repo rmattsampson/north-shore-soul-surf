@@ -608,7 +608,7 @@ function enterBeach(reason){
 }
 function enterWater(){
   if(quest.active && quest.lesson===1){ quest.sess=0; saveQuest(); }
-  if(player.injured){ setMsg("You stay hurt, cuz — go find Chandler fo' heal!",150); return; }
+  if(player.injured){ setMsg("Still healing, cuz — "+Math.ceil(player.injured/60)+" s more (or Chandler on Surf beach patches you right now).",90); return; }
   state='water'; player.x=clamp(player.x,14,W-14); player.y=SEABOT-2; player.downT=0;   // wade in from right where you stood, same facing
   player.shieldUsed=false;   // rashguard perk recharges each paddle-out
   water.surfing=false; water.cur=null; water.ride=0; water.combo=0; water.style=0; water.spray=[];
@@ -663,6 +663,7 @@ function spawnCrash(x,len,messy){
    ============================================================ */
 function update(){
   frame++; seaPhase++; music();
+  if(player.injured>0 && state!=='water'){ player.injured--; if(player.injured===0){ player.recover=0; setMsg("Bite all healed up. Go surf, braddah! 🤙",120); beep(540,.14,'triangle'); } }   // heals on its own on land (~12 s)
   dayT = (dayT + 1/DAY_LEN) % 1;   // advance the day/night clock
   if(msgT>0)msgT--; if(flashT>0){ flashT--; flash.y-=0.4; }
   if(consume('mute')){ muted=!muted; setMsg(muted?"🔇 muted":"🔊 sound on",60); }
@@ -1116,7 +1117,7 @@ function updWater(){
     if(wv){ if(wv.messy){ wipeout("Messy closeout wen' buss you up!"); }
       else { w.surfing=true; w.cur=wv; wv.rode=true; w.ride=0; w.combo=0; w.style=0; beep(600,.1,'sawtooth');
         if(player.wax>0) player.wax--;
-        setMsg("DROP IN! Z / X tricks (+ ↑ or ↓ fo' more) · Q = tricks you know",120);
+        setMsg("DROP IN! Z / X tricks (+ UP or DOWN fo' more) · Q = tricks you know",120);
         if(quest.active && quest.lesson===1){ quest.sess++; saveQuest(); if(quest.sess>=3) lessonDone(); }
         if(quest.active && quest.lesson===2 && dayT>=0.05 && dayT<0.25) lessonDone(); } }
     else setMsg("No swell right dea — paddle onto a wave line, cuz",60);
@@ -1245,8 +1246,8 @@ function tickLineup(){
     }
     s.x+=s.vx; s.y=Math.max(SEATOP+12, Math.min(SEABOT-10, s.y+s.vy));
     if(inSea && near(player.x,player.y,s.x,s.y,16)&&!player.injured){
-      player.injured=1; beep(60,.6,'sawtooth',.07);
-      setMsg("Shark wen' buss you up! Paddle in, find Chandler.",180);
+      player.injured=720; beep(60,.6,'sawtooth',.07);   // ~12 s on land to heal
+      setMsg("Shark wen' buss you up! Paddle in (DOWN) — heals in ~12 s on da sand, or Chandler fixes you quick.",200);
       w.surfing=false; w.cur=null; player.downT=36; s.hunt=false; }
     if(s.hunt && LU.pro && !LU.pro.bit && near(LU.pro.x,LU.pro.y,s.x,s.y,16)){   // takes out da pro (Hui stay untouched — even da sharks respect da Hui)
       LU.pro.bit=true; s.hunt=false; s.dir=s.x<W/2?-1:1; beep(70,.4,'sawtooth',.05);
