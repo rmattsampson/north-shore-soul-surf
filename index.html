@@ -183,7 +183,7 @@ const setHS=v=>{ try{localStorage.setItem(HS,String(v));}catch(e){} };
 /* ---- wallet + owned/equipped gear (persisted) ---- */
 const WALLET='nsss_coins', OWNED='nsss_owned', EQUIP='nsss_equip';
 // ---- NEW GAME: wipe every save so you start over in Arizona ----
-const SAVE_KEYS=['nsss_hi','nsss_coins','nsss_owned','nsss_equip','nsss_quest','nsss_xp','nsss_tank_done'];
+const SAVE_KEYS=['nsss_hi','nsss_coins','nsss_owned','nsss_equip','nsss_quest','nsss_xp','nsss_tank_done','nsss_scrpos'];
 function wipeSave(){ try{ for(const k of SAVE_KEYS) localStorage.removeItem(k); }catch(e){} }
 // one-time reset Matt asked for (back to da start of Arizona); runs once per browser, before anything loads
 try{ if(!localStorage.getItem('nsss_reset_v3')){ wipeSave(); localStorage.setItem('nsss_reset_v3','1'); } }catch(e){}
@@ -193,6 +193,10 @@ function loadOwned(){ try{ return JSON.parse(localStorage.getItem(OWNED)||'["boa
 function saveOwned(a){ try{ localStorage.setItem(OWNED,JSON.stringify(a)); }catch(e){} }
 function loadEquip(){ try{ return JSON.parse(localStorage.getItem(EQUIP)||'{"board":"board_teal","shorts":"shorts_blue","shirt":"none"}'); }catch(e){ return {board:'board_teal',shorts:'shorts_blue',shirt:'none'}; } }
 function saveEquip(o){ try{ localStorage.setItem(EQUIP,JSON.stringify(o)); }catch(e){} }
+// per-screen player position memory: where you were on each screen, so returning puts you back there
+const SCRPOS='nsss_scrpos';
+function loadScrPos(){ try{ return JSON.parse(localStorage.getItem(SCRPOS)||'{}')||{}; }catch(e){ return {}; } }
+function saveScrPos(o){ try{ localStorage.setItem(SCRPOS,JSON.stringify(o)); }catch(e){} }
 
 /* ---- utils ---- */
 const rnd=(a,b)=>a+Math.random()*(b-a), ri=(a,b)=>Math.floor(rnd(a,b+1));
@@ -366,6 +370,9 @@ function drawMountains(){
   for(let x=0;x<W;x+=2) if(dither(x,94,0.4)) px(x,94,1,2,shade(C.mtnB,20));
 }
 const SEATOP=96, SEABOT=252, SHORE=252;
+// Haleiwa river-mouth footbridge: the stream channel cuts the sand (cx0..cx1), the plank deck
+// is the ONLY dry crossing. Draw + collision both read these so the walkable gap lines up.
+const HBR={ cx0:22, cx1:88, deckY:SHORE+12, deckH:12 };
 function drawSeaBands(){
   // 32-bit translucent depth gradient: deep at the horizon → bright toward shore, dithered
   gradBand(0,SEATOP,W,(SEABOT-SEATOP)*0.5, C.seaDeep, C.sea1, 10);
@@ -572,6 +579,23 @@ const GREETS = [
 let beach={}, water={ waves:[], huis:[], pro:null, shark:null, surfing:false, cur:null, spray:[], crashes:[], surges:[],
   ride:0, combo:0, waveT:30, sharkT:9999, huiT:9999, proT:9999, style:0 };
 let beachBuilt=false;
+// per-screen position memory (persisted). Keyed by screen id -> {x,y}. Save where you stood when
+// you leave a screen; when you RETURN to a screen you were already on, drop back there (nudged inward)
+// instead of the default spawn. Edge spawns still apply on the first visit to a screen.
+let scrPos=loadScrPos();
+function rememberPos(sc){ if(sc===undefined||sc===null) return; scrPos[sc]={x:Math.round(player.x), y:Math.round(player.y)}; saveScrPos(scrPos); }
+// restore saved position for a screen, nudged a few px toward center so you don't instantly re-trigger
+// the edge you came from. returns true if a saved position was applied.
+function restorePos(sc){ const p=scrPos[sc]; if(!p) return false;
+  let x=p.x, y=p.y;
+  const land=IS_DOWN(sc);
+  const yLo=land?SEATOP+10:SHORE+4, yHi=H-14;
+  // nudge inward from any edge so we clear the transition trigger bands
+  if(x<=12) x=16; else if(x>=W-12) x=W-16;
+  if(y<=yLo+4) y=yLo+8; else if(y>=yHi-2) y=yHi-6;
+  player.x=clamp(x,12,W-12); player.y=clamp(y,yLo,yHi);
+  return true;
+}
 
 function buildBeach(){
   beach={ photographer:null, buggy:null, chandler:{x:58,y:H-54}, local:null, tourist:null,
@@ -775,15 +799,16 @@ function updBeach(){
     // Vertical down-scene: beach edge up top. UP walks back to the beach screen above it.
     player.y=clamp(player.y,SEATOP+10,H-10);
     if(b.scrLock>0){ b.scrLock--; }
-    else if(player.y<=SEATOP+12 && keys.up){ b.screen=UP_FROM[b.screen]; b.scrLock=10; player.x=clamp(player.x,20,W-20); player.y=H-30; beep(560,.07,'triangle'); return; }
+    else if(player.y<=SEATOP+12 && keys.up){ rememberPos(b.screen); b.screen=UP_FROM[b.screen]; b.scrLock=10;
+      if(!restorePos(b.screen)){ player.x=clamp(player.x,20,W-20); player.y=H-30; } beep(560,.07,'triangle'); return; }
     // LAND row scrolls left/right too: MY PLACE ◀ RCVA HOUSE ▶ DA COVE (mirrors the beaches above)
     const li=LAND_ROW.indexOf(b.screen);
     if(player.x<=10 && keys.left){
-      if(li>0){ b.screen=LAND_ROW[li-1]; player.x=W-24; announceLand(); return; }
+      if(li>0){ rememberPos(b.screen); b.screen=LAND_ROW[li-1]; if(!restorePos(b.screen)) player.x=W-24; announceLand(); return; }
       player.x=10;
     }
     if(player.x>=W-10 && keys.right){
-      if(li<LAND_ROW.length-1){ b.screen=LAND_ROW[li+1]; player.x=24; announceLand(); return; }
+      if(li<LAND_ROW.length-1){ rememberPos(b.screen); b.screen=LAND_ROW[li+1]; if(!restorePos(b.screen)) player.x=24; announceLand(); return; }
       player.x=W-10;
     }
     player.x=clamp(player.x,10,W-10);
@@ -804,18 +829,19 @@ function updBeach(){
     // trigger when you walk INTO the edge (not a pixel-exact test)
     const bi=BEACH_ROW.indexOf(b.screen);
     if(player.x<=10 && keys.left){
-      if(bi>0){ b.screen=BEACH_ROW[bi-1]; player.x=W-24; announceScreen(); return; }
+      if(bi>0){ rememberPos(b.screen); b.screen=BEACH_ROW[bi-1]; if(!restorePos(b.screen)) player.x=W-24; announceScreen(); return; }
       player.x=10;  // western-most screen: wall
     }
     if(player.x>=W-10 && keys.right){
-      if(bi<BEACH_ROW.length-1){ b.screen=BEACH_ROW[bi+1]; player.x=24; announceScreen(); return; }
+      if(bi<BEACH_ROW.length-1){ rememberPos(b.screen); b.screen=BEACH_ROW[bi+1]; if(!restorePos(b.screen)) player.x=24; announceScreen(); return; }
       player.x=W-10; // eastern-most screen: wall
     }
     player.x=clamp(player.x,10,W-10);
     // from the SURF beach, walk DOWN off the bottom → pop out AT the RCVA house (down top).
     // from any beach screen, walk DOWN off the bottom → pop out at its down-scene (top).
     if(DOWN_MAP[b.screen]!==undefined && player.y>=H-14 && keys.down && b.scrLock===0){
-      b.screen=DOWN_MAP[b.screen]; b.scrLock=10; player.x=(b.screen===SCR.HOUSE||NEW_LAND.has(b.screen))?W/2:W/2-80; player.y=SEATOP+18;
+      rememberPos(b.screen); b.screen=DOWN_MAP[b.screen]; b.scrLock=10;
+      if(!restorePos(b.screen)){ player.x=(b.screen===SCR.HOUSE||NEW_LAND.has(b.screen))?W/2:W/2-80; player.y=SEATOP+18; }
       beep(560,.07,'triangle'); return;
     }
   }
@@ -998,10 +1024,27 @@ const STROLLERS = [
 function curIdx(){ const sc=beach.screen; let i=BEACH_ROW.indexOf(sc); if(i<0) i=LAND_ROW.indexOf(sc); return Math.max(0,i); }
 // spawn a walker at da edge of YOUR current beach; after dat it lives on its own screen
 function spawnRoamer(o){ const fromLeft=Math.random()<0.5; return Object.assign(o,{ s:curIdx(), x:fromLeft?-20:W+20, dir:fromLeft?1:-1, hops:ri(1,3) }); }
-// move along; crossing a screen edge carries dem to da next beach. false = walked off da coast / done
-function roamStep(R,sp){ R.x+=sp*R.dir;
-  if(R.dir>0 && R.x>W+20){ if(R.s>=BEACH_ROW.length-1 || R.hops<=0) return false; R.s++; R.hops--; R.x=-20; R.said=0; }
-  if(R.dir<0 && R.x<-20){ if(R.s<=0 || R.hops<=0) return false; R.s--; R.hops--; R.x=W+20; R.said=0; }
+// move along; crossing a screen edge carries dem to da next beach. false = walked off da coast / done.
+// On Haleiwa dey can't cross da river channel either — dey detour onto da footbridge deck (same
+// water rects as da player), den drop back to dea path once past da stream. One source of truth.
+function roamStep(R,sp){
+  const sc=BEACH_ROW[R.s];
+  if(sc===SCR.HALEIWA){
+    if(R.pathY===undefined) R.pathY=R.y;                 // remember da line dey were strolling
+    const nextX=R.x+sp*R.dir;
+    // about to step into da channel x-band at a y dat isn't da bridge deck? route onto da deck.
+    const inChannelX = nextX>HBR.cx0-6 && nextX<HBR.cx1+6;
+    if(inChannelX){
+      const deckMid=HBR.deckY+HBR.deckH/2;               // walk da plank line across
+      R.y += clamp(deckMid-R.y, -sp, sp);                // ease onto da deck
+      if(blockedWater(sc,nextX,R.y)){ R.x=nextX; return true; }   // still in water: inch along da deck line
+    } else if(R.y!==R.pathY){
+      R.y += clamp(R.pathY-R.y, -sp, sp);                // past da stream: ease back to dea path
+    }
+  }
+  R.x+=sp*R.dir;
+  if(R.dir>0 && R.x>W+20){ if(R.s>=BEACH_ROW.length-1 || R.hops<=0) return false; R.s++; R.hops--; R.x=-20; R.said=0; R.pathY=undefined; }
+  if(R.dir<0 && R.x<-20){ if(R.s<=0 || R.hops<=0) return false; R.s--; R.hops--; R.x=W+20; R.said=0; R.pathY=undefined; }
   return true; }
 // is dis walker on da beach you're looking at?
 function onMyBeach(R){ return !!R && !IS_DOWN(beach.screen) && BEACH_ROW[R.s]===beach.screen; }
@@ -1774,11 +1817,33 @@ function drawBreakScenery(){
       const bob=Math.round(Math.sin(frame*0.05+bx)*1.5);
       px(bx-12,by+bob,24,5,hc); px(bx-10,by+5+bob,20,2,shade(hc,-30)); px(bx-4,by-5+bob,9,5,'#f2f2f2'); px(bx-3,by-4+bob,3,3,'#8fb0bf');
       px(bx+1,by-18+bob,1,13,'#ccc'); }
-    // Rainbow Bridge: twin white arches over da river mouth (left)
-    px(18,SHORE-2,70,H-SHORE+2,'#3a8ab8'); for(let y=SHORE;y<H;y+=6) px(22+((y*7)%50),y,10,1,'#6fc0e0');   // river channel cutting da sand
-    ctx.strokeStyle='#f2f2f2'; ctx.lineWidth=3;
-    for(const ax of [36,70]){ ctx.beginPath(); ctx.arc(ax,SHORE+26,17,Math.PI,0); ctx.stroke(); }
-    px(14,SHORE+8,78,4,'#e8e8e8'); px(14,SHORE+8,78,1,'#ffffff'); for(let k=16;k<92;k+=6) px(k,SHORE+4,1,4,'#e8e8e8');   // deck + rail
+    // da river mouth cutting across da sand (Anahulu stream), flowing out to sea
+    for(let y=SHORE-2;y<H;y+=1){ const t=(y-SHORE)/(H-SHORE); px(HBR.cx0, y, HBR.cx1-HBR.cx0, 1, t<0.5?'#2f7aa8':'#256a98'); }
+    for(let y=SHORE;y<H;y+=5){ const wob=Math.round(Math.sin(frame*0.04+y*0.2)*2); px(HBR.cx0+6+wob+((y*7)%18),y,8,1,'#6fc0e0'); px(HBR.cx0+2+((y*5)%24),y+2,4,1,'#9fd8ee'); }  // ripples
+    // ---- wooden footbridge across da stream ----
+    { const dy=HBR.deckY, dx0=HBR.cx0-6, dx1=HBR.cx1+6, dh=HBR.deckH;        // deck overhangs each bank a touch
+      // shadow cast on da water below da planks
+      ctx.save(); ctx.globalAlpha=0.35; px(dx0+2, dy+dh, dx1-dx0-2, 5, '#123a4a'); ctx.restore();
+      // support posts standing in da channel, with reflections
+      for(const pxp of [HBR.cx0+4, (HBR.cx0+HBR.cx1)/2|0, HBR.cx1-6]){
+        px(pxp,dy+dh,3,H-(dy+dh),'#5a3a1a'); px(pxp,dy+dh,1,H-(dy+dh),'#7a5226');
+        ctx.save(); ctx.globalAlpha=0.3; px(pxp,dy+dh+2,3,8,'#2a1a0e'); ctx.restore(); }
+      // deck: planks running ACROSS da bridge wit' dark gaps between 'em + wood-grain streaks
+      px(dx0,dy,dx1-dx0,dh,'#6a4a28');                                        // deck base (the gaps show through)
+      for(let px0=dx0; px0<dx1-3; px0+=5){
+        const tone=((px0>>2)%3), col=['#9a7446','#8a6638','#7a5a30'][tone];
+        px(px0,dy,4,dh,col); px(px0,dy,4,1,shade(col,20));                    // one plank, lit top edge
+        for(let gy=dy+1;gy<dy+dh;gy+=2) px(px0+1+((px0+gy)%2),gy,1,1,shade(col,-26)); // wood-grain streaks
+        px(px0+4,dy,1,dh,'#2a1a0e');                                          // dark gap between planks
+        px(px0+1,dy+1,1,1,'#3a2614'); px(px0+2,dy+dh-2,1,1,'#3a2614');        // nail heads
+      }
+      // side rails: top rail, posts, lower stringer — near rail darker so it reads as in front
+      for(const [ry,rc,pc] of [[dy-9,'#8a6638','#6a4a24'],[dy+dh+1,'#a07a4a','#7a5630']]){
+        px(dx0,ry,dx1-dx0,2,rc); px(dx0,ry,dx1-dx0,1,shade(rc,22));           // rail cap
+        px(dx0,ry+5,dx1-dx0,1,shade(rc,-18));                                  // lower stringer
+        for(let rpx=dx0; rpx<dx1; rpx+=9) px(rpx,ry+2,2,5,pc);                // balusters
+      }
+    }
     drawBeachSign(300,SHORE+22,['HALEIWA','SURF SCHOOL']);
     drawLifeguardTower(380);
   }
@@ -1886,17 +1951,32 @@ function drawNewLand(){
     // red-dirt road down da middle (wider toward you)
     ctx.fillStyle='#b0603a'; ctx.beginPath(); ctx.moveTo(W/2-12,sandB); ctx.lineTo(W/2+12,sandB); ctx.lineTo(W/2+34,H); ctx.lineTo(W/2-34,H); ctx.closePath(); ctx.fill();
     for(let y=sandB+8;y<H;y+=10) px(W/2-6+((y*7)%12),y,3,1,'#8a4a2a');
-    // sugar cane rows both sides, swaying in da trades (back rows first)
-    for(let y=sandB+14; y<H+10; y+=16){
-      const depth=(y-sandB)/(H-sandB), base=26+depth*16;
-      for(let x=-6; x<W+6; x+=6){
-        const roadHalf=14+(y-sandB)*0.09; if(Math.abs(x-W/2)<roadHalf+8) continue;
-        const hgt=base+((x*37+y*11)%9), sway=Math.sin(frame*0.025+x*0.08+y*0.03)*(2+depth*2), top=y-hgt;
-        const stalk=(x+y)%4? '#6a8a3a':'#7a9a40';
-        px(x,top+4,2,hgt-4,stalk); for(let j=top+10;j<y;j+=7) px(x,j,2,1,'#4a6a28');                                   // jointed stalk
-        pxLine(x+1,top+8,x-8+sway,top+2+((x>>1)%4),'#4a8a30',1); pxLine(x+1,top+8,x+9+sway,top+3+((x>>2)%4),'#5a9a38',1); // arching leaves
-        pxLine(x+1,top+4,x-4+sway,top-4,'#8ab84a',1); pxLine(x+1,top+4,x+5+sway,top-5,'#9ac85a',1);                     // fresh top leaves
-        pxLine(x+1,top+16,x-7+sway*0.5,top+13,'#3a7a28',1);
+    // sugar cane fields both sides of da road: layered rows, far (short) -> near (tall), drawn
+    // back-to-front so near stalks overlap da rows behind 'em fo' real depth
+    for(let row=0; row<6; row++){
+      const depth=row/5;                                                      // 0 = far ridge, 1 = right in front of you
+      const rowY=sandB+20+Math.round(depth*depth*(H-sandB-30));               // baseline da stalks grow UP from
+      const stepX=4+Math.round(depth*2);                                      // near rows spaced a touch wider
+      const sh=Math.round(24+depth*40);                                       // base stalk height grows toward you
+      const tw=1+Math.round(depth);                                           // stalk width: 1 far, 2 near
+      for(let x=-6; x<W+6; x+=stepX){
+        const roadHalf=12+(rowY-sandB)*0.12; if(Math.abs(x-W/2)<roadHalf+5) continue;   // keep da red-dirt road clear
+        const jitter=((x*37+row*101)%11)-5;                                   // deterministic per-stalk height variation
+        const hgt=sh+jitter, top=rowY-hgt;
+        const sway=Math.sin(frame*0.02+x*0.07+row*0.6)*(1.5+depth*3.5);       // trades sway, stronger near
+        const sel=(((x>>1)+row*3)%5+5)%5, stalk=['#6a8a38','#7a9a42','#5f8233','#82a24a','#6f9040'][sel];
+        const shadow=shade(stalk,-36), node='#415e1e';
+        // jointed stalk: lit core + shadow edge, segment nodes
+        px(x,top,tw,hgt,stalk); px(x+tw,top,1,hgt,shadow);
+        for(let j=top+6;j<rowY;j+=6) px(x-1,j,tw+2,1,node);
+        // long arching blade leaves off da upper stalk
+        pxLine(x,top+6,x-7-depth*3+sway,top+1+((x>>1)%5),shade(stalk,-14),tw);
+        pxLine(x,top+4,x+8+depth*3+sway,top+((x>>2)%5),stalk,tw);
+        pxLine(x,top+12,x-6+sway*0.5,top+9+((x>>1)%4),node,1);
+        // fresh yellow-green spear leaves at da very top
+        pxLine(x,top+1,x-4+sway,top-7,'#9ac85a',tw);
+        pxLine(x,top,  x+5+sway,top-8,'#aad466',tw);
+        pxLine(x,top-1,x+1+sway*1.2,top-10,'#c2e07a',1);                      // top tassel
       }
     }
     // rusty pickup wit' a crate of foam blanks fo' Chandler
@@ -1999,6 +2079,19 @@ function drawBeach(){
 // ---- solid obstacles: the player's FEET box can't enter these (x0,y0,x1,y1 in screen coords) ----
 const HOUSE_ROAD_Y = SEATOP+92;   // keep in sync with drawHouseScreen's roadY
 function palmRect(x,by){ return [x-4,by-8,x+9,by+2]; }
+// ---- ONE source of truth for impassable water ----
+// Haleiwa's river channel is blocked except the footbridge deck gap. The player's solid-obstacle
+// check (solidsNow/feetHit) and the NPC walkers both read these same rects so nobody crosses the
+// stream except over the bridge. Returns [] on every other screen.
+function waterRects(sc){
+  if(sc!==SCR.HALEIWA) return [];
+  return [
+    [HBR.cx0, HBR.deckY+HBR.deckH, HBR.cx1, H],   // channel below the deck
+    [HBR.cx0, SHORE+8, HBR.cx1, HBR.deckY],       // channel above the deck (stops short of the waterline)
+  ];
+}
+// point-in-water test for NPCs, using the SAME rects as the player. x,y is the walker's feet.
+function blockedWater(sc,x,y){ for(const r of waterRects(sc)) if(x>r[0]&&x<r[2]&&y>r[1]&&y<r[3]) return true; return false; }
 function solidsNow(){
   const b=beach, out=[];
   if(NEW_LAND.has(b.screen)) return newLandSolids();
@@ -2023,6 +2116,8 @@ function solidsNow(){
   }
   // ATV on the beach screens blocks you (it's solid); everything else is walk-through
   { const bx=buggyLX(); if(bx!==null) out.push([bx-16, SHORE+8, bx+16, SHORE+24]); }
+  // Haleiwa river mouth: the stream is impassable on foot — same rects the NPC check reuses.
+  for(const r of waterRects(b.screen)) out.push(r);
   return out;
 }
 function feetHit(x,y,rs){
@@ -2328,10 +2423,11 @@ function atDoorSpot(){
 }
 function atCabinSteps(){ return atDoorSpot()==='myplace'; }
 function enterRoom(id){ if(id==='hui') {}
+  rememberPos(beach.screen);   // save where you stood outside, so leaving drops you back there
   room=id; state='cabin'; player.x=CABIN.doorX; player.y=CABIN.y1-26; player.facing=1; beep(520,.08,'triangle'); }
 function enterCabin(){ enterRoom('myplace'); }
 function leaveCabin(){ const r=ROOMS[room]; beach.doorOpen=false; state='beach'; beach.screen=r.screen;
-  player.x=r.sx; player.y = r.enter==='up' ? r.sy+6 : r.sy-10; beach.scrLock=10; beep(440,.08,'triangle'); }
+  if(!restorePos(r.screen)){ player.x=r.sx; player.y = r.enter==='up' ? r.sy+6 : r.sy-10; } beach.scrLock=10; beep(440,.08,'triangle'); }
 // a real front door: trim frame, two inset panels, brass knob, little lamp; open = warm room light + slab swung in
 function drawHouseDoor(cx,top,w,h,col,trim,open){
   const x0=Math.round(cx-w/2);
