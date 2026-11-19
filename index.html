@@ -511,10 +511,10 @@ function enterWater(){
 function tickWaves(){
   const w=water;
   if(w.waveT>0)w.waveT--; else {
-    // once in a while a ROGUE wave: 5-6x TALLER (only ~1.5x wider), clean and ridable, and it just washes up harmless
+    // once in a while a ROGUE wave: ~2.5-3x TALLER (only ~1.5x wider), clean and ridable, and it just washes up harmless
     const rogue = !w.waves.some(v=>v.big) && Math.random()<0.05;
     if(rogue){
-      w.waves.push({ y:SEATOP+10, x:W/2+rnd(-60,60), len:rnd(180,240), spd:rnd(0.14,0.2), messy:false, rode:false, big:rnd(5,6) });   // tall, not super wide
+      w.waves.push({ y:SEATOP+10, x:W/2+rnd(-60,60), len:rnd(180,240), spd:rnd(0.14,0.2), messy:false, rode:false, big:rnd(2.5,3) });   // ~3x a normal wave: big, not silly
       if(state==='water' || (state==='beach' && !IS_DOWN(beach.screen))){ setMsg("🌊 ROGUE WAVE! Da big one stay coming — go catch 'um!",200); beep(110,.5,'triangle',.06); }
       w.waveT=ri(240,360);
     } else {
