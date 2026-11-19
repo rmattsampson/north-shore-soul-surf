@@ -1812,11 +1812,14 @@ function drawPipeMasters(){
 function drawBreakScenery(){
   const sc=beach.screen;
   if(sc===SCR.HALEIWA){
-    // harbor: little boats bobbing at their moorings
-    for(const [bx,by,hc] of [[300,SEATOP+42,'#f2ead8'],[352,SEATOP+56,'#2f8aa8'],[408,SEATOP+38,'#e0533a']]){
-      const bob=Math.round(Math.sin(frame*0.05+bx)*1.5);
-      px(bx-12,by+bob,24,5,hc); px(bx-10,by+5+bob,20,2,shade(hc,-30)); px(bx-4,by-5+bob,9,5,'#f2f2f2'); px(bx-3,by-4+bob,3,3,'#8fb0bf');
-      px(bx+1,by-18+bob,1,13,'#ccc'); }
+    // sailboats moored out past da channel: farther out, a bit bigger, real sails
+    for(const [bx,by,hc] of [[296,SEATOP+20,'#f2ead8'],[356,SEATOP+30,'#2f8aa8'],[414,SEATOP+16,'#e0533a']]){
+      const bob=Math.round(Math.sin(frame*0.05+bx)*1.5), y=by+bob;
+      px(bx-17,y,34,6,hc); px(bx-15,y+6,30,2,shade(hc,-30)); px(bx-13,y+8,26,1,'#5aa8c8');       // hull + waterline
+      px(bx-6,y-6,12,6,'#f2f2f2'); px(bx-4,y-5,4,3,'#8fb0bf');                                       // cabin
+      px(bx+1,y-30,2,24,'#ddd');                                                                     // mast
+      ctx.fillStyle='#fbf8f0'; ctx.beginPath(); ctx.moveTo(bx+3,y-29); ctx.lineTo(bx+3,y-8); ctx.lineTo(bx+16,y-8); ctx.closePath(); ctx.fill();   // mainsail
+      ctx.fillStyle='#e8e2d4'; ctx.beginPath(); ctx.moveTo(bx,y-26); ctx.lineTo(bx,y-8); ctx.lineTo(bx-10,y-8); ctx.closePath(); ctx.fill(); }  // jib
     // da river mouth cutting across da sand (Anahulu stream), flowing out to sea
     for(let y=SHORE-2;y<H;y+=1){ const t=(y-SHORE)/(H-SHORE); px(HBR.cx0, y, HBR.cx1-HBR.cx0, 1, t<0.5?'#2f7aa8':'#256a98'); }
     for(let y=SHORE;y<H;y+=5){ const wob=Math.round(Math.sin(frame*0.04+y*0.2)*2); px(HBR.cx0+6+wob+((y*7)%18),y,8,1,'#6fc0e0'); px(HBR.cx0+2+((y*5)%24),y+2,4,1,'#9fd8ee'); }  // ripples
@@ -1901,7 +1904,12 @@ function breakLooks(sc){
 }
 
 /* ===================== NEW LAND SCREENS (walk DOWN off each new beach) ===================== */
-const KAM={ store:[30,SEATOP+46,150,SEATOP+108], truck:[276,SEATOP+70,362,SEATOP+108], bus:[396,SEATOP+78,446,SEATOP+108], roadY:SEATOP+128 };   // trail runs W/2±12, clear
+const KAM={ store:[30,SEATOP+46,150,SEATOP+108], truck:[276,SEATOP+70,362,SEATOP+108], bus:[412,SEATOP+78,456,SEATOP+108], roadY:SEATOP+128, lineX:368 };   // trail runs W/2±12, clear
+const KAM_LINE=[   // da line at da shrimp truck (front of da line first)
+  {skin:'#c68642', trunks:'#2f6a8a', shirt:'#e0533a', hair:'#2a1a10'},
+  {skin:'#f1c27d', trunks:'#c0392b', shirt:'#ffd23f', hair:'#f0d470'},
+  {skin:'#8d5524', trunks:'#3a3a3a', shirt:'#2f8a4a', hair:'#1a1a1a'},
+  {skin:'#e0ac69', trunks:'#7a2a5a', shirt:'#6fc0e0', hair:'#5a3a1a'} ];
 const CANE_TRUCK=[W/2+30,SEATOP+108,W/2+96,SEATOP+132];
 const HUI={ x:W/2, base:SEATOP+100 };
 function landPlayer(){
@@ -1932,6 +1940,11 @@ function drawNewLand(){
       ctx.fillStyle='#c0392b'; ctx.font='bold 6px monospace'; ctx.fillText('GARLIC SHRIMP',a+4,b2+32);
       for(const wx of [a+12,c2-14]){ px(wx-5,d-9,10,9,'#222'); px(wx-2,d-6,4,4,'#888'); }
       px(a+20,d+4,36,4,'#8a5a30'); px(a+22,d+8,3,8,'#5a3a1a'); px(a+50,d+8,3,8,'#5a3a1a'); }
+    // da line at da shrimp truck window -- hungry locals and tourists, shuffling
+    for(const [i,q] of KAM_LINE.entries()){
+      const qx=KAM.lineX+i*11, sh=((frame+i*47)%240)<20 ? ((frame>>3)%2) : 0;   // little idle shuffle now and then
+      softShadow(qx,KAM.truck[3]+1,8);
+      drawDude(qx+sh,KAM.truck[3]-12,q.skin,q.trunks,-1,'stand',frame,q.shirt,q.hair); }
     // bus stop
     { const [a,b2,c2,d]=KAM.bus; px(a,b2,3,d-b2,'#8a8a8a'); px(c2-3,b2,3,d-b2,'#8a8a8a'); px(a-4,b2-4,c2-a+8,5,'#2f6a8a');
       px(a+6,d-10,c2-a-12,4,'#8a5a30'); px(c2+6,b2-18,2,d-b2+18,'#aaa'); px(c2+2,b2-22,12,8,'#ffd23f');
@@ -2028,7 +2041,7 @@ function drawNewLand(){
 }
 function newLandSolids(){
   const sc=beach.screen, f=r=>[r[0],r[1],r[2],r[3]];
-  if(sc===SCR.KAMHWY) return [f(KAM.store),f(KAM.truck),f(KAM.bus)];
+  if(sc===SCR.KAMHWY) return [f(KAM.store),f(KAM.truck),f(KAM.bus),[KAM.lineX-5,KAM.truck[3]-14,KAM.lineX+KAM_LINE.length*11-6,KAM.truck[3]]];
   if(sc===SCR.CANE) return [f(CANE_TRUCK)];
   if(sc===SCR.HUIHALE) return [[HUI.x-85,HUI.base-58,HUI.x+85,HUI.base-6],[W/2-34,HUI.base+18,W/2-22,HUI.base+28],[W/2+22,HUI.base+18,W/2+34,HUI.base+28]];
   return [[296,SEATOP+88,344,SEATOP+102]];   // lookout bench
@@ -2038,7 +2051,8 @@ function newLandLooks(sc){
   if(sc===SCR.KAMHWY){
     add('store',90,SEATOP+116,40,["General store. Spam musubi, sunscreen, and one cold POG.","Uncle behind da counter knows everybody's name.","Board wax by da register. Every flavor of coconut."]);
     add('shrimp',318,SEATOP+116,40,["Garlic shrimp truck. Da line stay long fo' one reason.","Smells so good you might paddle back in fo' lunch.","Plate lunch: shrimp, two scoop rice. Ono."]);
-    add('busstop',421,SEATOP+116,30,["Bus stop. Da bus to town comes... eventually.","Somebody left one boogie board on da bench.","Tourists waiting wit' dea surfboards. Kooks? Maybe."]);
+    add('shrimpline',KAM.lineX+16,SEATOP+108,30,["Da line fo' garlic shrimp. Worth every minute, brah.","Uncle in front ordering fo' his whole ohana.","Tourist in back asking if da shrimp stay spicy. Yes."]);
+    add('busstop',434,SEATOP+116,30,["Bus stop. Da bus to town comes... eventually.","Somebody left one boogie board on da bench.","Tourists waiting wit' dea surfboards. Kooks? Maybe."]);
     add('road',player.x,KAM.roadY+20,24,["Kam Highway. Da only road along da North Shore.","Traffic backs up fo' miles when da surf stay big.","Look both ways, brah. Then look again."]);
   }
   if(sc===SCR.CANE){
