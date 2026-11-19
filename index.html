@@ -569,7 +569,7 @@ function enterBeach(reason){
   // come ashore where you left the water: keep your x, land at the shoreline
   const comingFromWater = (state==='water');
   state='beach';
-  if(comingFromWater){ player.x=clamp(player.x,16,W-16); player.y=SHORE+10; }
+  if(comingFromWater){ player.x=clamp(player.x,16,W-16); player.y=SHORE+4; }   // step out right at da waterline (no jump)
   else { player.x=W/2; player.y=H-40; }
   player.facing=1; player.downT=0;
   if(reason) setMsg(reason,180);
@@ -577,7 +577,7 @@ function enterBeach(reason){
 function enterWater(){
   if(quest.active && quest.lesson===1){ quest.sess=0; saveQuest(); }
   if(player.injured){ setMsg("You stay hurt, cuz — go find Chandler fo' heal!",150); return; }
-  state='water'; player.x=clamp(player.x,14,W-14); player.y=SEABOT-14; player.facing=1; player.downT=0;
+  state='water'; player.x=clamp(player.x,14,W-14); player.y=SEABOT-2; player.downT=0;   // wade in from right where you stood, same facing
   player.shieldUsed=false;   // rashguard perk recharges each paddle-out
   water.surfing=false; water.cur=null; water.ride=0; water.combo=0; water.style=0; water.spray=[];
   water.huis=[]; water.laird=null; water.shark=null;
@@ -2414,7 +2414,7 @@ function drawWater(){
   if(player.downT>0){ drawDude(player.x,player.y,C.skin,player.shorts,player.facing,'down',frame,null,PLAYER_HAIR); }
   else {
     if(!w.surfing && player.y>WADE_Y){   // wading in da shallows: walk wit' da board under your arm, water round your knees
-      const moving=keys.left||keys.right||keys.up||keys.down, wy=player.y-6;
+      const moving=keys.left||keys.right||keys.up||keys.down, wy=player.y;   // drawn where you stand, so beach <-> water lines up
       drawBeachBoard(player.x,wy,player.facing,true);
       drawDude(player.x,wy,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame,player.shirt,PLAYER_HAIR);
       ctx.save(); ctx.globalAlpha=.55; px(player.x-9,wy+9,18,8,C.sea3); ctx.restore();          // water over da legs
