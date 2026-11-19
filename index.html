@@ -612,8 +612,6 @@ function enterWater(){
   state='water'; player.x=clamp(player.x,14,W-14); player.y=SEABOT-2; player.downT=0;   // wade in from right where you stood, same facing
   player.shieldUsed=false;   // rashguard perk recharges each paddle-out
   water.surfing=false; water.cur=null; water.ride=0; water.combo=0; water.style=0; water.spray=[];
-  water.huis=[]; water.laird=null; water.shark=null;
-  water.sharkT=ri(620,1100); water.huiT=ri(260,480); water.pro=null; water.proT=ri(360,700);
  
 }
 
@@ -672,6 +670,7 @@ function update(){
   if(questOpen){ if(consume('b')||consume('enter')) questOpen=false; return; }   // log open: game pauses
   if(beachBuilt||state==='beach'||state==='water') tickWaves();  // swell keeps rolling in every scene
   if(beachBuilt) tickBuggy();  // lifeguard ATV keeps driving even while you surf
+  if(beachBuilt) tickLineup(); // Hui, pros and sharks keep going whether you're in da water or not
   if(beachBuilt) tickLocal();  // a local strolls the beach ~1/min and drops stuff
   if(beachBuilt) tickTourist();  // a lone original tourist wanders by
   if(beachBuilt) tickKelly();    // Kelly Slater cameo on the beach
@@ -1143,11 +1142,19 @@ function updWater(){
     }
   }
 
+}
+
+// da lineup at each beach keeps living while you're on da sand: Hui + pros keep surfing, sharks stay
+function lineup(){ const w=water; w.lineups=w.lineups||{}; const k=beach.screen;
+  return w.lineups[k] || (w.lineups[k]={ huis:[], pro:null, shark:null, huiT:ri(260,480), proT:ri(360,700), sharkT:ri(620,1100) }); }
+function tickLineup(){
+  if(!beachBuilt || IS_DOWN(beach.screen) || (state!=='beach' && state!=='water')) return;
+  const w=water, LU=lineup(), inSea=(state==='water');
   // HUI
-  if(w.huiT>0)w.huiT--; else if(w.huis.length<2){
-    w.huis.push({ x:rnd(W*0.45,W-30), y:ri(SEATOP+14,SEABOT-16), vx:rnd(-0.25,0.25), vy:rnd(0.08,0.22) });
-    w.huiT=ri(320,560); setMsg("⚠️ Da HUI stay in da water — keep your distance!",130); beep(160,.2,'sawtooth'); }
-  for(const h of w.huis){
+  if(LU.huiT>0)LU.huiT--; else if(LU.huis.length<2){
+    LU.huis.push({ x:rnd(W*0.45,W-30), y:ri(SEATOP+14,SEABOT-16), vx:rnd(-0.25,0.25), vy:rnd(0.08,0.22) });
+    LU.huiT=ri(320,560); setMsg("⚠️ Da HUI stay in da water — keep your distance!",130); beep(160,.2,'sawtooth'); }
+  for(const h of LU.huis){
     if(h.surf){ // riding a wave in
       if(h.wave && w.waves.includes(h.wave)){ h.y=h.wave.y; h.x+=h.vx*0.4;
         h.x=clamp(h.x, h.wave.x-h.wave.len/2+8, h.wave.x+h.wave.len/2-8); }  // stay on the face
@@ -1163,7 +1170,7 @@ function updWater(){
       if(best){ h.y += Math.sign(best.y-h.y)*0.5;   // paddle to meet the wave
         if(bd<14 && Math.random()<0.8){ h.surf=true; h.wave=best; } }
     }
-    if(player.downT===0 && player.invuln===0 && near(player.x,player.y,h.x,h.y,15)){
+    if(inSea && player.downT===0 && player.invuln===0 && near(player.x,player.y,h.x,h.y,15)){
       wipeout("Da Hui wen' knock you off! Respect da lineup.");
       // bump apart so you don't get stuck in a knock-down loop
       player.y=clamp(player.y+24,SEATOP+6,SEABOT);
@@ -1173,11 +1180,11 @@ function updWater(){
     } }
 
   // FAMOUS SURFER — one at a time (Laird is in the roster). Cocky, snakes your wave, no damage.
-  if(w.proT>0)w.proT--; else if(!w.pro){
+  if(LU.proT>0)LU.proT--; else if(!LU.pro){
     const p=PROS[ri(0,PROS.length-1)];
-    w.pro={ name:p.name, line:p.line, female:!!p.female, x:rnd(60,W-60), y:SEATOP+12, t:ri(360,560), surf:false, wave:null };
+    LU.pro={ name:p.name, line:p.line, female:!!p.female, x:rnd(60,W-60), y:SEATOP+12, t:ri(360,560), surf:false, wave:null };
     setMsg(p.name+" paddling out — "+p.line,140); beep(520,.1,'triangle'); }
-  if(w.pro){ const L=w.pro; L.t--;
+  if(LU.pro){ const L=LU.pro; L.t--;
     if(L.surf){
       if(L.wave && w.waves.includes(L.wave)){ L.y=L.wave.y; L.x+=Math.sin(frame*0.1)*0.8;
         L.x=clamp(L.x, L.wave.x-L.wave.len/2+8, L.wave.x+L.wave.len/2-8); }  // stay on the face
@@ -1192,22 +1199,22 @@ function updWater(){
       if(best){ L.y += Math.sign(best.y-L.y)*0.6;
         if(bd<14 && Math.random()<0.85){ L.surf=true; L.wave=best; setMsg(L.name+" droppin' in — "+L.line,110); } }
     }
-    if(near(player.x,player.y,L.x,L.y,15)&&w.surfing){
+    if(inSea && near(player.x,player.y,L.x,L.y,15)&&w.surfing){
       setMsg(L.name+" SNAKED your wave! 'Did you see that one?!'",110);
       player.x=clamp(player.x+(player.x<L.x?-22:22),20,W-20); }
-    if(L.t<0||L.y>SEABOT){ w.pro=null; w.proT=ri(260,520); } }
+    if(L.t<0||L.y>SEABOT){ LU.pro=null; LU.proT=ri(260,520); } }
 
   // SHARK: hunts you. It steers toward the player while they're in the water
   // and lunges when it gets close. Once it has bitten someone, or you're safe
   // on the sand, it gives up and swims off.
-  if(w.sharkT>0)w.sharkT--; else if(!w.shark){
+  if(LU.sharkT>0)LU.sharkT--; else if(!LU.shark){
     const fromLeft = player.x > W/2;
-    w.shark={x:fromLeft?-24:W+24, y:ri(SEATOP+24,SEABOT-16), vx:0, vy:0,
-      dir:fromLeft?1:-1, speed:rnd(0.9,1.25), lunge:0, hunt:true};
+    LU.shark={x:fromLeft?-24:W+24, y:ri(SEATOP+24,SEABOT-16), vx:0, vy:0,
+      dir:fromLeft?1:-1, speed:rnd(0.9,1.25), lunge:0, hunt:true, life:ri(1800,3000)};   // sticks around 30-50 s
     beep(80,.5,'sawtooth',.06); setMsg("🦈 SHARK!! Get to shore, braddah!",160); }
-  if(w.shark){ const s=w.shark;
+  if(LU.shark){ const s=LU.shark;
     const inWater = player.y < SHORE-4;
-    if(s.hunt && inWater && !player.injured){
+    if(s.hunt && inSea && inWater && !player.injured){
       const dx=player.x-s.x, dy=player.y-s.y, d=Math.hypot(dx,dy)||1;
       if(s.lunge>0) s.lunge--;
       else if(d<48 && Math.random()<0.04){ s.lunge=22; beep(110,.15,'sawtooth',.05); }
@@ -1215,18 +1222,22 @@ function updWater(){
       s.vx += (dx/d*sp - s.vx)*0.06;
       s.vy += (dy/d*sp - s.vy)*0.06;
       if(Math.abs(s.vx)>0.15) s.dir = s.vx>0?1:-1;
+    } else if(s.hunt){            // you're on da sand: it hangs around, cruising da lineup
+      s.lunge=0; s.life--;
+      if(s.x<40) s.dir=1; if(s.x>W-40) s.dir=-1;
+      s.vx += (s.dir*0.7 - s.vx)*0.04; s.vy += (Math.sin(frame*0.02+s.x*0.01)*0.3 - s.vy)*0.05;
+      if(s.life<=0) s.hunt=false;  // finally gets bored and heads out to sea
     } else {
-      s.hunt=false; s.lunge=0;
+      s.lunge=0;
       s.vx += (s.dir*1.4 - s.vx)*0.05; s.vy *= 0.9;
     }
     s.x+=s.vx; s.y=Math.max(SEATOP+12, Math.min(SEABOT-10, s.y+s.vy));
-    if(near(player.x,player.y,s.x,s.y,16)&&!player.injured){
+    if(inSea && near(player.x,player.y,s.x,s.y,16)&&!player.injured){
       player.injured=1; beep(60,.6,'sawtooth',.07);
       setMsg("Shark wen' buss you up! Paddle in, find Chandler.",180);
       w.surfing=false; w.cur=null; player.downT=36; s.hunt=false; }
-    if(s.x>W+30||s.x<-30){ w.shark=null; w.sharkT=ri(240,480); } }
+    if(s.x>W+30||s.x<-30){ LU.shark=null; LU.sharkT=ri(240,480); } }
 }
-
 function trick(name,pts,col,id){ const w=water; w.combo++; w.style+=pts;
   score+=pts*w.combo; floatScore((w.combo>1?('x'+w.combo+' '):'')+name,player.x,player.y-16,col);
   beep(880+w.combo*50,.08,'square');
@@ -1916,6 +1927,7 @@ function newLandLooks(sc){
 function drawBeach(){
   if(IS_DOWN(beach.screen)){ if(NEW_LAND.has(beach.screen)) drawNewLand(); else drawHouseScreen(); return; }
   drawWaves();   // swell keeps rolling in while you're on the sand (drawn first so people + stands sit on top of da foam)
+  drawLineup();  // da Hui, pros and any shark out in da water, seen from da beach
   drawBeachProps();
   for(const [x,by] of BEACH_PALMS[beach.screen]) drawPalm(x,by);
   if(player.knockT>0){
@@ -2926,6 +2938,17 @@ function drawWaves(){
   }
 }
 const WADE_Y = SEABOT-34;   // below this line (closer to shore) you wade instead of swim
+function drawLineup(){ if(IS_DOWN(beach.screen)) return; const LU=lineup();
+  if(LU.shark) drawShark(LU.shark.x,LU.shark.y,LU.shark.dir||1);
+  for(const h of LU.huis){ softShadow(h.x, h.y+9, 11); drawHui(h.x,h.y,h.surf); }
+  if(LU.pro){ const L=LU.pro; softShadow(L.x, L.y+9, 12); drawBoard(L.x,L.y+4,C.sea1,-1); drawDude(L.x,L.surf?L.y-5:L.y+1,C.skin,'#111',-1,L.surf?'surf':'paddle',frame);
+    if(L.female){ // swim top for the women surfers (original, generic)
+      if(L.surf){ const ty=L.y-10; px(L.x-5,ty,10,3,'#ff5aa0'); px(L.x-5,ty,10,1,'#ff8cc0'); px(L.x-1,ty,2,1,'#c03a78'); }  // top across da chest (surf torso is y-11..y-3)
+      else { px(L.x-8,L.y+1,7,2,'#ff5aa0'); px(L.x-8,L.y+1,7,1,'#ff8cc0'); } }                                 // lying flat paddling: band on da chest
+
+
+    nameTag(L.name.toUpperCase(),L.x,L.y-23,C.gold); }
+}
 function drawWater(){
   const w=water;
   // the beach strip stays alive while you surf: Chandler + props + photographer + buggy
@@ -2934,15 +2957,7 @@ function drawWater(){
   drawWaves();
   drawBeachProps();
   for(const [x,by] of BEACH_PALMS[beach.screen]||[]) drawPalm(x,by);
-  if(w.shark) drawShark(w.shark.x,w.shark.y,w.shark.dir||1);
-  for(const h of w.huis){ softShadow(h.x, h.y+9, 11); drawHui(h.x,h.y,h.surf); }
-  if(w.pro){ const L=w.pro; softShadow(L.x, L.y+9, 12); drawBoard(L.x,L.y+4,C.sea1,-1); drawDude(L.x,L.surf?L.y-5:L.y+1,C.skin,'#111',-1,L.surf?'surf':'paddle',frame);
-    if(L.female){ // swim top for the women surfers (original, generic)
-      if(L.surf){ const ty=L.y-10; px(L.x-5,ty,10,3,'#ff5aa0'); px(L.x-5,ty,10,1,'#ff8cc0'); px(L.x-1,ty,2,1,'#c03a78'); }  // top across da chest (surf torso is y-11..y-3)
-      else { px(L.x-8,L.y+1,7,2,'#ff5aa0'); px(L.x-8,L.y+1,7,1,'#ff8cc0'); } }                                 // lying flat paddling: band on da chest
-
-
-    nameTag(L.name.toUpperCase(),L.x,L.y-23,C.gold); }
+  drawLineup();
   // spray particles (behind the surfer)
   for(const s of w.spray){ const c = s.kind==='barrel'?C.purp : s.life>12?'#fff':C.foam; px(s.x,s.y,2,2,c); }
   // player
