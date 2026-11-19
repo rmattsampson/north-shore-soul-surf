@@ -422,8 +422,18 @@ function drawPalm(x,by){
    ============================================================ */
 let state='splash';  // splash | help | beach | water | gameover
 let score=0, high=getHS(), frame=0;
-let msg='', msgT=0, flash=null, flashT=0;
-function setMsg(m,d=140){ msg=m; msgT=d; }
+let msg='', msgT=0, flash=null, flashT=0, msgLastFrame=-9999;
+// On-screen messages: keep them short and spaced out.
+const MSG_MAX=70, MSG_GAP=240;          // max characters; min frames between non-urgent messages (~4 s)
+function shortMsg(m){
+  if(m.length<=MSG_MAX) return m;
+  const cut=m.slice(20).search(/[.!?—](\s|$)/);                // end of the first sentence or clause
+  if(cut>=0 && cut+21<=MSG_MAX) return m.slice(0,cut+21).replace(/\s*—$/,'').trim();
+  return m.slice(0,MSG_MAX-1).replace(/\s+\S*$/,'')+'…';
+}
+function setMsg(m,d=140,urgent=false){
+  if(!urgent && msgT>0 && frame-msgLastFrame<MSG_GAP) return;  // a message is up and it's too soon: skip
+  msg=shortMsg(m); msgT=Math.round(Math.min(d,200)*0.8); msgLastFrame=frame; }
 function floatScore(txt,x,y,col){ flash={txt,x,y,col:col||C.gold}; flashT=70; }
 
 /* ---- day/night clock ---- dayT cycles 0..1 (morning→midday→sunset→night→morning) */
@@ -851,7 +861,7 @@ function updBeach(){
   if(IS_DOWN(b.screen)){
     const rid=atDoorSpot();
     if(rid && ROOMS[rid].needRank && rankIdx()<ROOMS[rid].needRank && consume('b')){
-      beep(260,.12,'triangle'); setMsg("Hui braddah: 'Members only. Earn some respect in da water first — come back when you're one "+RANKS[ROOMS[rid].needRank].n+".'",240); return; }
+      beep(260,.12,'triangle'); return; }
     if(rid && consume('b')){
       if(b.doorOpen===rid){ enterRoom(rid); return; }            // door already open: B walks you in
       b.doorOpen=rid; beep(520,.07,'triangle'); }
@@ -1180,7 +1190,7 @@ function tickLineup(){
   // HUI
   if(LU.huiT>0)LU.huiT--; else if(LU.huis.length<2){
     LU.huis.push({ x:rnd(W*0.45,W-30), y:ri(SEATOP+14,SEABOT-16), vx:rnd(-0.25,0.25), vy:rnd(0.08,0.22) });
-    LU.huiT=ri(320,560); setMsg("⚠️ Da HUI stay in da water — keep your distance!",130); beep(160,.2,'sawtooth'); }
+    LU.huiT=ri(320,560); beep(160,.2,'sawtooth'); }
   for(const h of LU.huis){
     if(h.surf){ // riding a wave in
       if(h.wave && w.waves.includes(h.wave)){ h.y=h.wave.y; h.x+=h.vx*0.4;
@@ -1240,7 +1250,7 @@ function tickLineup(){
     const fromLeft = player.x > W/2;
     LU.shark={x:fromLeft?-24:W+24, y:ri(SEATOP+24,SEABOT-16), vx:0, vy:0,
       dir:fromLeft?1:-1, speed:rnd(0.9,1.25), lunge:0, hunt:true, life:ri(1200,2100)};   // hangs 20-35 s, den leaves
-    beep(80,.5,'sawtooth',.06); setMsg("🦈 SHARK!! Get to shore, braddah!",160); }
+    beep(80,.5,'sawtooth',.06); setMsg("🦈 SHARK!! Get to shore, braddah!",160,true); }
   if(LU.shark){ const s=LU.shark;
     if(s.hunt && --s.life<=0){ s.hunt=false; s.dir=s.x<W/2?-1:1; }   // gets bored and heads out, in da water or not
     const inWater = player.y < SHORE-4;
@@ -1267,7 +1277,7 @@ function tickLineup(){
     s.x+=s.vx; s.y=Math.max(SEATOP+12, Math.min(SEABOT-10, s.y+s.vy));
     if(inSea && near(player.x,player.y,s.x,s.y,16)&&!player.injured){
       player.injured=720; beep(60,.6,'sawtooth',.07);   // ~12 s on land to heal
-      setMsg("Shark wen' buss you up! Paddle in (DOWN) — heals in ~12 s on da sand, or Chandler fixes you quick.",200);
+      setMsg("Shark wen' buss you up! Paddle in (DOWN) — heals in ~12 s on da sand, or Chandler fixes you quick.",200,true);
       w.surfing=false; w.cur=null; player.downT=36; s.hunt=false; }
     if(s.hunt && LU.pro && !LU.pro.bit && near(LU.pro.x,LU.pro.y,s.x,s.y,16)){   // takes out da pro (Hui stay untouched — even da sharks respect da Hui)
       LU.pro.bit=true; s.hunt=false; s.dir=s.x<W/2?-1:1; beep(70,.4,'sawtooth',.05);
@@ -2317,7 +2327,7 @@ function atDoorSpot(){
   return null;
 }
 function atCabinSteps(){ return atDoorSpot()==='myplace'; }
-function enterRoom(id){ if(id==='hui') setMsg("Hui: 'Respect, brah. You earned your spot in da lineup.'",220);
+function enterRoom(id){ if(id==='hui') {}
   room=id; state='cabin'; player.x=CABIN.doorX; player.y=CABIN.y1-26; player.facing=1; beep(520,.08,'triangle'); }
 function enterCabin(){ enterRoom('myplace'); }
 function leaveCabin(){ const r=ROOMS[room]; beach.doorOpen=false; state='beach'; beach.screen=r.screen;
