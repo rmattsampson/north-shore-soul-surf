@@ -84,6 +84,7 @@ function norm(e){ switch(e.key){
   case 'z':case 'Z':return 'z'; case 'x':case 'X':return 'x';
   case 'b':case 'B':return 'b';
   case 'i':case 'I':return 'inspect';
+  case 'q':case 'Q':return 'quest';
   case 'm':case 'M':return 'mute'; default:return null; } }
 function consume(k){ if(pressed[k]){ pressed[k]=false; return true; } return false; }
 
@@ -173,15 +174,17 @@ const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const near=(ax,ay,bx,by,r)=>{const dx=ax-bx,dy=ay-by;return dx*dx+dy*dy<r*r;};
 function px(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(x|0,y|0,w|0,h|0); }
 
+const PLAYER_HAIR='#f0d470';   // you: short blond top
 /* ============================================================
    SPRITES
    ============================================================ */
-function drawDude(x,y,skin,trunks,facing,pose,t,shirt){
+function drawDude(x,y,skin,trunks,facing,pose,t,shirt,hair){
+  const hc = hair || C.hair;               // hair color (player passes short blond)
   const hasShirt = shirt && shirt!=='none';
   const fx=facing<0?-1:1;
   const skinD = shade(skin,-28);            // shadow tone
   ctx.save(); ctx.translate(x|0,y|0); ctx.scale(fx,1);
-  if(pose==='down'){ px(-8,2,16,5,skin); px(-8,5,16,2,skinD); px(-6,-1,5,5,C.hair);
+  if(pose==='down'){ px(-8,2,16,5,skin); px(-8,5,16,2,skinD); px(-6,-1,5,5,hc);
     const b=(t>>2)%2; px(-11,-6,3,3,b?C.gold:C.foam); px(9,-7,3,3,b?C.foam:C.gold); ctx.restore(); return; }
   const stride=pose==='walk'?Math.sin(t*0.35)*2:0;
 
@@ -209,7 +212,7 @@ function drawDude(x,y,skin,trunks,facing,pose,t,shirt){
     // head: lit crown, shadow jaw, rim on the sun side
     px(-3+lean,-11-crouch,7,7,skin); px(-3+lean,-11-crouch,3,7,skinH); px(1+lean,-11-crouch,3,7,skinD);
     px(4+lean,-11-crouch,1,7,rim);
-    px(-3+lean,-12-crouch,7,3,C.hair); px(-3+lean,-12-crouch,2,4,C.hair);
+    px(-3+lean,-12-crouch,7,3,hc); if(!hair) px(-3+lean,-12-crouch,2,4,hc);   // custom hair = short crop, no long lock
     ctx.restore(); return;
   }
   if(pose==='paddle'){
@@ -223,7 +226,7 @@ function drawDude(x,y,skin,trunks,facing,pose,t,shirt){
     px(0,-1,8,4,skin); px(0,2,8,1,skinD);
     if(hasShirt){ px(-1,-1,9,4,shirt); px(-1,-1,9,1,shade(shirt,30)); px(-1,2,9,1,shade(shirt,-26)); }
     // head up, looking forward over the nose of the board
-    px(7,-3,5,5,skin); px(10,-3,2,5,skinD); px(7,-4,5,2,C.hair);
+    px(7,-3,5,5,skin); px(10,-3,2,5,skinD); px(7,-4,5,2,hc);
     // arms reaching ahead and down into the water, alternating stroke
     px(9,-1+strokeF*2,5,2,skin);   // forward (reaching) arm
     px(2,3+strokeB*2,5,2,skin);    // trailing (pulling) arm
@@ -240,7 +243,7 @@ function drawDude(x,y,skin,trunks,facing,pose,t,shirt){
   px(-6,-3,3,6,skin); px(4,-3,3,6,skin); px(5,-3,2,6,rim2);
   if(hasShirt){ px(-4,-4,9,8,shirt); px(-4,-4,3,8,shade(shirt,22)); px(1,-4,4,8,shade(shirt,-22)); px(-4,-4,9,1,shade(shirt,36));
     px(-6,-3,3,2,shirt); px(4,-3,3,2,shade(shirt,-22)); }                    // short sleeves
-  px(-3,-11,7,7,skin); px(-3,-11,3,7,skinH2); px(1,-11,3,7,skinD); px(4,-11,1,7,rim2); px(-3,-12,7,3,C.hair);
+  px(-3,-11,7,7,skin); px(-3,-11,3,7,skinH2); px(1,-11,3,7,skinD); px(4,-11,1,7,rim2); px(-3,-12,7,3,hc);
   ctx.restore();
 }
 function shade(hex,amt){ // lighten(+)/darken(-) a #rrggbb
@@ -425,6 +428,45 @@ function sleepTilMorning(){ dayT=0.10; sleepFade=70; setMsg("😴 Zzz... slept t
 const player={ x:W/2, y:0, facing:1, board:C.good, shorts:'#2a3a6a', shirt:'none',
   injured:0, recover:0, downT:0, invuln:0, trickT:0, trickKind:'', knockT:0, hitCool:0 };
 
+/* ---- XP + RANK: you're an up-and-coming surfer. XP comes from surfing + quests; higher rank =
+   waves are easier to catch and hold, and more tricks unlock. Coins stay photographer-only. ---- */
+const RANKS=[ {n:'GROM',min:0}, {n:'LOCAL',min:40}, {n:'CHARGER',min:120}, {n:'PIPE INVITE',min:250} ];
+let xp=(()=>{ try{ return parseInt(localStorage.getItem('nsss_xp')||'0',10)||0; }catch(e){ return 0; } })();
+function rankIdx(v){ let r=0; for(let i=0;i<RANKS.length;i++) if((v??xp)>=RANKS[i].min) r=i; return r; }
+function gainXP(n){ if(n<=0) return; const before=rankIdx(); xp+=n; try{ localStorage.setItem('nsss_xp',String(xp)); }catch(e){}
+  floatScore('+'+n+' XP',W/2,52,C.good);
+  const after=rankIdx();
+  if(after>before){ beep(660,.12,'triangle'); setTimeout(()=>beep(990,.16,'triangle'),140);
+    setMsg("🏄 RANK UP: "+RANKS[after].n+"! Waves catch easier now"+(TRICKS.some(t=>t.rank===after)?" + new tricks unlocked (Q).":"."),260); } }
+// how forgiving da waves are at each rank: [catch reach px, stay-on margin px, pull-along]
+const RIDE_FEEL=[ [9,3,0.03], [12,6,0.04], [15,9,0.05], [18,12,0.06] ];
+// tricks: key combo while riding -> trick; rank needed
+const TRICKS=[
+  { id:'cut',   name:'Cutback!',     keys:'Z',      pts:40,  rank:0, pose:'cut'  },
+  { id:'lip',   name:'Off-da-lip!',  keys:'X',      pts:45,  rank:0, pose:'lip'  },
+  { id:'snap',  name:'Snap!',        keys:'↓ + Z',  pts:55,  rank:1, pose:'cut'  },
+  { id:'float', name:'Floater!',     keys:'↑ + Z',  pts:60,  rank:1, pose:'surf' },
+  { id:'barrel',name:'BARREL!!',     keys:'Z + X',  pts:120, rank:1, pose:'barrel' },
+  { id:'round', name:'Roundhouse!',  keys:'↓ + X',  pts:75,  rank:2, pose:'cut'  },
+  { id:'air',   name:'AIR!!',        keys:'↑ + X',  pts:90,  rank:2, pose:'lip'  },
+];
+// Chandler's soul-surf lessons (talk to Chandler wit' B on da Surf beach)
+const LESSONS=[
+  { name:"Feel it",            goal:"Ride one wave fo' 200+ frames wit' NO tricks.", xp:15,
+    intro:"Chandler: 'First lesson: no tricks. Just ride. Feel da wave.'" },
+  { name:"Read da set",        goal:"Catch 3 waves in one paddle-out without wiping out.", xp:15,
+    intro:"Chandler: 'Read da ocean. Catch three in a row, no wipeouts.'" },
+  { name:"Dawn patrol",        goal:"Catch a wave early in da morning (sleep, then go surf).", xp:20,
+    intro:"Chandler: 'Da ocean stay glassy at dawn. Be out dea first.'" },
+  { name:"Respect da big one", goal:"Ride a ROGUE wave fo' 150+ frames.", xp:25,
+    intro:"Chandler: 'When da big one comes, no run. Ride 'um wit' respect.'" },
+];
+let quest=(()=>{ try{ return Object.assign({lesson:0,active:false,sess:0,gun:false}, JSON.parse(localStorage.getItem('nsss_quest')||'{}')); }catch(e){ return {lesson:0,active:false,sess:0,gun:false}; } })();
+function saveQuest(){ try{ localStorage.setItem('nsss_quest',JSON.stringify(quest)); }catch(e){} }
+function lessonDone(){ const L=LESSONS[quest.lesson]; quest.active=false; quest.lesson++; quest.sess=0; saveQuest();
+  gainXP(L.xp); beep(880,.12,'triangle');
+  setMsg("✅ Lesson done: "+L.name+"! "+(quest.lesson<LESSONS.length?"Go see Chandler fo' da next one.":"Chandler says: go see Turtle at da barn."),260); }
+let questOpen=false;
 /* ---- shop catalog: cosmetic gear, a tiny perk here and there ---- */
 const SHOP = [
   { id:'board_teal',   kind:'board',  name:'Teal Twin',     price:0,   color:'#2fbfae', perk:'' },
@@ -437,6 +479,7 @@ const SHOP = [
   { id:'shirt_none',   kind:'shirt',  name:'No Shirt',      price:0,   color:'none',    perk:'' },
   { id:'shirt_rash',   kind:'shirt',  name:'Rashguard',     price:200, color:'#2b6cb0', perk:'tough' }, // tiny perk: survive 1 extra hit
   { id:'shirt_aloha',  kind:'shirt',  name:'Aloha Shirt',   price:260, color:'#e0533a', perk:'' },
+  { id:'board_chandler',kind:'board', name:"Chandler's Gun", price:0, color:'#f2ead8', perk:'longboard', hidden:true }, // earned, not bought
   { id:'shaveice',     kind:'treat',  name:'Shave Ice',     price:40,  color:'#7ad9ff', perk:'treat' }  // a gift you carry (Andy likes)
 ];
 try{ if(!localStorage.getItem('nsss_coins_reset_v2')){ setCoins(0); localStorage.setItem('nsss_coins_reset_v2','1'); } }catch(e){}
@@ -533,6 +576,7 @@ function enterBeach(reason){
   if(reason) setMsg(reason,180);
 }
 function enterWater(){
+  if(quest.active && quest.lesson===1){ quest.sess=0; saveQuest(); }
   if(player.injured){ setMsg("You stay hurt, cuz — go find Chandler fo' heal!",150); return; }
   state='water'; player.x=clamp(player.x,14,W-14); player.y=SEABOT-14; player.facing=1; player.downT=0;
   player.shieldUsed=false;   // rashguard perk recharges each paddle-out
@@ -592,6 +636,8 @@ function update(){
   dayT = (dayT + 1/DAY_LEN) % 1;   // advance the day/night clock
   if(msgT>0)msgT--; if(flashT>0){ flashT--; flash.y-=0.4; }
   if(consume('mute')){ muted=!muted; setMsg(muted?"🔇 muted":"🔊 sound on",60); }
+  if(consume('quest') && (state==='beach'||state==='water'||state==='cabin')) questOpen=!questOpen;
+  if(questOpen){ if(consume('b')||consume('enter')) questOpen=false; return; }   // log open: game pauses
   if(beachBuilt||state==='beach'||state==='water') tickWaves();  // swell keeps rolling in every scene
   if(beachBuilt) tickBuggy();  // lifeguard ATV keeps driving even while you surf
   if(beachBuilt) tickLocal();  // a local strolls the beach ~1/min and drops stuff
@@ -609,13 +655,15 @@ function update(){
 /* ---- SHOP: simple buy menu overlaid on the beach ---- */
 let shop={ sel:0 };
 function openShop(){ state='shop'; shop.sel=0; beep(680,.09,'triangle'); }
+function shopList(){ return SHOP.filter(i=>!i.hidden || owned.includes(i.id)); }
 function updShop(){
-  if(consume('up'))   shop.sel=(shop.sel+SHOP.length-1)%SHOP.length;
-  if(consume('down')) shop.sel=(shop.sel+1)%SHOP.length;
-  if(consume('left')) shop.sel=(shop.sel+SHOP.length-1)%SHOP.length;
-  if(consume('right'))shop.sel=(shop.sel+1)%SHOP.length;
+  const SL=shopList();
+  if(consume('up'))   shop.sel=(shop.sel+SL.length-1)%SL.length;
+  if(consume('down')) shop.sel=(shop.sel+1)%SL.length;
+  if(consume('left')) shop.sel=(shop.sel+SL.length-1)%SL.length;
+  if(consume('right'))shop.sel=(shop.sel+1)%SL.length;
   if(consume('b')||consume('space')){ state='beach'; return; }   // close
-  if(consume('enter')){ buy(SHOP[shop.sel]); }
+  if(consume('enter')){ buy(SL[shop.sel]); }
 }
 function buy(item){
   if(item.kind==='treat'){
@@ -703,6 +751,13 @@ function updBeach(){
       if(player.recover>80){ player.injured=0; player.recover=0; beep(540,.14,'triangle');
         setMsg("Chandler: 'You good now, braddah. Surf wit' aloha.'",150); }
       else if(frame%30===0) setMsg("Chandler patching you up... hang loose",40);
+    } else if(near(player.x,player.y,b.chandler.x,b.chandler.y+6,26) && consume('b')){
+      beep(520,.08,'triangle'); b.chatCool=300;
+      if(quest.lesson<LESSONS.length){ const L=LESSONS[quest.lesson];
+        if(!quest.active){ quest.active=true; quest.sess=0; saveQuest(); setMsg(L.intro+"  ("+L.goal+")",320); }
+        else setMsg("Chandler: 'Lesson "+(quest.lesson+1)+" — "+L.name+": "+L.goal+"'",260); }
+      else if(!quest.gun) setMsg("Chandler: 'You ready, braddah. Go see Turtle at da barn — your board stay waiting.'",260);
+      else setMsg("Chandler: "+CHANDLER_LINES[ri(0,CHANDLER_LINES.length-1)],150);
     } else if(near(player.x,player.y,b.chandler.x,b.chandler.y+6,22)){
       if(b.chatCool>0) b.chatCool--;
       else { setMsg("Chandler: "+CHANDLER_LINES[ri(0,CHANDLER_LINES.length-1)],150);
@@ -986,12 +1041,15 @@ function updWater(){
 
   // drop-in: must be close to a clean swell line
   if(!w.surfing && consume('space')){
-    const reach = (player.longboard || player.wax>0) ? 22 : 14;   // longboard perk or fresh wax: easier to catch a swell
+    const feel=RIDE_FEEL[rankIdx()];
+    const reach = feel[0] + ((player.longboard || player.wax>0) ? 6 : 0);   // rank sets how close you must be; gun/wax helps
     const wv=w.waves.find(v=>!v.rode && Math.abs(v.y-player.y)<reach && Math.abs(v.x-player.x)<v.len/2+10);
     if(wv){ if(wv.messy){ wipeout("Messy closeout wen' buss you up!"); }
       else { w.surfing=true; w.cur=wv; wv.rode=true; w.ride=0; w.combo=0; w.style=0; beep(600,.1,'sawtooth');
         if(player.wax>0) player.wax--;
-        setMsg("DROP IN! ← → carve · Z cutback · X off-da-lip · Z+X barrel",120); } }
+        setMsg("DROP IN! Z / X tricks (+ ↑ or ↓ fo' more) · Q = tricks you know",120);
+        if(quest.active && quest.lesson===1){ quest.sess++; saveQuest(); if(quest.sess>=3) lessonDone(); }
+        if(quest.active && quest.lesson===2 && dayT>=0.05 && dayT<0.25) lessonDone(); } }
     else setMsg("No swell right dea — paddle onto a wave line, cuz",60);
   }
 
@@ -1000,19 +1058,22 @@ function updWater(){
     // slid off its face, the ride ends and you're paddling again — no phantom standing.
     const onWave = w.cur && w.waves.includes(w.cur)
                 && w.cur.y < SHORE-4
-                && player.x > w.cur.x - w.cur.len/2 - 10
-                && player.x < w.cur.x + w.cur.len/2 + 10;
+                && player.x > w.cur.x - w.cur.len/2 - RIDE_FEEL[rankIdx()][1]
+                && player.x < w.cur.x + w.cur.len/2 + RIDE_FEEL[rankIdx()][1];   // groms slip off easier
     if(!onWave){ endRide(); }
     else {
       w.ride++; score+=1;
       player.y=w.cur.y;                         // ride the face in
-      player.x += (w.cur.x - player.x)*0.04;    // get gently pulled along the wave
+      player.x += (w.cur.x - player.x)*RIDE_FEEL[rankIdx()][2];    // better surfers stay in da pocket
       if(frame%5===0) beep(280+Math.min(w.ride,220),.02,'sine',.012);
       // tricks — capture each key ONCE, then decide (fixes Z being eaten by &&)
       const zHit=consume('z'), xHit=consume('x');
-      if(zHit&&xHit) trick('BARREL!!',120,C.purp);
-      else if(zHit) trick('Cutback!',40,C.good);
-      else if(xHit) trick('Off-da-lip!',45,C.gold);
+      if(zHit||xHit){
+        const want = zHit&&xHit ? 'barrel' : zHit ? (keys.up?'float':keys.down?'snap':'cut') : (keys.up?'air':keys.down?'round':'lip');
+        let T=TRICKS.find(t=>t.id===want);
+        if(T.rank>rankIdx()){ setMsg("🔒 "+T.name.replace(/!/g,'')+" unlocks at "+RANKS[T.rank].n+" rank",90); T=TRICKS.find(t=>t.id===(zHit?'cut':'lip')); }
+        trick(T.name,T.pts,T.id==='barrel'?C.purp:T.id==='air'?C.bad:C.gold,T.id);
+      }
       // kick out on purpose, or ride into the shorebreak
       if(player.y>=SHORE-8 || consume('space')){ endRide(); }
     }
@@ -1083,18 +1144,22 @@ function updWater(){
     if(w.shark.x>W+30) w.shark=null; }
 }
 
-function trick(name,pts,col){ const w=water; w.combo++; w.style+=pts;
+function trick(name,pts,col,id){ const w=water; w.combo++; w.style+=pts;
   score+=pts*w.combo; floatScore((w.combo>1?('x'+w.combo+' '):'')+name,player.x,player.y-16,col);
   beep(880+w.combo*50,.08,'square');
   // drive the trick animation: distinct pose + spray burst
-  player.trickKind = name.startsWith('BARREL')?'barrel' : name.startsWith('Off')?'lip' : 'cut';
-  player.trickT = player.trickKind==='barrel'?34:22;
-  spawnSpray(player.x, player.y, player.trickKind); }
+  player.trickKind = id || (name.startsWith('BARREL')?'barrel' : name.startsWith('Off')?'lip' : 'cut');
+  player.trickT = player.trickKind==='barrel'?34 : player.trickKind==='air'?32 : 22;
+  spawnSpray(player.x, player.y, player.trickKind==='barrel'?'barrel':'cut'); }
 function spawnSpray(x,y,kind){
   const n = kind==='barrel'?16:9;
   for(let i=0;i<n;i++) water.spray.push({ x, y:y-4,
     vx:rnd(-2.6,2.6), vy:rnd(-3.2,-0.6), life:ri(16,30), kind }); }
 function endRide(){ const w=water; if(!w.surfing)return;
+  const rideLen=w.ride, usedTricks=w.style>0, onBig=!!(w.cur&&w.cur.big), combo=w.combo;
+  if(rideLen>=60) gainXP(1+Math.floor(rideLen/120)+(combo>=2?1:0));     // XP fo' every real ride
+  if(quest.active && quest.lesson===0 && rideLen>=200 && !usedTricks) lessonDone();
+  else if(quest.active && quest.lesson===3 && onBig && rideLen>=150) lessonDone();
   let bonus=Math.floor(w.ride*0.6)+w.style, note="Nice ride! "+w.ride+" frames";
   if(photographerOut()){ bonus*=2; note="📷 Da photog got your shot!"; beep(990,.14); }
   score+=bonus;
@@ -1114,6 +1179,7 @@ function wipeout(reason){ const w=water;
     floatScore('RASHGUARD SAVE!',player.x,player.y-18,C.good); beep(520,.12,'triangle');
     setMsg("Rashguard saved you — keep ripping!",90); return; }
   w.surfing=false; w.cur=null; w.ride=0; w.combo=0; w.style=0;
+  if(quest.active && quest.lesson===1 && quest.sess>0){ quest.sess=0; saveQuest(); }    // a wipeout resets "read da set"
   player.downT=48; setMsg(reason||"WIPEOUT! Worked in da impact zone.",120); beep(130,.28,'sawtooth');
   if(score>high){ high=score; setHS(high); } }
 
@@ -1131,8 +1197,31 @@ function render(){
   if(isNight() && state!=='shop'){ ctx.save(); ctx.globalAlpha=0.34; ctx.fillStyle='#0a0f2a'; ctx.fillRect(0,0,W,H); ctx.restore(); }
   if(sleepFade>0){ const a=sleepFade>35?(70-sleepFade)/35:sleepFade/35; ctx.save(); ctx.globalAlpha=Math.min(1,a*1.2); ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H); ctx.restore(); sleepFade--; }
   drawHUD(); drawBanner(); drawKeyHint();
+  if(questOpen) drawQuestLog();
 }
 
+function drawQuestLog(){
+  ctx.save(); ctx.globalAlpha=.8; px(0,0,W,H,'#0a0618'); ctx.restore();
+  const bx=40, by=28, bw=W-80, bh=H-56;
+  px(bx,by,bw,bh,'#14233a'); ctx.strokeStyle=C.good; ctx.lineWidth=2; ctx.strokeRect(bx+1,by+1,bw-2,bh-2);
+  ctx.textAlign='center'; ctx.fillStyle=C.gold; ctx.font='bold 12px "Courier New",monospace'; ctx.fillText('SURF JOURNAL',W/2,by+16);
+  const r=rankIdx(), next=RANKS[r+1];
+  ctx.textAlign='left'; ctx.font='bold 10px "Courier New",monospace'; ctx.fillStyle=C.txt;
+  ctx.fillText('Rank: '+RANKS[r].n+'   '+xp+' XP'+(next?('  (next: '+next.n+' at '+next.min+')'):'  (top rank!)'),bx+12,by+34);
+  if(next){ const t=(xp-RANKS[r].min)/(next.min-RANKS[r].min); px(bx+12,by+40,bw-24,5,'#2a3a5a'); px(bx+12,by+40,Math.round((bw-24)*Math.min(1,t)),5,C.good); }
+  let y=by+60; const line=(txt,col)=>{ ctx.fillStyle=col||C.txt; ctx.fillText(txt,bx+12,y); y+=13; };
+  ctx.font='bold 9px "Courier New",monospace'; line('QUESTS',C.gold); ctx.font='9px "Courier New",monospace';
+  if(quest.lesson<LESSONS.length){ const L=LESSONS[quest.lesson];
+    line((quest.active?'▶ ':'○ ')+"Chandler lesson "+(quest.lesson+1)+"/"+LESSONS.length+": "+L.name, quest.active?C.good:C.txt);
+    line('    '+(quest.active?L.goal:"Talk to Chandler (B) on da Surf beach")+(quest.active&&quest.lesson===1?('  ['+quest.sess+'/3]'):''),'#b4b2cc');
+  } else if(!quest.gun){ line("▶ Pick up your board from Turtle at da Shaping Barn (B)",C.good); }
+  else line("✓ Chandler's lessons done — you ride Chandler's Gun",C.good);
+  line((gifts>0?'▶ ':'○ ')+"Bring Andy Irons a shave ice (RCVA house)"+(gifts>0?'  — you have '+gifts:''), gifts>0?C.good:C.txt);
+  line("○ Surf in front of da photog at da Cove fo' coins",C.txt);
+  y+=4; ctx.font='bold 9px "Courier New",monospace'; line('TRICKS (while riding)',C.gold); ctx.font='9px "Courier New",monospace';
+  for(const T of TRICKS){ const ok=T.rank<=r; line((ok?'  ':'🔒')+' '+T.keys.padEnd(7)+' '+T.name.replace(/!/g,'')+(ok?'':'  ('+RANKS[T.rank].n+')'), ok?C.txt:'#7a7890'); }
+  ctx.textAlign='center'; ctx.fillStyle=C.good; ctx.fillText('Q / B to close',W/2,by+bh-8); ctx.textAlign='left';
+}
 function drawSplash(){
   drawSky(); drawMountains(); drawSeaBands(); drawSand();
   drawPalm(40,SHORE+66); drawPalm(W-46,SHORE+70);
@@ -1164,7 +1253,8 @@ function drawHelp(){
   const L=[
     '↑ paddle out  ·  ← → steer  ·  ↓ go back to beach',
     'SPACE  drop in on a clean swell / kick out',
-    'Z cutback · X off-da-lip · Z + X  BARREL',
+    'Z/X tricks · add ↑ or ↓ fo\' more · Z+X barrel',
+    'Q = quest log + rank · higher rank = easier waves',
     'B use / sleep / shop  ·  I inspect stuff',
     'read da waves. long rides + tricks = fo\' da soul.',
     '📷 photog at da cove sells your shot = 🪙 (only way)',
@@ -1339,14 +1429,14 @@ function drawBeach(){
   if(player.knockT>0){
     softShadow(player.x, player.y+12, 11);
     drawBeachBoard(player.x,player.y,player.facing,false);
-    drawDude(player.x,player.y,C.skin,player.shorts,player.facing,'down',frame);
+    drawDude(player.x,player.y,C.skin,player.shorts,player.facing,'down',frame,null,PLAYER_HAIR);
     ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
     ctx.fillText('💫 dazed',player.x,player.y-14); ctx.textAlign='left';
   } else {
     const moving=state!=='shop' && (keys.left||keys.right||keys.up||keys.down);   // arrows only drive the menu while shopping
     softShadow(player.x, player.y+13, 10);
     drawBeachBoard(player.x,player.y,player.facing,moving);
-    drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame,player.shirt);
+    drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame,player.shirt,PLAYER_HAIR);
     if(player.injured) px(player.x-3,player.y-20,6,3,C.bad);
   }
 }
@@ -1518,14 +1608,14 @@ function drawHouseScreen(){
   const moving=state!=='shop' && (keys.left||keys.right||keys.up||keys.down);   // arrows only drive the menu while shopping
   if(player.knockT>0){
     softShadow(player.x, player.y+12, 11);
-    drawDude(player.x,player.y,C.skin,player.shorts,player.facing,'down',frame);
+    drawDude(player.x,player.y,C.skin,player.shorts,player.facing,'down',frame,null,PLAYER_HAIR);
     ctx.fillStyle=C.bad; ctx.font='7px monospace'; ctx.textAlign='center';
     ctx.fillText('💫 dazed',player.x,player.y-14); ctx.textAlign='left';
     return;
   }
   softShadow(player.x, player.y+13, 10);
   drawBeachBoard(player.x,player.y,player.facing,moving);
-  drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame,player.shirt);
+  drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame,player.shirt,PLAYER_HAIR);
 }
 function drawTallPalm(x,by,h){
   // slender curved trunk rising high, drooping fronds — original
@@ -1766,6 +1856,10 @@ function updCabin(){
   }
   if(nearBlank() && consume('b')){ player.waxing=180; player.facing = player.x<COVE_ROOM.blank.x ? 1 : -1; beep(640,.08,'triangle');
     setMsg("Turtle: 'Eh, grab one bar of wax, help me out!'",120); }
+  if(nearTurtle() && quest.lesson>=LESSONS.length && !quest.gun && consume('b')){
+    quest.gun=true; saveQuest(); if(!owned.includes('board_chandler')){ owned.push('board_chandler'); saveOwned(owned); }
+    equip.board='board_chandler'; saveEquip(equip); applyEquip(); gainXP(30); beep(990,.2,'triangle');
+    setMsg("Turtle: 'Chandler shaped dis gun fo' YOU, brah.' 🏄 You got CHANDLER'S GUN — catches waves way easier!",320); }
   if(nearTurtle() && npcCool===0){ npcCool=600; beep(540,.07,'triangle');
     setMsg(pickLine('turtle-talk',["Turtle: 'Eh braddah! Chandler says shape da board wit' your soul, not your hands.'","Turtle: 'Grab one wax at da blank. B. Make 'um stick.'","Turtle: 'Dis gun going be da one fo' Pipe. Watch.'","Turtle: 'Chandler no sell boards. He give 'um to who earns 'um.'"]),240); }
   if(nearAuntie() && npcCool===0){ npcCool=600; beep(560,.07,'triangle');
@@ -1829,7 +1923,7 @@ function drawCabin(){
   // player (board stays leaning outside by the door)
   const moving=keys.left||keys.right||keys.up||keys.down;
   softShadow(player.x, player.y+13, 10);
-  drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame,player.shirt);
+  drawDude(player.x,player.y,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame,player.shirt,PLAYER_HAIR);
   if(player.waxing>0){ const hx=player.x+player.facing*(8+Math.sin(frame*0.35)*3); px(hx-3,player.y-2,6,3,'#e8dca8'); px(hx-3,player.y-2,6,1,'#fff6d0'); }  // wax bar in hand
 }
 function drawMyPlaceRoom(){
@@ -2109,13 +2203,14 @@ function doInspect(){
 function drawKeyHint(){
   if(state!=='beach' && state!=='cabin') return;
   let act=null;
-  if(state==='cabin'){ if(atCabinDoor()) act=['↓','walk out']; else if(nearCabinBed()) act=['B','sleep']; else if(nearAndy()) act=['B','give gift']; else if(player.waxing>0) act=['B','stop waxing']; else if(nearBlank()) act=['B','help Turtle wax']; }
+  if(state==='cabin'){ if(atCabinDoor()) act=['↓','walk out']; else if(nearCabinBed()) act=['B','sleep']; else if(nearAndy()) act=['B','give gift']; else if(nearTurtle() && quest.lesson>=LESSONS.length && !quest.gun) act=['B','get your board']; else if(player.waxing>0) act=['B','stop waxing']; else if(nearBlank()) act=['B','help Turtle wax']; }
   else {
     const b=beach;
     const rid=atDoorSpot();
     if(rid) act = b.doorOpen===rid ? ['B',(ROOMS[rid].enter==='up'?'/ ↑':'/ ↓')+' walk in'] : ['B','open door'];
     else if(b.screen===SCR.MYHOUSE){ const HM=myHammock(); if(near(player.x,player.y,HM.x,HM.y,40)) act=['B','sleep']; }
     else if(b.screen===SCR.TOWN && near(player.x,player.y,b.iceShop.x,b.iceShop.y,24)) act=['B','shop'];
+    else if(b.screen===SCR.SURF && near(player.x,player.y,b.chandler.x,b.chandler.y+6,26)) act=['B','talk to Chandler'];
   }
   const look=!!nearestInspectable();
   const rows=[ act ? [act[0],act[1],true] : ['B','open / use',false], ['I','inspect',look] ];
@@ -2317,12 +2412,12 @@ function drawWater(){
   // spray particles (behind the surfer)
   for(const s of w.spray){ const c = s.kind==='barrel'?C.purp : s.life>12?'#fff':C.foam; px(s.x,s.y,2,2,c); }
   // player
-  if(player.downT>0){ drawDude(player.x,player.y,C.skin,player.shorts,player.facing,'down',frame); }
+  if(player.downT>0){ drawDude(player.x,player.y,C.skin,player.shorts,player.facing,'down',frame,null,PLAYER_HAIR); }
   else {
     if(!w.surfing && player.y>WADE_Y){   // wading in da shallows: walk wit' da board under your arm, water round your knees
       const moving=keys.left||keys.right||keys.up||keys.down, wy=player.y-6;
       drawBeachBoard(player.x,wy,player.facing,true);
-      drawDude(player.x,wy,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame,player.shirt);
+      drawDude(player.x,wy,C.skin,player.shorts,player.facing,moving?'walk':'stand',frame,player.shirt,PLAYER_HAIR);
       ctx.save(); ctx.globalAlpha=.55; px(player.x-9,wy+9,18,8,C.sea3); ctx.restore();          // water over da legs
       const r=(frame>>3)%2; px(player.x-10-r,wy+9,20+2*r,1,C.foam); px(player.x-6,wy+11,3,1,'#fff'); // ripple ring
       if(player.injured) px(player.x-3,wy-20,6,3,C.bad);
@@ -2330,16 +2425,19 @@ function drawWater(){
     }
     softShadow(player.x, player.y+9, 13);
     drawBoard(player.x,player.y+4,player.board,player.facing);
-    const pose = !w.surfing ? 'paddle'
-               : player.trickT>0 ? player.trickKind   // 'cut' | 'lip' | 'barrel'
-               : 'surf';
+    const TK = player.trickT>0 ? TRICKS.find(t=>t.id===player.trickKind) : null;
+    const pose = !w.surfing ? 'paddle' : TK ? TK.pose : 'surf';
+    // airs leave da wave, floaters ride up on da lip, roundhouses flip direction mid-turn
+    const lift = !TK ? 0 : TK.id==='air' ? -Math.round(12*Math.sin(Math.PI*(1-player.trickT/32))) : TK.id==='float' ? -5 : 0;
+    const face = TK && TK.id==='round' && player.trickT<11 ? -player.facing : player.facing;
     // board carve tilt during a cutback reads as a little spray arc under the tail
     if(w.surfing&&player.trickT>0){ for(let i=0;i<4;i++) px(player.x-14+i*8, player.y+9+Math.sin(frame*0.4+i)*2, 3,2, C.foam); }
     // prone paddler lies right on the deck; standing poses keep their offset
-    drawDude(player.x, pose==='paddle' ? player.y+1 : player.y-5, C.skin,player.shorts,player.facing,pose,frame,player.shirt);
+    if(lift<0) drawBoard(player.x,player.y+4+lift,player.board,face);   // board comes wit' you on an air / floater
+    drawDude(player.x, pose==='paddle' ? player.y+1 : player.y-5+lift, C.skin,player.shorts,face,pose,frame,player.shirt,PLAYER_HAIR);
     if(w.surfing){
-      const label = player.trickT>0 ? (player.trickKind==='barrel'?'BARREL!':player.trickKind==='lip'?'OFF-DA-LIP':'CUTBACK') : 'SHREDDIN';
-      const col = player.trickT>0 ? (player.trickKind==='barrel'?C.purp:C.gold) : C.good;
+      const label = TK ? TK.name.replace(/!/g,'').toUpperCase() : 'SHREDDIN';
+      const col = TK ? (TK.id==='barrel'?C.purp:TK.id==='air'?C.bad:C.gold) : C.good;
       px(player.x-20,player.y-32,40,4,'#002'); ctx.fillStyle=col; ctx.font='8px monospace'; ctx.textAlign='center';
       ctx.fillText(label,player.x,player.y-33); ctx.textAlign='left';
     }
@@ -2364,8 +2462,9 @@ function drawShop(){
   ctx.fillText('🪙 '+coins+' coins',W/2,by+24);
   ctx.font='9px "Courier New",monospace'; ctx.textAlign='left';
   let yy=by+38;
-  for(let i=0;i<SHOP.length;i++){
-    const it=SHOP[i], isSel=i===shop.sel;
+  const SL=shopList();
+  for(let i=0;i<SL.length;i++){
+    const it=SL[i], isSel=i===shop.sel;
     const ownedIt = it.kind==='treat' ? false : owned.includes(it.id);
     const equipped = it.kind!=='treat' && equip[it.kind]===it.id;
     if(isSel){ px(bx+6,yy-8,bw-12,13,'#24456a'); }
@@ -2394,6 +2493,7 @@ function drawHUD(){
   ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText(state==='beach'?'🏖 BEACH':state==='shop'?'🍧 SHOP':state==='cabin'?ROOMS[room].label:'🌊 LINEUP',W/2,12);
   ctx.textAlign='left'; ctx.fillStyle=C.gold; ctx.font='bold 10px "Courier New",monospace';
   ctx.fillText('🪙 '+coins, 6, 12);
+  ctx.fillStyle=C.good; ctx.fillText(RANKS[rankIdx()].n+' · '+xp+' XP  (Q)', 60, 12);
   ctx.font='bold 11px "Courier New",monospace';
   if(state==='water'&&water.surfing){ ctx.fillStyle=C.purp; ctx.fillText('RIDE '+water.ride+(water.combo>1?('  x'+water.combo):''),W/2,28); }
   if(player.injured){ ctx.fillStyle=C.bad; ctx.textAlign='center'; ctx.fillText('🩹 HURT — heal at Chandler on da beach',W/2, state==='water'?44:28); }
