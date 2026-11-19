@@ -106,11 +106,12 @@ function beep(f=440,d=.08,type='square',v=.05){ if(muted||!actx)return;
   try{ const o=actx.createOscillator(),g=actx.createGain(); o.type=type; o.frequency.value=f;
     o.connect(g); g.connect(actx.destination); g.gain.setValueAtTime(v,actx.currentTime);
     g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+d); o.start(); o.stop(actx.currentTime+d);}catch(e){} }
-/* ---- MIDI-style chiptune: surf-rock / island groove (original tune) ----
+/* ---- MIDI-style chiptune: Hawaiian island groove (original tune) ----
    Web Audio step sequencer scheduled ahead on the audio clock so the tempo never drifts with frame rate.
-   I-vi-IV-V in G, 16 steps per bar, 4 bars, then a B-section; square lead, triangle bass, pulse chords,
-   noise hats + sine kick. */
-const BPM=112, STEP=60/BPM/4;                                    // 16th-note length in seconds
+   Slow swung feel. Lead is a slide "steel guitar" (slides into each note, then vibrato), chords are a
+   strummed ukulele on the offbeats, bass is a soft root/fifth, drums are a light shaker + soft thump. */
+const BPM=88, STEP=60/BPM/4;                                     // 16th-note length in seconds
+const SWING=0.30;                                                // delay of each off-8th, as a fraction of a 16th
 const N=(m)=>440*Math.pow(2,(m-69)/12);
 const CHORDS=[[55,59,62],[52,55,59],[48,52,55],[50,54,57],       // A: G  Em  C  D
               [48,52,55],[50,54,57],[52,55,59],[50,54,57]];      // B: C  D   Em D
@@ -134,21 +135,40 @@ function hat(t,vol){
   src.buffer=noiseBuf; hp.type='highpass'; hp.frequency.value=7000; src.connect(hp); hp.connect(g); g.connect(musicGain);
   g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.04); src.start(t); src.stop(t+0.05);
 }
-function kick(t){
+function kick(t,vol=0.9){
   const o=actx.createOscillator(), g=actx.createGain(); o.type='sine';
   o.frequency.setValueAtTime(140,t); o.frequency.exponentialRampToValueAtTime(45,t+0.12);
-  o.connect(g); g.connect(musicGain); g.gain.setValueAtTime(0.9,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
+  o.connect(g); g.connect(musicGain); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
   o.start(t); o.stop(t+0.18);
+}
+// Lap-steel guitar: slides up into the note, then a gentle vibrato, through a soft lowpass.
+function steel(f,t,dur,vol){
+  const o=actx.createOscillator(), g=actx.createGain(), lp=actx.createBiquadFilter();
+  const lfo=actx.createOscillator(), lfoG=actx.createGain();
+  o.type='triangle'; o.frequency.setValueAtTime(f*0.94,t); o.frequency.exponentialRampToValueAtTime(f,t+0.07);
+  lfo.frequency.value=5.5; lfoG.gain.setValueAtTime(0,t); lfoG.gain.linearRampToValueAtTime(f*0.012,t+0.18);
+  lfo.connect(lfoG); lfoG.connect(o.frequency);
+  lp.type='lowpass'; lp.frequency.value=2400;
+  o.connect(lp); lp.connect(g); g.connect(musicGain);
+  g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.start(t); lfo.start(t); o.stop(t+dur+0.02); lfo.stop(t+dur+0.02);
+}
+// Ukulele strum: the chord an octave up, plucked low-to-high a few ms apart.
+function uke(ch,t,vol){
+  ch.forEach((m,i)=>tone('triangle',N(m+12),t+i*0.014,0.22,vol));
 }
 function playStep(k,t){
   const bar=Math.floor(k/16)%8, s16=k%16, ch=CHORDS[bar];
+  const ts = (s16%4===2) ? t+STEP*SWING : t;                                       // swing the off-8ths
   const lead=LEAD[(k%128)];
-  if(lead!==null) tone('square',N(lead),t,STEP*1.8,0.16);                         // lead melody
-  if(s16%4===0) tone('triangle',N(ch[0]-12),t,STEP*1.9,0.55);                      // bass: root on da beat
-  if(s16%4===2) tone('triangle',N(ch[0]-5),t,STEP*1.4,0.40);                       //       fifth on da "and"
-  if(s16===4||s16===12) for(const m of ch) tone('square',N(m),t,STEP*1.2,0.045);  // offbeat chord stabs (ska/surf skank)
-  if(s16%2===1) hat(t,0.12); else if(s16===0||s16===8) kick(t);                   // drums
-  if(s16===4||s16===12) hat(t,0.22);                                               // backbeat snap
+  if(lead!==null) steel(N(lead),ts,STEP*2.6,0.20);                                 // steel-guitar lead
+  if(s16===0||s16===8) tone('triangle',N(ch[0]-12),t,STEP*3.2,0.50);               // bass: root
+  if(s16===6||s16===14) tone('triangle',N(ch[0]-5),ts,STEP*1.6,0.32);              //       fifth
+  if(s16%4===2) uke(ch,ts,0.07);                                                   // ukulele strum on the "and"
+  if(s16===12) uke(ch,t,0.05);                                                     // extra light strum
+  if(s16%2===0) hat(s16%4===2?ts:t,0.05);                                          // soft shaker
+  if(s16===0) kick(t,0.35);                                                        // soft thump on beat 1
 }
 function music(){ if(!actx||muted){ if(musicGain)musicGain.gain.value=0; return; }
   musicGain.gain.value=0.11;
@@ -1252,7 +1272,7 @@ function tickLineup(){
     if(s.hunt && LU.pro && !LU.pro.bit && near(LU.pro.x,LU.pro.y,s.x,s.y,16)){   // takes out da pro (Hui stay untouched — even da sharks respect da Hui)
       LU.pro.bit=true; s.hunt=false; s.dir=s.x<W/2?-1:1; beep(70,.4,'sawtooth',.05);
       setMsg("🦈 Shark wen' hit "+LU.pro.name+"! Dey okay — paddlin' back to shore.",170); }
-    if(s.x>W+30||s.x<-30){ LU.shark=null; LU.sharkT=ri(240,480); } }
+    if(s.x>W+30||s.x<-30){ LU.shark=null; LU.sharkT=ri(660,1080); } }
 }
 function trick(name,pts,col,id){ const w=water; w.combo++; w.style+=pts;
   score+=pts*w.combo; floatScore((w.combo>1?('x'+w.combo+' '):'')+name,player.x,player.y-16,col);
