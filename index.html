@@ -189,7 +189,7 @@ function drawDude(x,y,skin,trunks,facing,pose,t,shirt,hair){
   const stride=pose==='walk'?Math.sin(t*0.35)*2:0;
 
   if(pose==='surf'||pose==='cut'||pose==='lip'||pose==='barrel'){
-    const skinH=shade(skin,22), rim='#ffcf8a';   // highlight tone + sunset rim-light
+    const skinH=shade(skin,22), rim=shade(skin,14);   // highlight tone + soft rim (skin-toned, not yellow)
     // crouch amount + lean per trick
     let crouch=2, leanArmUp=false, tuck=false, lean=0;
     if(pose==='cut'){ crouch=4; lean=-3; }          // low carve, leaning back
@@ -211,7 +211,6 @@ function drawDude(x,y,skin,trunks,facing,pose,t,shirt,hair){
     else { px(-11+lean,-3-crouch,6,3,skin); px(-11+lean,-3-crouch,6,1,skinH); px(5+lean,-6-crouch,6,3,skin); px(5+lean,-6-crouch,6,1,rim); }
     // head: lit crown, shadow jaw, rim on the sun side
     px(-3+lean,-11-crouch,7,7,skin); px(-3+lean,-11-crouch,3,7,skinH); px(1+lean,-11-crouch,3,7,skinD);
-    px(4+lean,-11-crouch,1,7,rim);
     px(-3+lean,-12-crouch,7,3,hc); if(!hair) px(-3+lean,-12-crouch,2,4,hc);   // custom hair = short crop, no long lock
     ctx.restore(); return;
   }
@@ -235,7 +234,7 @@ function drawDude(x,y,skin,trunks,facing,pose,t,shirt,hair){
     ctx.restore(); return;
   }
   // stand / walk — 3-tone with sunset rim
-  const skinH2=shade(skin,22), rim2='#ffcf8a';
+  const skinH2=shade(skin,22), rim2=shade(skin,14);
   px(-3,6,3,7+stride,skin); px(1,6,3,7-stride,skin);
   px(-3,13,4,2,'#1b2a33'); px(1,13,4,2,'#1b2a33');
   px(-4,3,9,4,trunks); px(-4,3,9,1,shade(trunks,36));
@@ -243,7 +242,7 @@ function drawDude(x,y,skin,trunks,facing,pose,t,shirt,hair){
   px(-6,-3,3,6,skin); px(4,-3,3,6,skin); px(5,-3,2,6,rim2);
   if(hasShirt){ px(-4,-4,9,8,shirt); px(-4,-4,3,8,shade(shirt,22)); px(1,-4,4,8,shade(shirt,-22)); px(-4,-4,9,1,shade(shirt,36));
     px(-6,-3,3,2,shirt); px(4,-3,3,2,shade(shirt,-22)); }                    // short sleeves
-  px(-3,-11,7,7,skin); px(-3,-11,3,7,skinH2); px(1,-11,3,7,skinD); px(4,-11,1,7,rim2); px(-3,-12,7,3,hc);
+  px(-3,-11,7,7,skin); px(-3,-11,3,7,skinH2); px(1,-11,3,7,skinD); px(-3,-12,7,3,hc);
   ctx.restore();
 }
 function shade(hex,amt){ // lighten(+)/darken(-) a #rrggbb
@@ -2216,7 +2215,7 @@ function drawKeyHint(){
   const rows=[ act ? [act[0],act[1],true] : ['B','open / use',false], ['I','inspect',look] ];
   ctx.font='bold 7px monospace';
   const bw=Math.ceil(Math.max(...rows.map(r=>ctx.measureText(r[1]).width)))+22, bh=rows.length*10+4;
-  const bx=W-bw-4, by=H-26-bh;
+  const bx=W-bw-4, by=H-Math.max(26,bannerH+4)-bh;   // stays above a wrapped message
   ctx.save(); ctx.globalAlpha=.78; px(bx,by,bw,bh,'#0a0618'); ctx.restore();
   rows.forEach(([k,label,on],i)=>{
     const y=by+10+i*10, col=on?C.gold:'#b4b2cc';
@@ -2500,12 +2499,17 @@ function drawHUD(){
   if(flashT>0&&flash){ ctx.fillStyle=flash.col; ctx.font='bold 11px monospace'; ctx.textAlign='center'; ctx.fillText(flash.txt,flash.x,flash.y); }
   ctx.textAlign='left';
 }
+let bannerH=0;   // height of da message bar this frame (key legend sits above it)
 function drawBanner(){
-  if(msgT<=0||!msg)return;
+  bannerH=0; if(msgT<=0||!msg) return;
   ctx.font='10px "Courier New",monospace'; ctx.textAlign='center';
-  const w=ctx.measureText(msg).width+16, a=Math.min(1,msgT/20);
-  ctx.globalAlpha=.82*a; px(W/2-w/2,H-22,w,15,'#0a0618');
-  ctx.globalAlpha=a; ctx.fillStyle=C.good; ctx.fillText(msg,W/2,H-11);
+  const maxW=W-28, words=msg.split(' '), lines=[]; let cur='';
+  for(const wd of words){ const t=cur?cur+' '+wd:wd; if(ctx.measureText(t).width>maxW && cur){ lines.push(cur); cur=wd; } else cur=t; }
+  if(cur) lines.push(cur);
+  const lh=12, h=lines.length*lh+5, w=Math.min(W-12, Math.max(...lines.map(l=>ctx.measureText(l).width))+16), a=Math.min(1,msgT/20);
+  const top=H-7-h; bannerH=h+7;
+  ctx.globalAlpha=.86*a; px(W/2-w/2,top,w,h,'#0a0618');
+  ctx.globalAlpha=a; ctx.fillStyle=C.good; lines.forEach((l,k)=>ctx.fillText(l,W/2,top+11+k*lh));
   ctx.globalAlpha=1; ctx.textAlign='left';
 }
 
