@@ -662,8 +662,10 @@ function update(){
   if(beachBuilt) tickKelly();    // Kelly Slater cameo on the beach
   if(beachBuilt) tickStroller(); // other North Shore names strolling da sand (friendly, not surfing)
   if(beachBuilt) tickRoad();     // clothed walkers + cyclists stroll the dirt sidewalk
-  if(state==='splash'){ if(consume('enter')){ state='help'; beep(660,.1);} else if(consume('space')){ enterBeach(); } return; }
-  if(state==='help'){ if(consume('enter')||consume('space')){ enterBeach(); } return; }
+  if(state==='splash'){ if(consume('enter')){ state='help'; beep(660,.1);} else if(consume('space')){ startGame(); } return; }
+  if(state==='help'){ if(consume('enter')||consume('space')){ startGame(); } return; }
+  if(state==='tank'){ updTank(); return; }
+  tickHeat();
   if(state==='gameover'){ if(consume('enter')||consume('space')){ score=0; state='splash'; } return; }
   if(state==='shop'){ updShop(); return; }
   if(state==='beach') updBeach(); else if(state==='water') updWater(); else if(state==='cabin') updCabin();
@@ -786,6 +788,11 @@ function updBeach(){
       else { setMsg("Chandler: "+CHANDLER_LINES[ri(0,CHANDLER_LINES.length-1)],150);
         beep(500,.08,'triangle'); b.chatCool=260; }
     }
+  }
+  if(b.screen===SCR.PIPE && near(player.x,player.y,JUDGE.x,JUDGE.y,26) && consume('b')){
+    if(heat.on) setMsg("Head judge: 'Heat stay running — go surf! "+Math.ceil(heat.t/60)+" seconds left.'",160);
+    else if(rankIdx()<3) setMsg("Head judge: 'Pipe Masters is invite only, brah. Come back when you're one PIPE INVITE.'",240);
+    else startHeat();
   }
   if(b.screen===SCR.TOWN){
     // SHOP: walk up to da shave-ice stand, press B
@@ -1184,6 +1191,7 @@ function spawnSpray(x,y,kind){
 function endRide(){ const w=water; if(!w.surfing)return;
   const rideLen=w.ride, usedTricks=w.style>0, onBig=!!(w.cur&&w.cur.big), combo=w.combo;
   if(rideLen>=60) gainXP(1+Math.floor(rideLen/120)+(combo>=2?1:0));     // XP fo' every real ride
+  if(heat.on && beach.screen===SCR.PIPE) heatRide(rideLen/60, w.style, combo);
   if(quest.active && quest.lesson===0 && rideLen>=200 && !usedTricks) lessonDone();
   else if(quest.active && quest.lesson===3 && onBig && rideLen>=150) lessonDone();
   let bonus=Math.floor(w.ride*0.6)+w.style, note="Nice ride! "+(w.ride/60).toFixed(1)+" seconds";
@@ -1214,6 +1222,7 @@ function wipeout(reason){ const w=water;
    ============================================================ */
 function render(){
   if(state==='splash') return drawSplash();
+  if(state==='tank'){ drawTank(); drawBanner(); return; }
   if(state==='help') return drawHelp();
   drawSky(); drawMountains();
   if(!(state==='beach' && IS_DOWN(beach.screen))){ drawSeaBands(); drawSand(); }
@@ -1244,9 +1253,88 @@ function drawQuestLog(){
   else line("✓ Chandler's lessons done — you ride Chandler's Gun",C.good);
   line((gifts>0?'▶ ':'○ ')+"Bring Andy Irons a shave ice (RCVA house)"+(gifts>0?'  — you have '+gifts:''), gifts>0?C.good:C.txt);
   line("○ Surf in front of da photog at da Cove fo' coins",C.txt);
+  line(quest.champ?"✓ PIPE MASTERS CHAMPION — trophy at your place":(rankIdx()>=3?"▶ Pipe Masters: talk to da head judge at Pipeline (B)":"○ Pipe Masters: reach PIPE INVITE, then see da judge at Pipeline"), quest.champ||rankIdx()>=3?C.good:C.txt);
   y+=4; ctx.font='bold 9px "Courier New",monospace'; line('TRICKS (while riding)',C.gold); ctx.font='9px "Courier New",monospace';
   for(const T of TRICKS){ const ok=T.rank<=r; line((ok?'  ':'🔒')+' '+T.keys.padEnd(7)+' '+T.name.replace(/!/g,'')+(ok?'':'  ('+RANKS[T.rank].n+')'), ok?C.txt:'#7a7890'); }
   ctx.textAlign='center'; ctx.fillStyle=C.good; ctx.fillText('Q / B to close',W/2,by+bh-8); ctx.textAlign='left';
+}
+/* ===================== PROLOGUE: da Arizona wave tank =====================
+   You start as a desert kid surfing a machine-made wave pool. Win da little contest (3 clean rides),
+   win a ticket to Hawaii, land on da North Shore as a total kook. Plays once; ENTER skips. */
+const TANK={ x0:40, x1:440, y0:132, y1:262 };
+let tank=null;
+function startGame(){
+  let done=false; try{ done=!!localStorage.getItem('nsss_tank_done'); }catch(e){}
+  if(done){ enterBeach(); return; }
+  state='tank'; tank={ x:W/2, y:TANK.y1-14, facing:1, waves:[], t:40, riding:false, cur:null, ride:0, rides:0, need:3, end:0 };
+  setMsg("ARIZONA. 112°F. Da only waves fo' 400 miles come out of one machine. Win da Desert Surf Classic: 3 clean rides!",360);
+}
+function finishTank(){
+  try{ localStorage.setItem('nsss_tank_done','1'); }catch(e){}
+  enterBeach(); sleepFade=70;
+  setMsg("✈️ Welcome to da North Shore, kook. Real waves no come from one machine. Go find Chandler.",360);
+}
+function updTank(){
+  const T=tank;
+  if(consume('enter')){ finishTank(); return; }                                         // skip
+  if(T.end>0){ T.end--; if(T.end===0) finishTank(); return; }
+  if(T.t>0) T.t--; else { T.waves.push({ y:TANK.y0+4, x:W/2, len:TANK.x1-TANK.x0-20, spd:0.38 }); T.t=150; }   // perfect, identical lines
+  for(const v of T.waves) v.y+=v.spd;
+  T.waves=T.waves.filter(v=>v.y<TANK.y1-2);
+  if(!T.riding){
+    const sp=1.0;
+    if(keys.left){ T.x-=sp; T.facing=-1; } if(keys.right){ T.x+=sp; T.facing=1; }
+    if(keys.up) T.y-=0.9; if(keys.down) T.y+=0.9;
+    T.x=clamp(T.x,TANK.x0+14,TANK.x1-14); T.y=clamp(T.y,TANK.y0+10,TANK.y1-10);
+    if(consume('space')){ const v=T.waves.find(v=>Math.abs(v.y-T.y)<16);
+      if(v){ T.riding=true; T.cur=v; T.ride=0; beep(600,.1,'sawtooth'); } else setMsg("Wait fo' da machine to push one wave, den SPACE.",80); }
+  } else {
+    if(!T.waves.includes(T.cur)){ endTankRide(); }
+    else { T.ride++; T.y=T.cur.y;
+      if(keys.left){ T.x-=2; T.facing=-1; } if(keys.right){ T.x+=2; T.facing=1; } T.x=clamp(T.x,TANK.x0+14,TANK.x1-14);
+      if(consume('z')||consume('x')){ floatScore('CARVE!',T.x,T.y-16,C.gold); beep(880,.06,'square'); }
+      if(T.cur.y>=TANK.y1-8) endTankRide(); }
+  }
+}
+function endTankRide(){
+  const T=tank, secs=T.ride/60; T.riding=false; T.cur=null; T.y=TANK.y1-14;
+  if(secs>=1.5){ T.rides++; beep(760,.1,'triangle');
+    if(T.rides>=T.need){ T.end=300; beep(990,.2,'triangle');
+      setMsg("🏆 You won da DESERT SURF CLASSIC! Prize: one-way ticket to HAWAII. Pack your board, kid.",300); }
+    else setMsg("Judges: clean ride! "+T.rides+"/"+T.need+" — da crowd stay going wild (all twelve of dem).",160); }
+  else setMsg("Too short — stay on da machine wave longer (1.5+ seconds).",120);
+}
+function drawTank(){
+  const T=tank;
+  // desert sky + mesas + saguaros
+  gradBand(0,0,W,120,'#f2a65a','#ffd9a0',10);
+  ctx.fillStyle='#fff2c0'; ctx.beginPath(); ctx.arc(380,46,18,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#b4583a'; ctx.beginPath(); ctx.moveTo(0,110); ctx.lineTo(20,72); ctx.lineTo(120,72); ctx.lineTo(140,110); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#9a4a30'; ctx.beginPath(); ctx.moveTo(300,110); ctx.lineTo(320,84); ctx.lineTo(430,84); ctx.lineTo(452,110); ctx.closePath(); ctx.fill();
+  gradBand(0,104,W,H-104,'#d8b070','#c89a5a',6);                                                   // sand + dirt
+  for(const [cx,cy,h] of [[18,118,30],[462,124,34],[250,112,22]]){ px(cx-2,cy-h,5,h,'#3a7a3a'); px(cx-8,cy-h+10,4,10,'#3a7a3a'); px(cx-8,cy-h+10,6,3,'#3a7a3a'); px(cx+5,cy-h+6,4,12,'#3a7a3a'); px(cx+3,cy-h+14,5,3,'#3a7a3a'); }
+  // da wave machine house + banner + bleachers
+  px(TANK.x0+120,TANK.y0-26,160,24,'#9a9a9a'); px(TANK.x0+120,TANK.y0-26,160,3,'#c0c0c0');
+  ctx.fillStyle='#333'; ctx.font='bold 7px monospace'; ctx.textAlign='center'; ctx.fillText('WAVE MACHINE',W/2,TANK.y0-12);
+  px(70,30,340,14,'#c0392b'); ctx.fillStyle='#fff'; ctx.font='bold 9px "Courier New",monospace'; ctx.fillText('DESERT SURF CLASSIC',W/2,41); ctx.textAlign='left';
+  px(70,30,2,74,'#888'); px(408,30,2,74,'#888');
+  for(let r=0;r<3;r++){ px(TANK.x1+4,TANK.y0+10+r*12,34,4,'#8a8a8a'); for(let k=0;k<5;k++) px(TANK.x1+7+k*6,TANK.y0+4+r*12,4,6,['#e0533a','#2b6cb0','#ffd23f','#2fbfae','#f2f2f2'][(k+r)%5]); }
+  // concrete pool + painted-blue water
+  px(TANK.x0-8,TANK.y0-8,TANK.x1-TANK.x0+16,TANK.y1-TANK.y0+16,'#b8b4aa'); px(TANK.x0-8,TANK.y0-8,TANK.x1-TANK.x0+16,2,'#d8d4ca');
+  gradBand(TANK.x0,TANK.y0,TANK.x1-TANK.x0,TANK.y1-TANK.y0,'#2f9ab8','#4fc0d8',6);
+  for(let y=TANK.y0+6;y<TANK.y1;y+=10) for(let x=TANK.x0+4;x<TANK.x1;x+=40) px(x+((y*3)%20),y,10,1,'#7ad6e8');   // chlorine sparkle
+  px(TANK.x0,TANK.y1-6,TANK.x1-TANK.x0,6,'#e8e4da');                                                        // concrete "beach" slope
+  // machine waves: perfectly straight, perfectly identical
+  for(const v of T.waves){ const x0=v.x-v.len/2;
+    for(let i=0;i<v.len;i+=3){ px(x0+i,v.y+2,3,5,'#1f7a98'); px(x0+i,v.y,3,3,'#3fb0d0'); px(x0+i,v.y-2,3,2,'#e8f8ff'); } }
+  // you
+  if(T.riding){ drawBoard(T.x,T.y+4,player.board,T.facing); drawDude(T.x,T.y-5,C.skin,player.shorts,T.facing,'surf',frame,player.shirt,PLAYER_HAIR); }
+  else { drawBoard(T.x,T.y+4,player.board,T.facing); drawDude(T.x,T.y+1,C.skin,player.shorts,T.facing,'paddle',frame,player.shirt,PLAYER_HAIR); }
+  // HUD
+  px(0,0,W,16,'#00000059'); ctx.font='bold 10px "Courier New",monospace'; ctx.fillStyle=C.gold; ctx.textAlign='left';
+  ctx.fillText('🌵 ARIZONA WAVE TANK — clean rides '+T.rides+'/'+T.need,6,12);
+  ctx.textAlign='right'; ctx.fillStyle=C.txt; ctx.fillText('SPACE catch · ←→ steer · ENTER skip',W-6,12); ctx.textAlign='left';
+  if(T.end>0 && T.end<70){ ctx.save(); ctx.globalAlpha=1-T.end/70; px(0,0,W,H,'#000'); ctx.restore(); }
 }
 function drawSplash(){
   drawSky(); drawMountains(); drawSeaBands(); drawSand();
@@ -1439,7 +1527,7 @@ const BEACH_PALMS = {
   [SCR.COVE]: [[22,H-8],[110,H-14],[W/2+40,H-12],[W-70,H-6]],
   [SCR.HALEIWA]: [[150,H-8],[W-36,H-6]],
   [SCR.WAIMEA]:  [[200,H-6],[W-40,H-10]],
-  [SCR.PIPE]:    [[24,H-8],[96,H-12],[W-26,H-8]],
+  [SCR.PIPE]:    [[W-26,H-8]],
   [SCR.SUNSET]:  [[60,H-8],[W/2+20,H-12]],
 };
 // nudge a beach prop's x so it isn't hidden under a palm on the SURF or COVE screens
@@ -1477,6 +1565,49 @@ function drawIronwood(x,base){   // wispy casuarina: dark needles in drooping ti
   for(let i=0;i<7;i++){ const ty=base-62+i*7, wd=6+i*3;
     for(let k=-wd;k<=wd;k+=2) px(x+k,ty+Math.abs(k)*0.25+((k*13+i)%3),1,5+((k+i)%3),i%2?'#2a5a3a':'#356a44'); }
 }
+/* ===================== FINALE: PIPE MASTERS heat at Pipeline =====================
+   Reach PIPE INVITE, talk to da head judge on da Pipeline sand (B). 60-second heat vs Kelly, Jamie
+   and Mason; your best TWO waves count (score out of 10 each). Win = Pipe Masters champ. */
+let heat={ on:false, t:0, scores:[], opp:[] };
+const JUDGE={ x:166, y:SHORE+30 };
+function bestTwo(a){ const b=[...a].sort((x,y)=>y-x); return (b[0]||0)+(b[1]||0); }
+function startHeat(){
+  heat={ on:true, t:60*60, scores:[],
+    opp:[ {n:'KELLY SLATER', s:+rnd(13.5,16.5).toFixed(1)}, {n:"JAMIE O'BRIEN", s:+rnd(12,15).toFixed(1)}, {n:'MASON HO', s:+rnd(11,14).toFixed(1)} ] };
+  beep(660,.15,'square'); setTimeout(()=>beep(880,.2,'square'),160);
+  setMsg("🎺 PIPE MASTERS — HEAT ON! 60 seconds, best TWO waves count. Kelly Slater: 'Pipe's MY living room, kook.'",300);
+}
+function heatRide(secs,style,combo){
+  const sc=Math.min(10, secs*1.7 + style/45 + (combo>1?combo*0.4:0));
+  const v=+sc.toFixed(1); heat.scores.push(v); floatScore('JUDGES: '+v.toFixed(1),player.x,player.y-28,C.gold);
+}
+function tickHeat(){
+  if(!heat.on) return;
+  heat.t--;
+  if(heat.t===10*60) setMsg("⏱ 10 seconds left in da heat!",120);
+  if(heat.t>0) return;
+  heat.on=false;
+  const mine=+bestTwo(heat.scores).toFixed(1), field=[...heat.opp,{n:'YOU',s:mine}].sort((a,b)=>b.s-a.s), place=field.findIndex(f=>f.n==='YOU')+1;
+  if(place===1){ quest.champ=true; saveQuest(); gainXP(60); beep(990,.3,'triangle');
+    setMsg("🏆 PIPE MASTERS CHAMPION! "+mine.toFixed(1)+" beats "+field[1].n+" ("+field[1].s.toFixed(1)+"). Kelly Slater: 'Lucky waves, kook... OK, dose were good.' Trophy stay at your place.",420); }
+  else { beep(300,.2,'triangle');
+    setMsg("Heat ovah — you placed #"+place+" wit' "+mine.toFixed(1)+". Winner: "+field[0].n+" ("+field[0].s.toFixed(1)+"). Kelly: 'Bettah luck next year, grom.' Talk to da judge to try again.",420); }
+}
+function drawPipeMasters(){
+  // contest scaffolding: judges' tower, banner, flags, little crowd on da sand
+  const x0=40, x1=140, base=SHORE+46, top=base-58;
+  for(const x of [x0,x0+33,x0+66,x1]) { px(x,top,2,base-top,'#9a9a9a'); }
+  for(let y=top;y<base;y+=14){ px(x0,y,x1-x0+2,2,'#9a9a9a'); pxLine(x0,y,x0+33,y+14,'#888',1); pxLine(x0+66,y,x1,y+14,'#888',1); }
+  px(x0-4,top-14,x1-x0+10,14,'#14233a'); px(x0-2,top-12,x1-x0+6,10,'#1f3a5a');                       // judges' booth
+  for(let i=0;i<4;i++) px(x0+6+i*24,top-10,14,6,'#8fb0bf');
+  px(x0-10,top+16,x1-x0+22,12,'#c0392b'); ctx.fillStyle='#fff'; ctx.font='bold 8px "Courier New",monospace'; ctx.textAlign='center';
+  ctx.fillText('PIPE MASTERS',(x0+x1)/2,top+25); ctx.textAlign='left';
+  for(const [fx,fc] of [[x0-6,'#ffd23f'],[x1+6,'#2fbfae']]){ px(fx,top-34,1,22,'#ccc'); px(fx+1,top-34+(frame>>4)%2,8,5,fc); }
+  for(let i=0;i<14;i++){ const cx=150+((i*37)%120), cy=SHORE+56+((i*13)%14); px(cx,cy,3,6,['#e0533a','#2b6cb0','#ffd23f','#f2f2f2','#2f8a4a'][i%5]); px(cx,cy-3,3,3,'#c88a4e'); }
+  // da head judge wit' a clipboard
+  softShadow(JUDGE.x,JUDGE.y+13,9); drawDude(JUDGE.x,JUDGE.y,'#c88a4e','#1f3a6a',1,'stand',0,'#f2f2f2');
+  px(JUDGE.x+5,JUDGE.y-2,5,7,'#d8c070'); nameTag('HEAD JUDGE',JUDGE.x,JUDGE.y-18,C.gold);
+}
 function drawBreakScenery(){
   const sc=beach.screen;
   if(sc===SCR.HALEIWA){
@@ -1511,7 +1642,8 @@ function drawBreakScenery(){
     for(const [rx,ry,rw,rh] of [[90,SHORE-36,40,6],[200,SHORE-24,54,6],[330,SHORE-40,46,7],[420,SHORE-22,34,5]]){ ctx.beginPath(); ctx.ellipse(rx,ry,rw,rh,0,0,Math.PI*2); ctx.fill(); }
     ctx.restore();
     drawBeachSign(290,SHORE+22,['DANGER','SHALLOW REEF'],'#ffd23f','#c0392b');
-    drawBeachSign(170,SHORE+22,['PIPELINE']);
+    drawPipeMasters();
+    drawBeachSign(236,SHORE+22,['PIPELINE']);
     drawLifeguardTower(360);
   }
   else if(sc===SCR.SUNSET){
@@ -2198,6 +2330,8 @@ function drawCabin(){
 }
 function drawMyPlaceRoom(){
   const c=CABIN, lit=isNight();
+  if(quest.champ){ const tx=CABIN.table[0]+60, ty=CABIN.table[1]-18; px(tx-6,ty,12,14,'#ffd23f'); px(tx-9,ty-2,18,4,'#ffe27a'); px(tx-3,ty+14,6,4,'#c8a030'); px(tx-7,ty+18,14,3,'#8a6a20');
+    ctx.fillStyle='#14233a'; ctx.font='bold 4px monospace'; ctx.fillText('PIPE',tx-4,ty+8); }   // your Pipe Masters trophy
   drawRoomWindow(232,'#c0503a');
   drawWallBoard(...c.board);
   px(176,c.wallY+14,24,18,'#5a3c22'); px(178,c.wallY+16,20,14,'#9ad6f0'); px(178,c.wallY+25,20,5,'#3a9ab8'); px(181,c.wallY+23,9,2,'#fff');
@@ -2442,6 +2576,7 @@ function inspectables(){
     add('lamp',157,150,22,["Little lamp. Da bulb flickers when da trades blow.","Lamp made from one old koa branch.","Moths love this thing at night."]);
     add('ukulele',368,186,22,["Ukulele. You only know three chords, but dey da right three.","Somebody wen' tune 'um wrong again.","Strum one... sounds like one sunset."]);
     add('mangoes',340,186,20,["Fresh mangoes from da neighbor's tree. Ono.","Mango juice going drip all ovah your chin.","Don't eat 'um all, da brahs going be hungry when dey wake up."]);
+    if(quest.champ) add('trophy',CABIN.table[0]+60,CABIN.table[1],24,["Your PIPE MASTERS trophy. From desert kook to Pipe champ.","Chandler said da trophy no matter. You polish 'um anyway.","Kelly still says it was lucky waves."]);
     add('wallboard',356,124,30,["Your old single-fin. Dinged but cherry.","Shaped in Chandler's barn. No touch, only admire.","Dis board seen Pipe on one big day."]);
     add('window',256,124,34,lit?["Stars out. Tomorrow going be firing.","Can hear da shorebreak pounding in da dark.","Moon on da water. Mean."]:["Swell lines stacking up outside.","Trades light. Glassy out dea.","Somebody stay paddling out already. Hurry up, cuz."]);
     add('photo',188,124,24,["Picture of Pipe on one solid day. Chicken skin.","You in da barrel... or maybe dat's one blur.","Signed by da boys at Sunset."]);
@@ -2514,6 +2649,7 @@ function drawKeyHint(){
     else if(b.screen===SCR.MYHOUSE){ const HM=myHammock(); if(near(player.x,player.y,HM.x,HM.y,40)) act=['B','sleep']; }
     else if(b.screen===SCR.TOWN && near(player.x,player.y,b.iceShop.x,b.iceShop.y,24)) act=['B','shop'];
     else if(b.screen===SCR.SURF && near(player.x,player.y,b.chandler.x,b.chandler.y+6,26)) act=['B','talk to Chandler'];
+    else if(b.screen===SCR.PIPE && near(player.x,player.y,JUDGE.x,JUDGE.y,26)) act=['B',heat.on?'heat info':'enter Pipe Masters'];
   }
   const look=!!nearestInspectable();
   const rows=[ act ? [act[0],act[1],true] : ['B','open / use',false], ['I','inspect',look] ];
@@ -2793,10 +2929,14 @@ function drawHUD(){
   px(0,0,W,16,'#00000059');
   ctx.font='bold 11px "Courier New",monospace'; ctx.textAlign='left';
 
-  ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText(state==='beach'?'🏖 BEACH':state==='shop'?'🍧 SHOP':state==='cabin'?ROOMS[room].label:'🌊 LINEUP',W/2,12);
+  ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText(state==='beach'?(BREAK[beach.screen]?'🏝 '+BREAK[beach.screen].name:IS_DOWN(beach.screen)?'🌿 NORTH SHORE':'🏖 BEACH'):state==='shop'?'🍧 SHOP':state==='cabin'?ROOMS[room].label:'🌊 LINEUP',W/2,12);
   ctx.textAlign='left'; ctx.fillStyle=C.gold; ctx.font='bold 10px "Courier New",monospace';
   ctx.fillText('🪙 '+coins, 6, 12);
-  ctx.fillStyle=C.good; ctx.fillText(RANKS[rankIdx()].n+' · '+xp+' XP  (Q)', 60, 12);
+  if(heat.on){ const b2=bestTwo(heat.scores), lead=heat.opp.reduce((m,o)=>o.s>m.s?o:m,heat.opp[0]);
+    px(W/2-150,18,300,14,'#000000aa'); ctx.textAlign='center'; ctx.fillStyle=heat.t<600?C.bad:C.gold; ctx.font='bold 9px "Courier New",monospace';
+    ctx.fillText('PIPE MASTERS  '+Math.floor(heat.t/3600)+':'+String(Math.ceil(heat.t/60)%60).padStart(2,'0')+'   YOU '+b2.toFixed(1)+'   LEADER '+lead.n+' '+lead.s.toFixed(1),W/2,28);
+    ctx.textAlign='left'; ctx.font='bold 10px "Courier New",monospace'; }
+  ctx.fillStyle=C.good; ctx.font='bold 9px "Courier New",monospace'; ctx.fillText(RANKS[rankIdx()].n+' '+xp+'xp', 56, 12); ctx.font='bold 10px "Courier New",monospace';
   ctx.font='bold 11px "Courier New",monospace';
   if(state==='water'&&water.surfing){ ctx.fillStyle=C.purp; ctx.fillText('RIDE '+(water.ride/60).toFixed(1)+'s'+(water.combo>1?('  x'+water.combo):''),W/2,28); }
   if(player.injured){ ctx.fillStyle=C.bad; ctx.textAlign='center'; ctx.fillText('🩹 HURT — heal at Chandler on da beach',W/2, state==='water'?44:28); }
