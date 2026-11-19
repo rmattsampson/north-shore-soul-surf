@@ -83,6 +83,7 @@ function norm(e){ switch(e.key){
   case ' ':return 'space'; case 'Enter':return 'enter';
   case 'z':case 'Z':return 'z'; case 'x':case 'X':return 'x';
   case 'b':case 'B':return 'b';
+  case 'n':case 'N':return 'newgame';
   case 'i':case 'I':return 'inspect';
   case 'q':case 'Q':return 'quest';
   case 'm':case 'M':return 'mute'; default:return null; } }
@@ -161,6 +162,11 @@ const setHS=v=>{ try{localStorage.setItem(HS,String(v));}catch(e){} };
 
 /* ---- wallet + owned/equipped gear (persisted) ---- */
 const WALLET='nsss_coins', OWNED='nsss_owned', EQUIP='nsss_equip';
+// ---- NEW GAME: wipe every save so you start over in Arizona ----
+const SAVE_KEYS=['nsss_hi','nsss_coins','nsss_owned','nsss_equip','nsss_quest','nsss_xp','nsss_tank_done'];
+function wipeSave(){ try{ for(const k of SAVE_KEYS) localStorage.removeItem(k); }catch(e){} }
+// one-time reset Matt asked for (back to da start of Arizona); runs once per browser, before anything loads
+try{ if(!localStorage.getItem('nsss_reset_v3')){ wipeSave(); localStorage.setItem('nsss_reset_v3','1'); } }catch(e){}
 const getCoins=()=>parseInt(localStorage.getItem(WALLET)||'0',10)||0;
 const setCoins=v=>{ try{localStorage.setItem(WALLET,String(v));}catch(e){} };
 function loadOwned(){ try{ return JSON.parse(localStorage.getItem(OWNED)||'["board_teal","shorts_blue"]'); }catch(e){ return ['board_teal','shorts_blue']; } }
@@ -671,7 +677,10 @@ function update(){
   if(beachBuilt) tickKelly();    // Kelly Slater cameo on the beach
   if(beachBuilt) tickStroller(); // other North Shore names strolling da sand (friendly, not surfing)
   if(beachBuilt) tickRoad();     // clothed walkers + cyclists stroll the dirt sidewalk
-  if(state==='splash'){ if(consume('enter')){ state='help'; beep(660,.1);} else if(consume('space')){ startGame(); } return; }
+  if(state==='splash'){
+    if(newGameT>0) newGameT--;
+    if(consume('newgame')){ if(newGameT>0){ wipeSave(); location.reload(); return; } newGameT=240; beep(300,.1,'triangle'); }
+    if(consume('enter')){ state='help'; beep(660,.1);} else if(consume('space')){ startGame(); } return; }
   if(state==='help'){ if(consume('enter')||consume('space')){ startGame(); } return; }
   if(state==='tank'){ updTank(); return; }
   if(state==='flight'){ updFlight(); return; }
@@ -1291,6 +1300,7 @@ function drawQuestLog(){
    win a ticket to Hawaii, land on da North Shore as a total kook. Plays once; ENTER skips. */
 const TANK={ x0:40, x1:440, y0:132, y1:262 };
 let tank=null;
+let newGameT=0;
 function startGame(){
   let done=false; try{ done=!!localStorage.getItem('nsss_tank_done'); }catch(e){}
   if(done){ enterBeach(); return; }
@@ -1418,6 +1428,7 @@ function drawSplash(){
     ctx.fillStyle='#000'; ctx.fillText(t,W/2+1,y+1); ctx.fillStyle=col; ctx.fillText(t,W/2,y);
   };
   label('PRESS ENTER',232,'bold 12px "Courier New",monospace',(frame%60<40)?'#ffffff':'#ffe27a');
+  label(newGameT>0?'Press N again to ERASE your save and start over':'N = new game (start over in Arizona)',278,'bold 9px "Courier New",monospace',newGameT>0?'#ff8a7a':'#b4b2cc');
   label('🪙 '+coins+' coins',256,'bold 11px "Courier New",monospace',C.gold);
   label('a lil homage to NORTH SHORE (1987) · Cheehoo!',300,'bold 10px "Courier New",monospace','#9fffd0');
   ctx.textAlign='left';
