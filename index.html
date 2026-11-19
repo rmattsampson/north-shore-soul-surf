@@ -1185,7 +1185,8 @@ function tickLineup(){
     LU.pro={ name:p.name, line:p.line, female:!!p.female, x:rnd(60,W-60), y:SEATOP+12, t:ri(360,560), surf:false, wave:null };
     setMsg(p.name+" paddling out — "+p.line,140); beep(520,.1,'triangle'); }
   if(LU.pro){ const L=LU.pro; L.t--;
-    if(L.surf){
+    if(L.bit){ L.surf=false; L.wave=null; L.y+=0.45; }   // shark got 'em: paddlin' straight to shore
+    else if(L.surf){
       if(L.wave && w.waves.includes(L.wave)){ L.y=L.wave.y; L.x+=Math.sin(frame*0.1)*0.8;
         L.x=clamp(L.x, L.wave.x-L.wave.len/2+8, L.wave.x+L.wave.len/2-8); }  // stay on the face
       else { L.surf=false; L.wave=null; }
@@ -1199,10 +1200,10 @@ function tickLineup(){
       if(best){ L.y += Math.sign(best.y-L.y)*0.6;
         if(bd<14 && Math.random()<0.85){ L.surf=true; L.wave=best; setMsg(L.name+" droppin' in — "+L.line,110); } }
     }
-    if(inSea && near(player.x,player.y,L.x,L.y,15)&&w.surfing){
+    if(!L.bit && inSea && near(player.x,player.y,L.x,L.y,15)&&w.surfing){
       setMsg(L.name+" SNAKED your wave! 'Did you see that one?!'",110);
       player.x=clamp(player.x+(player.x<L.x?-22:22),20,W-20); }
-    if(L.t<0||L.y>SEABOT){ LU.pro=null; LU.proT=ri(260,520); } }
+    if((L.t<0&&!L.bit)||L.y>SEABOT){ LU.pro=null; LU.proT=ri(260,520); } }
 
   // SHARK: hunts you. It steers toward the player while they're in the water
   // and lunges when it gets close. Once it has bitten someone, or you're safe
@@ -1210,9 +1211,10 @@ function tickLineup(){
   if(LU.sharkT>0)LU.sharkT--; else if(!LU.shark){
     const fromLeft = player.x > W/2;
     LU.shark={x:fromLeft?-24:W+24, y:ri(SEATOP+24,SEABOT-16), vx:0, vy:0,
-      dir:fromLeft?1:-1, speed:rnd(0.9,1.25), lunge:0, hunt:true, life:ri(1800,3000)};   // sticks around 30-50 s
+      dir:fromLeft?1:-1, speed:rnd(0.9,1.25), lunge:0, hunt:true, life:ri(1200,2100)};   // hangs 20-35 s, den leaves
     beep(80,.5,'sawtooth',.06); setMsg("🦈 SHARK!! Get to shore, braddah!",160); }
   if(LU.shark){ const s=LU.shark;
+    if(s.hunt && --s.life<=0){ s.hunt=false; s.dir=s.x<W/2?-1:1; }   // gets bored and heads out, in da water or not
     const inWater = player.y < SHORE-4;
     if(s.hunt && inSea && inWater && !player.injured){
       const dx=player.x-s.x, dy=player.y-s.y, d=Math.hypot(dx,dy)||1;
@@ -1222,11 +1224,14 @@ function tickLineup(){
       s.vx += (dx/d*sp - s.vx)*0.06;
       s.vy += (dy/d*sp - s.vy)*0.06;
       if(Math.abs(s.vx)>0.15) s.dir = s.vx>0?1:-1;
+    } else if(s.hunt && LU.pro && !LU.pro.bit){   // no you in da water: it stalks da pro (neva da Hui)
+      const P=LU.pro, dx=P.x-s.x, dy=P.y-s.y, d=Math.hypot(dx,dy)||1;
+      s.vx += (dx/d*s.speed*0.8 - s.vx)*0.05; s.vy += (dy/d*s.speed*0.8 - s.vy)*0.05;
+      if(Math.abs(s.vx)>0.15) s.dir = s.vx>0?1:-1;
     } else if(s.hunt){            // you're on da sand: it hangs around, cruising da lineup
-      s.lunge=0; s.life--;
+      s.lunge=0;
       if(s.x<40) s.dir=1; if(s.x>W-40) s.dir=-1;
       s.vx += (s.dir*0.7 - s.vx)*0.04; s.vy += (Math.sin(frame*0.02+s.x*0.01)*0.3 - s.vy)*0.05;
-      if(s.life<=0) s.hunt=false;  // finally gets bored and heads out to sea
     } else {
       s.lunge=0;
       s.vx += (s.dir*1.4 - s.vx)*0.05; s.vy *= 0.9;
@@ -1236,6 +1241,9 @@ function tickLineup(){
       player.injured=1; beep(60,.6,'sawtooth',.07);
       setMsg("Shark wen' buss you up! Paddle in, find Chandler.",180);
       w.surfing=false; w.cur=null; player.downT=36; s.hunt=false; }
+    if(s.hunt && LU.pro && !LU.pro.bit && near(LU.pro.x,LU.pro.y,s.x,s.y,16)){   // takes out da pro (Hui stay untouched — even da sharks respect da Hui)
+      LU.pro.bit=true; s.hunt=false; s.dir=s.x<W/2?-1:1; beep(70,.4,'sawtooth',.05);
+      setMsg("🦈 Shark wen' hit "+LU.pro.name+"! Dey okay — paddlin' back to shore.",170); }
     if(s.x>W+30||s.x<-30){ LU.shark=null; LU.sharkT=ri(240,480); } }
 }
 function trick(name,pts,col,id){ const w=water; w.combo++; w.style+=pts;
@@ -1383,26 +1391,28 @@ function updTank(){
   const T=tank;
   if(consume('enter')){ finishTank(); return; }                                         // skip
   if(T.end>0){ T.end--; if(T.end===0) finishTank(); return; }
-  if(T.t>0) T.t--; else { T.waves.push({ y:TANK.y0+4, x:W/2, len:TANK.x1-TANK.x0-20, spd:0.38 }); T.t=150; }   // perfect, identical lines
+  if(T.t>0) T.t--; else { const len=ri(110,160); T.waves.push({ y:TANK.y0+4, x:ri(TANK.x0+len/2+6,TANK.x1-len/2-6), len, spd:0.38 }); T.t=150; }   // machine-made peaks, short sections
   for(const v of T.waves) v.y+=v.spd;
   T.waves=T.waves.filter(v=>v.y<TANK.y1-2);
   if(!T.riding){
     const sp=1.0;
     if(keys.left){ T.x-=sp; T.facing=-1; } if(keys.right){ T.x+=sp; T.facing=1; }
-    if(keys.up) T.y-=0.9; if(keys.down) T.y+=0.9;
-    T.x=clamp(T.x,TANK.x0+14,TANK.x1-14); T.y=clamp(T.y,TANK.y0+10,TANK.y1-10);
-    if(consume('space')){ const v=T.waves.find(v=>Math.abs(v.y-T.y)<16);
-      if(v){ T.riding=true; T.cur=v; T.ride=0; beep(600,.1,'sawtooth'); } else setMsg("Wait fo' da machine to push one wave, den SPACE.",80); }
+    if(keys.up) T.y-=1.0; if(keys.down) T.y+=1.0;
+    T.x=clamp(T.x,TANK.x0+12,TANK.x1-12); T.y=clamp(T.y,TANK.y0+6,TANK.y1-10);
+    if(consume('space')){ const v=T.waves.find(v=>Math.abs(v.y-T.y)<16 && Math.abs(v.x-T.x)<v.len/2+4);
+      if(v){ T.riding=true; T.cur=v; T.ride=0; pressed.up=false; beep(600,.1,'sawtooth'); } else setMsg("Wait fo' da machine to push one wave, den SPACE.",80); }
   } else {
     if(!T.waves.includes(T.cur)){ endTankRide(); }
     else { T.ride++; T.y=T.cur.y;
-      if(keys.left){ T.x-=2; T.facing=-1; } if(keys.right){ T.x+=2; T.facing=1; } T.x=clamp(T.x,TANK.x0+14,TANK.x1-14);
+      if(keys.left){ T.x-=2; T.facing=-1; } if(keys.right){ T.x+=2; T.facing=1; } T.x=clamp(T.x,TANK.x0+12,TANK.x1-12);
       if(consume('z')||consume('x')){ floatScore('CARVE!',T.x,T.y-16,C.gold); beep(880,.06,'square'); }
-      if(T.cur.y>=TANK.y1-8) endTankRide(); }
+      if(Math.abs(T.x-T.cur.x)>T.cur.len/2+2){ floatScore('KICK OUT',T.x,T.y-16,C.txt); endTankRide(); }      // rode off da end
+      else if(consume('up')){ T.y-=10; floatScore('KICK OUT',T.x,T.y-16,C.txt); endTankRide(); }            // pull out over da back
+      else if(T.cur.y>=TANK.y1-8) endTankRide(); }
   }
 }
 function endTankRide(){
-  const T=tank, secs=T.ride/60; T.riding=false; T.cur=null; T.y=TANK.y1-14;
+  const T=tank, secs=T.ride/60; T.riding=false; T.cur=null; T.y=clamp(T.y,TANK.y0+6,TANK.y1-10);   // stay where you finished
   if(secs>=1.5){ T.rides++; beep(760,.1,'triangle');
     if(T.rides>=T.need){ T.end=300; beep(990,.2,'triangle');
       setMsg("🏆 You won da DESERT SURF CLASSIC! Prize: one-way ticket to HAWAII. Pack your board, kid.",300); }
@@ -1437,8 +1447,8 @@ function drawTank(){
   else { drawBoard(T.x,T.y+4,player.board,T.facing); drawDude(T.x,T.y+1,C.skin,player.shorts,T.facing,'paddle',frame,player.shirt,PLAYER_HAIR); }
   // HUD
   px(0,0,W,16,'#00000059'); ctx.font='bold 10px "Courier New",monospace'; ctx.fillStyle=C.gold; ctx.textAlign='left';
-  ctx.fillText('🌵 ARIZONA WAVE TANK — clean rides '+T.rides+'/'+T.need,6,12);
-  ctx.textAlign='right'; ctx.fillStyle=C.txt; ctx.fillText('SPACE catch · ←→ steer · ENTER skip',W-6,12); ctx.textAlign='left';
+  ctx.fillText('🌵 ARIZONA — rides '+T.rides+'/'+T.need,6,12);
+  ctx.textAlign='right'; ctx.fillStyle=C.txt; ctx.font='bold 8px "Courier New",monospace'; ctx.fillText('SPACE catch ←→ steer ↑ kick out ENTER skip',W-6,11); ctx.textAlign='left';
   if(T.end>0 && T.end<70){ ctx.save(); ctx.globalAlpha=1-T.end/70; px(0,0,W,H,'#000'); ctx.restore(); }
 }
 function drawSplash(){
