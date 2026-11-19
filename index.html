@@ -104,19 +104,54 @@ function beep(f=440,d=.08,type='square',v=.05){ if(muted||!actx)return;
   try{ const o=actx.createOscillator(),g=actx.createGain(); o.type=type; o.frequency.value=f;
     o.connect(g); g.connect(actx.destination); g.gain.setValueAtTime(v,actx.currentTime);
     g.gain.exponentialRampToValueAtTime(.0001,actx.currentTime+d); o.start(); o.stop(actx.currentTime+d);}catch(e){} }
-/* mellow surf-rock-ish arpeggio loop */
-let musicStep=0, musicT=0;
-const scale=[0,3,5,7,10,12];
-function startMusic(){ if(musicGain) musicGain.gain.value = muted?0:0.0; }
+/* ---- MIDI-style chiptune: surf-rock / island groove (original tune) ----
+   Web Audio step sequencer scheduled ahead on the audio clock so the tempo never drifts with frame rate.
+   I-vi-IV-V in G, 16 steps per bar, 4 bars, then a B-section; square lead, triangle bass, pulse chords,
+   noise hats + sine kick. */
+const BPM=112, STEP=60/BPM/4;                                    // 16th-note length in seconds
+const N=(m)=>440*Math.pow(2,(m-69)/12);
+const CHORDS=[[55,59,62],[52,55,59],[48,52,55],[50,54,57],       // A: G  Em  C  D
+              [48,52,55],[50,54,57],[52,55,59],[50,54,57]];      // B: C  D   Em D
+const _=null;
+const LEAD=[                                                      // 8 bars x 16 steps (MIDI numbers, null = rest)
+  74,_,71,_, 74,_,76,_, 74,_,71,_, 67,_,_,_,     71,_,67,_, 71,_,74,_, 72,_,71,_, 67,_,_,_,
+  72,_,76,_, 79,_,76,_, 74,_,72,_, 71,_,_,_,     69,_,72,_, 74,_,72,_, 69,_,66,_, 69,_,74,_,
+  76,_,_,79, 76,_,74,_, 72,_,_,_, 76,_,74,_,     74,_,_,78, 74,_,72,_, 69,_,_,_, 66,_,69,_,
+  71,_,74,_, 79,_,78,_, 76,_,74,_, 71,_,_,_,     74,_,72,_, 69,_,66,_, 67,_,_,_, _,_,_,_ ];
+let musicStep=0, nextNoteT=0, noiseBuf=null;
+function startMusic(){ if(musicGain) musicGain.gain.value = muted?0:0.0; nextNoteT=actx?actx.currentTime+0.1:0; }
+function tone(type,f,t,dur,vol){
+  const o=actx.createOscillator(), g=actx.createGain(); o.type=type; o.frequency.setValueAtTime(f,t);
+  o.connect(g); g.connect(musicGain);
+  g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur); o.start(t); o.stop(t+dur+0.02);
+}
+function hat(t,vol){
+  if(!noiseBuf){ noiseBuf=actx.createBuffer(1,actx.sampleRate*0.05,actx.sampleRate); const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1; }
+  const src=actx.createBufferSource(), hp=actx.createBiquadFilter(), g=actx.createGain();
+  src.buffer=noiseBuf; hp.type='highpass'; hp.frequency.value=7000; src.connect(hp); hp.connect(g); g.connect(musicGain);
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.04); src.start(t); src.stop(t+0.05);
+}
+function kick(t){
+  const o=actx.createOscillator(), g=actx.createGain(); o.type='sine';
+  o.frequency.setValueAtTime(140,t); o.frequency.exponentialRampToValueAtTime(45,t+0.12);
+  o.connect(g); g.connect(musicGain); g.gain.setValueAtTime(0.9,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
+  o.start(t); o.stop(t+0.18);
+}
+function playStep(k,t){
+  const bar=Math.floor(k/16)%8, s16=k%16, ch=CHORDS[bar];
+  const lead=LEAD[(k%128)];
+  if(lead!==null) tone('square',N(lead),t,STEP*1.8,0.16);                         // lead melody
+  if(s16%4===0) tone('triangle',N(ch[0]-12),t,STEP*1.9,0.55);                      // bass: root on da beat
+  if(s16%4===2) tone('triangle',N(ch[0]-5),t,STEP*1.4,0.40);                       //       fifth on da "and"
+  if(s16===4||s16===12) for(const m of ch) tone('square',N(m),t,STEP*1.2,0.045);  // offbeat chord stabs (ska/surf skank)
+  if(s16%2===1) hat(t,0.12); else if(s16===0||s16===8) kick(t);                   // drums
+  if(s16===4||s16===12) hat(t,0.22);                                               // backbeat snap
+}
 function music(){ if(!actx||muted){ if(musicGain)musicGain.gain.value=0; return; }
-  musicGain.gain.value=0.02; musicT++;
-  if(musicT%26===0){ const root=48+(Math.floor(musicStep/6)%2?5:0);
-    const n=root+scale[musicStep%scale.length];
-    const f=440*Math.pow(2,(n-69)/12);
-    const o=actx.createOscillator(),g=actx.createGain(); o.type='triangle'; o.frequency.value=f;
-    o.connect(g); g.connect(musicGain); g.gain.setValueAtTime(.5,actx.currentTime);
-    g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+.4); o.start(); o.stop(actx.currentTime+.42);
-    musicStep++; } }
+  musicGain.gain.value=0.11;
+  if(nextNoteT<actx.currentTime-0.25) nextNoteT=actx.currentTime+0.05;          // tab was asleep: resync, don't burst
+  while(nextNoteT < actx.currentTime+0.12){ playStep(musicStep,nextNoteT); nextNoteT+=STEP; musicStep++; } }
 
 /* ---- high score ---- */
 const HS='nsss_hi';
@@ -2274,8 +2309,10 @@ function drawWater(){
   for(const h of w.huis){ softShadow(h.x, h.y+9, 11); drawHui(h.x,h.y,h.surf); }
   if(w.pro){ const L=w.pro; softShadow(L.x, L.y+9, 12); drawBoard(L.x,L.y+4,C.sea1,-1); drawDude(L.x,L.surf?L.y-5:L.y+1,C.skin,'#111',-1,L.surf?'surf':'paddle',frame);
     if(L.female){ // swim top for the women surfers (original, generic)
-      const ty = L.surf ? L.y-14 : L.y;     // torso height differs surf vs paddle
-      px(L.x-5,ty,10,3,'#ff5aa0'); px(L.x-5,ty,10,1,'#ff8cc0'); } // bikini top band + highlight
+      if(L.surf){ const ty=L.y-10; px(L.x-5,ty,10,3,'#ff5aa0'); px(L.x-5,ty,10,1,'#ff8cc0'); px(L.x-1,ty,2,1,'#c03a78'); }  // top across da chest (surf torso is y-11..y-3)
+      else { px(L.x-8,L.y+1,7,2,'#ff5aa0'); px(L.x-8,L.y+1,7,1,'#ff8cc0'); } }                                 // lying flat paddling: band on da chest
+
+
     nameTag(L.name.toUpperCase(),L.x,L.y-23,C.gold); }
   // spray particles (behind the surfer)
   for(const s of w.spray){ const c = s.kind==='barrel'?C.purp : s.life>12?'#fff':C.foam; px(s.x,s.y,2,2,c); }
