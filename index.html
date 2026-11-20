@@ -438,9 +438,9 @@ function shortMsg(m){
   if(cut>=0 && cut+21<=MSG_MAX) return m.slice(0,cut+21).replace(/\s*—$/,'').trim();
   return m.slice(0,MSG_MAX-1).replace(/\s+\S*$/,'')+'…';
 }
-function setMsg(m,d=140,urgent=false){
-  if(!urgent && msgT>0 && frame-msgLastFrame<MSG_GAP) return;  // a message is up and it's too soon: skip
-  msg=shortMsg(m); msgT=Math.round(Math.min(d,200)*0.8); msgLastFrame=frame; }
+function setMsg(m,d=140,urgent=false,full=false){   // full=true: quest/lesson/rules text, never trimmed
+  if(!urgent && !full && msgT>0 && frame-msgLastFrame<MSG_GAP) return;  // a message is up and it's too soon: skip
+  msg=full?m:shortMsg(m); msgT=Math.round(Math.min(d,full?320:200)*0.8); msgLastFrame=frame; }
 function floatScore(txt,x,y,col){ flash={txt,x,y,col:col||C.gold}; flashT=70; }
 
 /* ---- day/night clock ---- dayT cycles 0..1 (morning→midday→sunset→night→morning) */
@@ -507,7 +507,7 @@ let quest=(()=>{ try{ return Object.assign({lesson:0,active:false,sess:0,gun:fal
 function saveQuest(){ try{ localStorage.setItem('nsss_quest',JSON.stringify(quest)); }catch(e){} }
 function lessonDone(){ const L=LESSONS[quest.lesson]; quest.active=false; quest.lesson++; quest.sess=0; saveQuest();
   gainXP(L.xp); beep(880,.12,'triangle');
-  setMsg("✅ Lesson done: "+L.name+"! "+(quest.lesson<LESSONS.length?"Go see Chandler fo' da next one.":"Chandler says: go see Turtle at da barn."),260); }
+  setMsg("✅ Lesson done: "+L.name+"! "+(quest.lesson<LESSONS.length?"Go see Chandler fo' da next one.":"Chandler says: go see Turtle at da barn."),260,true,true); }
 let questOpen=false;
 /* ---- shop catalog: cosmetic gear, a tiny perk here and there ---- */
 const SHOP = [
@@ -622,12 +622,18 @@ function placePlayerFree(sc,x,y,edge){
   if(!reach) return;                                           // nothing computed: keep da clamped spot
   const gx=Math.round((x-xLo)/4), gy=Math.round((y-yLo)/4);
   const key=(i,j)=>i+','+j;
-  if(reach.has(key(gx,gy)) && !feetHit(x,y,rs)) return;      // already fine
+  if(reach.has(key(gx,gy)) && !feetHit(x,y,rs) && !noLandZone(sc,x,y)) return;      // already fine
   let best=null, bd=1e9;
   for(const k of reach){ const [i,j]=k.split(',').map(Number), cx=xLo+i*4, cy=yLo+j*4, d=(cx-x)*(cx-x)+(cy-y)*(cy-y);
+    if(noLandZone(sc,cx,cy)) continue;                         // reachable through a gate, but you neva spawn inside it
     if(d<bd){ bd=d; best=[cx,cy]; } }
   if(best){ player.x=best[0]; player.y=best[1]; }
 }
+// places you can WALK into (through a gate) but must never pop into from another screen: Sterling's Billabong yard
+function noLandZone(sc,x,y){
+  if(sc!==SCR.HOUSE) return false;
+  const BB=billabongLayout(), fy=y+12;
+  return x>BB.f0-6 && x<BB.f1+8 && fy>BB.ft-12 && fy<BB.fb+4; }
 function freeReachable(rs,xLo,xHi,yLo,yHi,edge){
   const nx=Math.floor((xHi-xLo)/4), ny=Math.floor((yHi-yLo)/4), seen=new Set(), q=[];
   const key=(i,j)=>i+','+j;
@@ -657,15 +663,15 @@ function buildBeach(){
 // which screen owns which flair
 const SCR={ TOWN:0, SURF:1, COVE:2, HOUSE:3, MYHOUSE:4, COVEDOWN:5,
   HALEIWA:6, WAIMEA:7, PIPE:8, SUNSET:9,                 // new surf breaks
-  KAMHWY:10, CANE:11, HUIHALE:12, LOOKOUT:13 };          // and da land screens below them
+  KAMHWY:10, CANE:11, HUIHALE:12, LOOKOUT:13, SKATE:14 };   // SKATE = skate park, walk DOWN off Kam Hwy (bottom-left of da map)          // and da land screens below them
 // da coast, west -> east (like da real North Shore): Haleiwa, our town beaches, then Waimea, Pipeline, Sunset
 const BEACH_ROW=[SCR.HALEIWA, SCR.TOWN, SCR.SURF, SCR.COVE, SCR.WAIMEA, SCR.PIPE, SCR.SUNSET];
 // da LAND row right under it, same order (walk DOWN off any beach to reach these)
 const LAND_ROW =[SCR.KAMHWY, SCR.MYHOUSE, SCR.HOUSE, SCR.COVEDOWN, SCR.CANE, SCR.HUIHALE, SCR.LOOKOUT];
 const DOWN_MAP={}, UP_FROM={}; BEACH_ROW.forEach((sc,i)=>{ DOWN_MAP[sc]=LAND_ROW[i]; UP_FROM[LAND_ROW[i]]=sc; });
-const LAND_SET=new Set(LAND_ROW);
+const LAND_SET=new Set([...LAND_ROW, SCR.SKATE]);   // skate park sits one row further down, under Kam Hwy
 const IS_DOWN = s => LAND_SET.has(s);
-const NEW_LAND=new Set([SCR.KAMHWY, SCR.CANE, SCR.HUIHALE, SCR.LOOKOUT]);
+const NEW_LAND=new Set([SCR.KAMHWY, SCR.CANE, SCR.HUIHALE, SCR.LOOKOUT, SCR.SKATE]);
 // surf breaks: name, rank needed to paddle out, how da waves come in
 const BREAK={
   [SCR.HALEIWA]:{ name:'HALEIWA',      rank:0, desc:"Mellow little peelers. Da place fo' learn.",
@@ -826,6 +832,7 @@ function updBeach(){
     player.knockT--;
     return;
   }
+  if(b.screen===SCR.SKATE && player.skating){ updSkate(); return; }   // on da skateboard: own physics
   const ox0=player.x, oy0=player.y;
   if(keys.left){ player.x-=sp; player.facing=-1; }
   if(keys.right){ player.x+=sp; player.facing=1; }
@@ -845,14 +852,20 @@ function updBeach(){
     // Vertical down-scene: beach edge up top. UP walks back to the beach screen above it.
     player.y=clamp(player.y,SEATOP+10,H-10);
     if(b.scrLock>0){ b.scrLock--; }
+    else if(b.screen===SCR.SKATE && player.y<=SEATOP+12 && keys.up){                 // out da park gate, back up to Kam Hwy
+      goScreen(SCR.KAMHWY, player.x, H-16); b.scrLock=10; beep(560,.07,'triangle'); return; }
     else if(player.y<=SEATOP+12 && keys.up){ goScreen(UP_FROM[b.screen], player.x, H-22); b.scrLock=10; beep(560,.07,'triangle'); return; }
-    // LAND row scrolls left/right too, mirroring da beaches above
+    else if(b.screen===SCR.KAMHWY && player.y>=H-11 && keys.down){                     // walk DOWN off Kam Hwy = skate park
+      goScreen(SCR.SKATE, player.x, SEATOP+18); b.scrLock=10; beep(560,.07,'triangle');
+      setMsg("🛹 NORTH SHORE SKATE CLUB — grab da board by da gate (B) and drop in da pool.",240,true,true); return; }
+    // LAND row scrolls left/right too, mirroring da beaches above (skate park has no side exits)
     const li=LAND_ROW.indexOf(b.screen);
-    if(player.x<=10 && keys.left){
+    if(li<0){ player.x=clamp(player.x,14,W-14); }
+    else if(player.x<=10 && keys.left){
       if(li>0){ goScreen(LAND_ROW[li-1], W-14, player.y); announceLand(); return; }
       player.x=10;
     }
-    if(player.x>=W-10 && keys.right){
+    if(li>=0 && player.x>=W-10 && keys.right){
       if(li<LAND_ROW.length-1){ goScreen(LAND_ROW[li+1], 14, player.y); announceLand(); return; }
       player.x=W-10;
     }
@@ -900,8 +913,8 @@ function updBeach(){
     } else if(near(player.x,player.y,b.chandler.x,b.chandler.y+6,26) && consume('b')){
       beep(520,.08,'triangle'); b.chatCool=300;
       if(quest.lesson<LESSONS.length){ const L=LESSONS[quest.lesson];
-        if(!quest.active){ quest.active=true; quest.sess=0; saveQuest(); setMsg(L.intro+"  ("+L.goal+")",320); }
-        else setMsg("Chandler: 'Lesson "+(quest.lesson+1)+" — "+L.name+": "+L.goal+"'",260); }
+        if(!quest.active){ quest.active=true; quest.sess=0; saveQuest(); setMsg(L.intro+" Lesson "+(quest.lesson+1)+": "+L.goal,320,true,true); }
+        else setMsg("Chandler: 'Lesson "+(quest.lesson+1)+", "+L.name+": "+L.goal+"'",300,true,true); }
       else if(!quest.gun) setMsg("Chandler: 'You ready, braddah. Go see Turtle at da barn — your board stay waiting.'",260);
       else setMsg("Chandler: "+CHANDLER_LINES[ri(0,CHANDLER_LINES.length-1)],150);
     } else if(near(player.x,player.y,b.chandler.x,b.chandler.y+6,22)){
@@ -910,6 +923,7 @@ function updBeach(){
         beep(500,.08,'triangle'); b.chatCool=260; }
     }
   }
+  if(b.screen===SCR.SKATE && nearSkateBoard() && consume('b')){ startSkating(); return; }
   if(b.screen===SCR.PIPE && near(player.x,player.y,JUDGE.x,JUDGE.y,26) && consume('b')){
     if(heat.on) setMsg("Kelly Slater (judging): 'Heat stay running — go surf! "+Math.ceil(heat.t/60)+" seconds left, kook.'",160);
     else if(!pipeReady()) setMsg("Kelly Slater (judging): 'Pipe Masters is da final, kook. You still need: "+pipeMissing().join(', ')+".'",300);
@@ -1425,7 +1439,7 @@ function bigWaveSlam(reason){ const w=water;
   player.y=SEABOT-4;                                   // washed all da way in to da shallows
   for(let i=0;i<24;i++) w.spray.push({ x:player.x+rnd(-20,20), y:player.y-6, vx:rnd(-3,3), vy:rnd(-4,-1), life:ri(20,40), kind:'foam' });
   beep(55,.7,'sawtooth',.08); beep(90,.4,'triangle',.06);
-  setMsg("🌊💥 "+reason+" You stay hurt -- paddle in (DOWN), heals in ~12 s on da sand.",260,true);
+  setMsg("🌊💥 "+reason+" You stay hurt -- paddle in (DOWN), heals in ~12 s on da sand.",300,true,true);
 }
 function wipeout(reason){ const w=water;
   // rashguard perk: shrug off ONE wipeout, then it's spent until you go ashore
@@ -1979,7 +1993,139 @@ const KAM_LINE=[   // da line at da shrimp truck (front of da line first)
   {skin:'#e0ac69', trunks:'#7a2a5a', shirt:'#6fc0e0', hair:'#5a3a1a'} ];
 const CANE_TRUCK=[W/2+30,SEATOP+108,W/2+96,SEATOP+132];
 const HUI={ x:W/2, base:SEATOP+100 };
+/* ===================== SKATE PARK (walk DOWN off Kam Hwy) =====================
+   Old-school 80s backyard-pool skating. One loaner board hangs out by da gate: B grabs it, B drops it
+   wherever you stand. Da board NEVER leaves da park: ride up to da gate and you leave it dea.
+   In da pool da walls are transitions: ride into one and it carries you back down (carve). Hit da coping
+   fast = AIR, hold X when you hit it = GRIND da coping, Z = ollie / kickflip anywhere. Exit da pool on
+   foot or on board through da shallow-end steps (left side). Just fun: no coins, no XP. */
+const POOL={ x0:150, y0:SEATOP+62, x1:410, y1:H-26, r:34, stepY0:SEATOP+100, stepY1:SEATOP+132, T:24 };
+const SKATE_GATE={ x:W/2, y:SEATOP+30 };
+function skateBoard(){ const b=beach; if(!b.skateBoard) b.skateBoard={ x:W/2+44, y:SEATOP+30 }; return b.skateBoard; }
+function nearSkateBoard(){ const s=skateBoard(); return !player.skating && near(player.x,player.y,s.x,s.y-8,22); }
+function inPool(x,fy){   // fy = feet y. rounded-rect test
+  const P=POOL; if(x<P.x0||x>P.x1||fy<P.y0||fy>P.y1) return false;
+  const cx=clamp(x,P.x0+P.r,P.x1-P.r), cy=clamp(fy,P.y0+P.r,P.y1-P.r), dx=x-cx, dy=fy-cy;
+  return dx*dx+dy*dy<=P.r*P.r; }
+const atPoolSteps = fy => fy>=POOL.stepY0 && fy<=POOL.stepY1;
+function startSkating(){ player.skating=true; player.sk={ vx:0, vy:0, jump:0, J:1, grind:0, gx:0, gy:0, lastIn:false, flip:false };
+  beep(660,.08,'square',.04); setMsg("🛹 Grab'd da loaner. Arrows push, Z ollie, X at da coping = grind. B drops 'um.",260,true,true); }
+function stopSkating(x,y,msg){ const s=skateBoard(); s.x=x; s.y=y; player.skating=false; player.sk=null; beep(380,.07,'triangle'); if(msg) setMsg(msg,260,true,true); }
+function skateTrick(name,col){ floatScore(name,player.x,player.y-26,col||C.gold); beep(700+Math.random()*300,.06,'square',.04); }
+function updSkate(){
+  const S=player.sk, P=POOL, acc=0.09;
+  if(consume('b')){ stopSkating(player.x,player.y,null); return; }
+  if(keys.left){ S.vx-=acc; player.facing=-1; } if(keys.right){ S.vx+=acc; player.facing=1; }
+  if(keys.up) S.vy-=acc; if(keys.down) S.vy+=acc;
+  if(S.jump>0) S.jump--;
+  if(S.jump===0 && consume('z')){ const sp=Math.hypot(S.vx,S.vy); S.J=sp>1.6?24:18; S.jump=S.J; S.flip=sp>1.6; skateTrick(sp>1.6?'KICKFLIP!':'OLLIE!'); }
+  const fy=player.y+12, inP=inPool(player.x,fy);
+  if(S.grind>0){                                      // grinding da coping: slide along da edge
+    S.grind--; player.x=clamp(player.x+S.gx,P.x0+6,P.x1-6); player.y=clamp(player.y+S.gy,P.y0-6,P.y1-18);
+    if(frame%4===0) beep(1400,.02,'sawtooth',.015);
+    if(S.grind===0){ S.vx=S.gx*0.8; S.vy=S.gy*0.8; const cx=(P.x0+P.x1)/2, cy=(P.y0+P.y1)/2-12;   // drop back in
+      S.vx+=(cx-player.x)*0.01; S.vy+=(cy-player.y)*0.01; }
+    return; }
+  if(inP){                                            // da walls are transitions: dey push you back to da middle
+    const dl=player.x-P.x0, dr=P.x1-player.x, dt=fy-P.y0, db=P.y1-fy, k=0.011;
+    const dmin=Math.min(dl,dr,dt,db);
+    if(dmin<10 && (consume('x')||keys.x) && !(dl===dmin && atPoolSteps(fy))){   // up by da coping + X = lock into a grind
+      const t=Math.max(1.6,Math.hypot(S.vx,S.vy)); S.grind=46;
+      if(dmin===dl||dmin===dr){ S.gx=0; S.gy=(S.vy>=0?1:-1)*t; } else { S.gy=0; S.gx=(S.vx>=0?1:-1)*t; }
+      S.vx=S.vy=0; skateTrick(['5-0 GRIND!','SMITH GRIND!','FEEBLE GRIND!'][ri(0,2)],C.purp); return; }
+    if(dl<P.T) S.vx+=(P.T-dl)*k; if(dr<P.T) S.vx-=(P.T-dr)*k;
+    if(dt<P.T) S.vy+=(P.T-dt)*k; if(db<P.T) S.vy-=(P.T-db)*k; }
+  const fr=inP?0.992:0.975; S.vx*=fr; S.vy*=fr;
+  let sp=Math.hypot(S.vx,S.vy); const max=inP?3.6:2.6; if(sp>max){ S.vx*=max/sp; S.vy*=max/sp; sp=max; }
+  let nx=player.x+S.vx, ny=player.y+S.vy;
+  const nIn=inPool(nx,ny+12);
+  if(inP && !nIn && !(atPoolSteps(ny+12) && nx<P.x0+P.r)){   // hit da coping from inside
+    const side = (nx<=P.x0+2||nx>=P.x1-2) ? 'x' : 'y';
+    if(keys.x || consume('x')){ consume('x'); S.grind=46; const t=Math.max(1.6,sp);
+      if(side==='x'){ S.gx=0; S.gy=(S.vy>=0?1:-1)*t; } else { S.gy=0; S.gx=(S.vx>=0?1:-1)*t; }
+      skateTrick(['5-0 GRIND!','SMITH GRIND!','FEEBLE GRIND!'][ri(0,2)],C.purp); S.vx=S.vy=0; return; }
+    if(sp>2.3){ S.J=30; S.jump=30; skateTrick(sp>3.2?'540 McTWIST!':['FRONTSIDE AIR!','BACKSIDE AIR!','INDY AIR!'][ri(0,2)],C.bad); }
+    else if(sp>1.2) skateTrick('CARVE',C.good);
+    if(side==='x') S.vx=-S.vx*0.9; else S.vy=-S.vy*0.9;
+    nx=player.x; ny=player.y; }
+  else if(!inP && nIn && !(atPoolSteps(ny+12) && nx<P.x0+P.r)) { if(sp>0.6) skateTrick('DROP IN!',C.good); }
+  player.x=clamp(nx,14,W-14); player.y=clamp(ny,SEATOP+10,H-12);
+  if(player.x<=14||player.x>=W-14) S.vx=-S.vx*0.6;
+  if(player.y>=H-12) S.vy=-S.vy*0.6;
+  // da gate: board stays in da park
+  if(player.y<=SEATOP+14){ player.y=SEATOP+18; stopSkating(player.x,SEATOP+30,"No boards outside da park, brah — you leave 'um by da gate. Walk out (UP) on foot."); }
+}
+function skateLift(){ const S=player.sk; if(!S) return 0;
+  let lift=S.jump>0 ? Math.sin(Math.PI*(1-S.jump/S.J))*(S.J>=30?18:10) : 0;
+  if(S.grind>0) lift+=8;
+  const fy=player.y+12; if(inPool(player.x,fy)){ const P=POOL, d=Math.min(player.x-P.x0,P.x1-player.x,fy-P.y0,P.y1-fy); if(d<P.T) lift+=(P.T-d)*0.45; }   // riding up da wall
+  return lift; }
+function drawSkateboard(x,y,flip){   // deck + trucks + wheels (x,y = deck center)
+  px(x-9,y,18,3,flip&&(frame>>2)%2?'#ffd23f':'#e0336a'); px(x-9,y,18,1,'#ff7aa8'); px(x-10,y+1,1,1,'#e0336a'); px(x+9,y+1,1,1,'#e0336a');
+  px(x-6,y+3,3,2,'#f2f2f2'); px(x+4,y+3,3,2,'#f2f2f2'); }
+function drawSkater(){
+  const lift=skateLift(), S=player.sk;
+  softShadow(player.x, player.y+13, 10);
+  drawSkateboard(player.x, player.y+11-lift, S&&S.jump>0&&S.flip);
+  drawDude(player.x, player.y-lift, C.skin, player.shorts, player.facing, (S&&S.grind>0)?'cut':'surf', frame, player.shirt, PLAYER_HAIR);
+}
+function drawSkatePark(){
+  const P=POOL, top=SEATOP;
+  px(0,top,W,10,'#3a3a3e'); px(0,top+8,W,2,'#e8e8e8');                                      // Kam Hwy edge up top
+  gradBand(0,top+10,W,H-top-10,'#c8c2b4','#b4ae9e',6);                                     // concrete deck
+  for(let i=0;i<14;i++){ const cx=(i*97+23)%W, cy=top+18+((i*61)%(H-top-30)); pxLine(cx,cy,cx+8,cy+3,'#a49e8e',1); }   // cracks
+  for(let x=0;x<W;x+=40) px(x,top+10,1,H-top-10,'#bdb7a8');                                // expansion joints
+  // chain-link fence round da park, gate gap at top center
+  const fc='#9aa0a4';
+  for(const [a,b2] of [[6,SKATE_GATE.x-22],[SKATE_GATE.x+22,W-6]]){ px(a,top+12,b2-a,2,fc); for(let x=a;x<b2;x+=6){ pxLine(x,top+14,x+6,top+22,'#b0b6ba',1); pxLine(x+6,top+14,x,top+22,'#b0b6ba',1); } px(a,top+22,b2-a,1,fc); }
+  px(SKATE_GATE.x-24,top+8,3,16,'#6a7074'); px(SKATE_GATE.x+21,top+8,3,16,'#6a7074');       // gate posts
+  px(6,top+12,2,H-top-14,fc); px(W-8,top+12,2,H-top-14,fc);
+  // da sign: 80s neon
+  px(24,top+30,108,22,'#1a1030'); px(24,top+30,108,2,'#ff3fa8'); px(24,top+50,108,2,'#2fe0d0');
+  ctx.font='bold 8px "Courier New",monospace'; ctx.textAlign='center';
+  ctx.fillStyle='#ff3fa8'; ctx.fillText('NORTH SHORE',78,top+40); ctx.fillStyle='#2fe0d0'; ctx.fillText('SKATE CLUB',78,top+49); ctx.textAlign='left';
+  // palms + bench + boombox kid
+  drawTallPalm(452,H-20,70); drawTallPalm(30,H-14,62);
+  px(30,top+96,44,5,'#8a5a30'); px(32,top+101,3,8,'#5a3a1a'); px(68,top+101,3,8,'#5a3a1a');
+  softShadow(52,top+105,8); drawDude(52,top+86,'#8d5524','#3a3a3a',1,'stand',0,'#2fe0d0','#1a1a1a'); drawSkateboard(70,top+104,false);
+  px(36,top+90,10,6,'#2a2a2a'); px(37,top+91,3,3,'#888'); px(42,top+91,3,3,'#888');        // boombox
+  if((frame>>4)%2){ ctx.fillStyle='#ff3fa8'; ctx.font='bold 7px monospace'; ctx.fillText('♪',44,top+86); }
+  // ---- da POOL: kidney-ish rounded bowl ----
+  const rr=(x0,y0,x1,y1,r)=>{ ctx.beginPath(); ctx.moveTo(x0+r,y0); ctx.arcTo(x1,y0,x1,y1,r); ctx.arcTo(x1,y1,x0,y1,r); ctx.arcTo(x0,y1,x0,y0,r); ctx.arcTo(x0,y0,x1,y0,r); ctx.closePath(); };
+  ctx.fillStyle='#ece6d6'; rr(P.x0-5,P.y0-5,P.x1+5,P.y1+5,P.r+5); ctx.fill();               // pool coping (fat concrete lip)
+  ctx.fillStyle='#d4cdb8'; rr(P.x0-5,P.y0-1,P.x1+5,P.y1+5,P.r+5); ctx.fill();
+  ctx.fillStyle='#2f6aa8'; rr(P.x0,P.y0,P.x1,P.y1,P.r); ctx.fill();                          // tile band
+  ctx.save(); rr(P.x0,P.y0,P.x1,P.y1,P.r); ctx.clip();
+  for(let x=P.x0;x<P.x1;x+=6) px(x,P.y0,1,P.y1-P.y0,'#4a86c0');
+  ctx.fillStyle='#8cc8d8'; rr(P.x0+5,P.y0+5,P.x1-5,P.y1-5,P.r-5); ctx.fill();               // walls (transition)
+  const g=ctx.createLinearGradient(P.x0,0,P.x1,0); g.addColorStop(0,'#b8e0e8'); g.addColorStop(1,'#6aaabf');   // shallow -> deep end
+  ctx.fillStyle=g; rr(P.x0+P.T,P.y0+P.T-6,P.x1-P.T,P.y1-P.T+4,Math.max(6,P.r-P.T)); ctx.fill();   // flat bottom
+  ctx.save(); ctx.globalAlpha=0.25; ctx.fillStyle='#ffffff'; rr(P.x0+6,P.y0+6,P.x1-6,P.y0+16,10); ctx.fill(); ctx.restore();   // sun on da far wall
+  // graffiti on da deep-end wall
+  ctx.font='bold 10px "Courier New",monospace'; ctx.fillStyle='#ff3fa8'; ctx.fillText('SHRED',P.x1-78,P.y1-10);
+  ctx.fillStyle='#ffd23f'; ctx.font='bold 7px monospace'; ctx.fillText('NO KOOKS',P.x0+60,P.y1-9);
+  // drain + depth marks
+  ctx.fillStyle='#3a5a6a'; ctx.beginPath(); ctx.ellipse(P.x1-60,(P.y0+P.y1)/2,6,4,0,0,Math.PI*2); ctx.fill();
+  for(let i=-2;i<=2;i++) px(P.x1-63+i*2,(P.y0+P.y1)/2-1,1,2,'#8cb0c0');
+  ctx.fillStyle='#1f3a6a'; ctx.font='bold 6px monospace'; ctx.fillText('3 FT',P.x0+30,P.y0+18); ctx.fillText('9 FT',P.x1-46,P.y0+18);
+  ctx.restore();
+  // shallow-end steps (da way in and out)
+  for(let i=0;i<3;i++) px(P.x0-4+i*8,P.stepY0+2,6,P.stepY1-P.stepY0-4,i%2?'#f2f2f2':'#e2e2e2');
+  px(P.x0-6,P.stepY0,2,P.stepY1-P.stepY0,'#c8c8c8');
+  // da loaner board by da gate (or wherever you left it)
+  if(!player.skating){ const s=skateBoard(); softShadow(s.x,s.y+4,9); drawSkateboard(s.x,s.y,false);
+    if(near(player.x,player.y,s.x,s.y-8,40) && (frame>>4)%2) { ctx.fillStyle='#ffd23f'; ctx.font='bold 7px monospace'; ctx.textAlign='center'; ctx.fillText('LOANER',s.x,s.y-6); ctx.textAlign='left'; } }
+}
+function skateSolids(){   // walkers: pool walls block except da steps; fence; bench
+  const P=POOL, t=4, o=[];
+  o.push([P.x0+P.r,P.y0-t-12,P.x1-P.r,P.y0-12+t]);               // far wall (feet box sits 10-14 below y)
+  o.push([P.x0+P.r,P.y1-14-t,P.x1-P.r,P.y1-14+t]);               // near wall
+  o.push([P.x1-t,P.y0-12,P.x1+t,P.y1-14]);                        // deep end wall
+  o.push([P.x0-t,P.y0-12,P.x0+t,P.stepY0-14],[P.x0-t,P.stepY1-12,P.x0+t,P.y1-14]);   // shallow wall, gap = steps
+  o.push([28,SEATOP+86,76,SEATOP+100]);                           // bench + kid
+  return o; }
 function landPlayer(){
+  if(beach.screen===SCR.SKATE && player.skating){ drawSkater(); return; }
   const moving=keys.left||keys.right||keys.up||keys.down;
   softShadow(player.x, player.y+13, 10);
   drawBeachBoard(player.x,player.y,player.facing,moving);
@@ -1987,6 +2133,7 @@ function landPlayer(){
 }
 function drawNewLand(){
   const sc=beach.screen, top=SEATOP, sandB=SEATOP+10, lit=isNight();
+  if(sc===SCR.SKATE){ drawSkatePark(); landPlayer(); return; }
   gradBand(0,top,W,sandB-top,C.sand,C.sandWet,4);                                   // beach edge you came down from
   if(sc===SCR.KAMHWY){
     gradBand(0,sandB,W,KAM.roadY-sandB,'#4a8a4a','#3a7a3c',6);
@@ -2022,6 +2169,9 @@ function drawNewLand(){
     for(let x=W/2-18;x<W/2+18;x+=8) px(x,ry+3,5,34,'#e8e8e8');
     gradBand(0,ry+40,W,H-ry-40,'#4a8a4a','#3a7a3c',6); px(0,ry+40,W,4,'#9a4a2a');
     for(let i=0;i<10;i++){ const tx=(i*53+20)%W; if(Math.abs(tx-W/2)<30) continue; px(tx,H-26,3,16,'#5a3a1a'); px(tx-6,H-34,15,8,i%2?'#7a2a5a':'#2f8a4a'); }   // ti plants
+    drawDirtPath(W/2-12,W/2+12,ry+44,H);                                                   // path on down to da skate park
+    { const sx=W/2+34, sy=H-40; px(sx,sy,58,16,'#1a1030'); px(sx,sy,58,2,'#ff3fa8'); px(sx+28,sy+16,2,10,'#6a6a6a');
+      ctx.fillStyle='#2fe0d0'; ctx.font='bold 7px monospace'; ctx.fillText('SKATE PARK ▼',sx+3,sy+11); }
   }
   else if(sc===SCR.CANE){
     gradBand(0,sandB,W,H-sandB,'#9a4a2a','#7a3a22',6);                                     // red dirt
@@ -2110,6 +2260,7 @@ function newLandSolids(){
   const sc=beach.screen, f=r=>[r[0],r[1],r[2],r[3]];
   if(sc===SCR.KAMHWY) return [f(KAM.store),f(KAM.truck),f(KAM.bus),[KAM.lineX-5,KAM.truck[3]-14,KAM.lineX+KAM_LINE.length*11-6,KAM.truck[3]]];
   if(sc===SCR.CANE) return [f(CANE_TRUCK)];
+  if(sc===SCR.SKATE) return skateSolids();
   if(sc===SCR.HUIHALE) return [[HUI.x-85,HUI.base-58,HUI.x+85,HUI.base-6],[W/2-34,HUI.base+18,W/2-22,HUI.base+28],[W/2+22,HUI.base+18,W/2+34,HUI.base+28]];
   return [[296,SEATOP+88,344,SEATOP+102]];   // lookout bench
 }
@@ -2130,6 +2281,12 @@ function newLandLooks(sc){
   if(sc===SCR.HUIHALE){
     add('lodge',HUI.x,HUI.base+16,50,["Da Hui clubhouse. Members and invited guests only.","Respect da lineup, respect da house.","You can feel people watching you from inside."]);
     add('guards',HUI.x,HUI.base+20,40,rankIdx()>=2?["Da braddahs nod at you. You earned it.","'Go inside, brah. You stay welcome.'","Big guys. Bigger hearts. Don't test 'um."]:["Two big braddahs at da door. Dey no smile.","'Members only. Earn some respect in da water first.'","Maybe when you're one Charger, dey let you in."]);
+  }
+  if(sc===SCR.SKATE){
+    add('pool',(POOL.x0+POOL.x1)/2,POOL.y0+20,90,["Old backyard pool, drained and painted. Da best kine bowl on da North Shore.","Deep end stay 9 ft. Hit da coping fast fo' AIR, hold X fo' grind.","Somebody wrote SHRED on da wall. Fair."]);
+    add('sign',78,SEATOP+52,40,["NORTH SHORE SKATE CLUB. Flat days, dis where everybody goes.","Surf's flat? Skate da pool, brah.","Neon sign straight out of '86."]);
+    add('kid',52,SEATOP+96,30,["Local kid wit' one boombox. 'Eh, da loaner stay by da gate, brah.'","He says da loaner board neva leaves da park. House rules.","'Carve da deep end, den hit da coping. Easy.'"]);
+    if(!player.skating){ const s=skateBoard(); add('loaner',s.x,s.y-4,24,["Da park's loaner skateboard. Pink deck, white wheels. Press B.","Grip tape stay worn down from a million sessions.","Stays in da park. Always."]); }
   }
   if(sc===SCR.LOOKOUT){
     add('bench',320,SEATOP+112,30,["Bench under da monkeypod tree. Best sunset seat.","Somebody carved 'PIPE 87' in da wood.","Sit down, watch da swell lines roll in."]);
@@ -2996,6 +3153,8 @@ function drawKeyHint(){
     else if(b.screen===SCR.TOWN && near(player.x,player.y,b.iceShop.x,b.iceShop.y,24)) act=['B','shop'];
     else if(b.screen===SCR.SURF && near(player.x,player.y,b.chandler.x,b.chandler.y+6,26)) act=['B','talk to Chandler'];
     else if(b.screen===SCR.PIPE && near(player.x,player.y,JUDGE.x,JUDGE.y,26)) act=['B',heat.on?'heat info':'enter Pipe Masters'];
+    else if(b.screen===SCR.SKATE && player.skating) act=['B','drop board · Z ollie · X grind'];
+    else if(b.screen===SCR.SKATE && nearSkateBoard()) act=['B','grab skateboard'];
   }
   const look=!!nearestInspectable();
   const rows=[ act ? [act[0],act[1],true] : ['B','open / use',false], ['I','inspect',look] ];

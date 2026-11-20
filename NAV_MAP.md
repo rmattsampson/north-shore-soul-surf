@@ -28,6 +28,9 @@ Two rows of screens, west (left) to east (right). Each beach has a land screen d
 | CANE (11) | land | SHAPING BARN | HUI | WAIMEA | -- | pickup w/ foam blanks |
 | HUIHALE (12) | land | CANE | LOOKOUT | PIPELINE | -- | Hui door (Charger) |
 | LOOKOUT (13) | land | HUI | wall | SUNSET | -- | |
+| SKATE (14) | 3rd row, under KAM HWY | wall | wall | KAM HWY (gate) | -- | loaner skateboard (B), pool. The board can't leave the park. |
+
+KAM HWY's down exit leads to the SKATE park, which sits in the bottom-left corner of the map. Sterling's Billabong yard (HOUSE) is a no-landing zone: you can walk in through its gate, but a screen change never drops you inside it.
 
 ## Transition rules (code: `goScreen()` in index.html)
 - **Left/right edge:** come out on the opposite edge of the neighbor at the **same y** (left edge x=14, right edge x=W-14).
