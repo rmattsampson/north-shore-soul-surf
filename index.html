@@ -671,7 +671,7 @@ const BREAK={
   [SCR.HALEIWA]:{ name:'HALEIWA',      rank:0, desc:"Mellow little peelers. Da place fo' learn.",
                   feel:{len:[60,110],  spd:[0.12,0.22], messy:0.10, rogue:0.00, gap:[110,200]} },
   [SCR.WAIMEA]: { name:'WAIMEA BAY',   rank:2, desc:"Only breaks on giant days. Charger rank to paddle out.",
-                  feel:{len:[150,230], spd:[0.14,0.22], messy:0.18, rogue:0.30, gap:[200,330]} },
+                  feel:{len:[150,220], spd:[0.16,0.24], messy:0, rogue:0, allBig:[2.2,2.8], gap:[200,330]} },   // ONLY big waves
   [SCR.PIPE]:   { name:'PIPELINE',     rank:3, final:true, desc:"Da FINAL level. Conquer Haleiwa, Sunset and Waimea, finish Chandler's lessons, reach PIPE INVITE.",
                   feel:{len:[60,100],  spd:[0.30,0.42], messy:0.30, rogue:0.04, gap:[100,170]} },
   [SCR.SUNSET]: { name:'SUNSET BEACH', rank:1, desc:"Long, heavy walls. Local rank to paddle out.",
@@ -722,6 +722,10 @@ function tickWaves(){
       w.waves.push({ y:SEATOP+10, x:W/2+rnd(-60,60), len:rnd(180,240), spd:rnd(0.14,0.2), messy:false, rode:false, big:rnd(2.5,3) });   // ~3x a normal wave: big, not silly
       if(state==='water' || (state==='beach' && !IS_DOWN(beach.screen))){ setMsg("🌊 ROGUE WAVE! Da big one stay coming — go catch 'um!",200); beep(110,.5,'triangle',.06); }
       w.waveT=ri(240,360);
+    } else if(F.allBig){
+      // WAIMEA: every wave is a big one. Clean, but it BREAKS hard on da inside
+      w.waves.push({ y:SEATOP+10, x:rnd(80,W-80), len:rnd(F.len[0],F.len[1]), spd:rnd(F.spd[0],F.spd[1]), messy:false, rode:false, big:rnd(F.allBig[0],F.allBig[1]) });
+      w.waveT=ri(F.gap[0],F.gap[1]);
     } else {
       const messy=Math.random()<F.messy;
       w.waves.push({ y:SEATOP+10, x:rnd(60,W-60), len:rnd(F.len[0],F.len[1]), spd:rnd(F.spd[0],F.spd[1]), messy, rode:false });
@@ -907,8 +911,8 @@ function updBeach(){
     }
   }
   if(b.screen===SCR.PIPE && near(player.x,player.y,JUDGE.x,JUDGE.y,26) && consume('b')){
-    if(heat.on) setMsg("Head judge: 'Heat stay running — go surf! "+Math.ceil(heat.t/60)+" seconds left.'",160);
-    else if(!pipeReady()) setMsg("Head judge: 'Pipe Masters is da final. You still need: "+pipeMissing().join(', ')+".'",300);
+    if(heat.on) setMsg("Kelly Slater (judging): 'Heat stay running — go surf! "+Math.ceil(heat.t/60)+" seconds left, kook.'",160);
+    else if(!pipeReady()) setMsg("Kelly Slater (judging): 'Pipe Masters is da final, kook. You still need: "+pipeMissing().join(', ')+".'",300);
     else startHeat();
   }
   if(b.screen===SCR.TOWN){
@@ -1222,17 +1226,25 @@ function updWater(){
   if(!w.surfing && keys.down && player.y>=SEABOT-1){ enterBeach(player.injured?"Limp in fo' heal, braddah":"Pau surf. Back on da sand."); return; }
 
   // drop-in: must be close to a clean swell line
-  if(!w.surfing && consume('space')){
+  if(!w.surfing && player.injured && consume('space')){ setMsg("You stay hurt, cuz -- paddle in (DOWN) and heal on da sand first.",90); }
+  else if(!w.surfing && consume('space')){
     const feel=RIDE_FEEL[rankIdx()];
     const reach = feel[0] + ((player.longboard || player.wax>0) ? 6 : 0);   // rank sets how close you must be; gun/wax helps
     const wv=w.waves.find(v=>!v.rode && Math.abs(v.y-player.y)<reach && Math.abs(v.x-player.x)<v.len/2+10);
     if(wv){ if(wv.messy){ wipeout("Messy closeout wen' buss you up!"); }
-      else { w.surfing=true; w.cur=wv; wv.rode=true; w.ride=0; w.combo=0; w.style=0; beep(600,.1,'sawtooth');
+      else { w.surfing=true; w.cur=wv; wv.rode=true; w.warned=false; w.ride=0; w.combo=0; w.style=0; beep(600,.1,'sawtooth');
         if(player.wax>0) player.wax--;
         setMsg("DROP IN! Z / X tricks (+ UP or DOWN fo' more) · Q = tricks you know",120);
         if(quest.active && quest.lesson===1){ quest.sess++; saveQuest(); if(quest.sess>=3) lessonDone(); }
         if(quest.active && quest.lesson===2 && dayT>=0.05 && dayT<0.25) lessonDone(); } }
     else setMsg("No swell right dea — paddle onto a wave line, cuz",60);
+  }
+
+  // CAUGHT INSIDE: a big wave dat's already breaking rolls ovah you while you're paddling = you get worked.
+  // Out back (before it breaks) you just duck under it. So sit out back, or catch it.
+  if(!w.surfing && player.invuln===0 && player.y<WADE_Y){
+    const hit=w.waves.find(v=>v.big && !v.rode && v.y>=BIG_BREAK_Y && Math.abs(v.y-player.y)<3 && Math.abs(v.x-player.x)<v.len/2+4);
+    if(hit){ bigWaveSlam("Caught inside! Da set wave wen' land on your head. Sit out back or catch 'um next time."); return; }
   }
 
   if(w.surfing){
@@ -1257,7 +1269,10 @@ function updWater(){
         trick(T.name,T.pts,T.id==='barrel'?C.purp:T.id==='air'?C.bad:C.gold,T.id);
       }
       // kick out on purpose, or ride into the shorebreak
-      if(player.y>=SHORE-8 || consume('space')){ endRide(); }
+      if(consume('space')){ endRide(); }
+      else if(w.cur.big && player.y>=BIG_CLOSEOUT_Y){ bigWaveSlam("Da big one closed out on top of you! Gotta kick out (SPACE) before it detonates."); return; }
+      else if(w.cur.big && player.y>=BIG_BREAK_Y && !w.warned){ w.warned=true; setMsg("⚠ It's BREAKING — KICK OUT (SPACE) NOW!",120,true); beep(220,.15,'square',.05); }
+      else if(player.y>=SHORE-8){ endRide(); }
     }
   }
 
@@ -1400,6 +1415,18 @@ function endRide(){ const w=water; if(!w.surfing)return;
   player.y=clamp(player.y-28, SEATOP+20, SEABOT-20);
   player.trickT=0; player.trickKind='';
 }
+// BIG WAVE HOLD-DOWN: like a shark bite -- you wash in hurt and gotta heal on da sand (~12 s) or see Chandler
+const BIG_BREAK_Y   = SHORE-94;   // big waves start pitching/breaking here (matches drawWaves' 'breaking')
+const BIG_CLOSEOUT_Y= SHORE-56;   // still riding a big one past here = it detonates on you
+function bigWaveSlam(reason){ const w=water;
+  if(w.cur) w.cur.rode=true;
+  w.surfing=false; w.cur=null; w.combo=0; w.style=0; w.warned=false;
+  player.injured=720; player.downT=70; player.invuln=150; player.trickT=0;
+  player.y=SEABOT-4;                                   // washed all da way in to da shallows
+  for(let i=0;i<24;i++) w.spray.push({ x:player.x+rnd(-20,20), y:player.y-6, vx:rnd(-3,3), vy:rnd(-4,-1), life:ri(20,40), kind:'foam' });
+  beep(55,.7,'sawtooth',.08); beep(90,.4,'triangle',.06);
+  setMsg("🌊💥 "+reason+" You stay hurt -- paddle in (DOWN), heals in ~12 s on da sand.",260,true);
+}
 function wipeout(reason){ const w=water;
   // rashguard perk: shrug off ONE wipeout, then it's spent until you go ashore
   if(player.tough && !player.shieldUsed){ player.shieldUsed=true; w.combo=0;
@@ -1448,7 +1475,7 @@ function drawQuestLog(){
   line((gifts>0?'▶ ':'○ ')+"Bring Andy Irons a shave ice (RCVA house)"+(gifts>0?'  — you have '+gifts:''), gifts>0?C.good:C.txt);
   line("○ Surf in front of da photog at da Cove fo' coins",C.txt);
   line("Breaks: "+LEVELS.map(sc=>(levelDone(sc)?'✓ ':'○ ')+BREAK[sc].name).join('   ')+"   (3+ s each)", C.txt);
-  line(quest.champ?"✓ PIPE MASTERS CHAMPION — trophy at your place":(pipeReady()?"▶ FINAL: Pipe Masters — talk to da head judge at Pipeline (B)":"○ FINAL: Pipe Masters (needs all breaks, lessons, PIPE INVITE)"), quest.champ||pipeReady()?C.good:C.txt);
+  line(quest.champ?"✓ PIPE MASTERS CHAMPION — trophy at your place":(pipeReady()?"▶ FINAL: Pipe Masters — talk to Kelly Slater at da judges' tent (B)":"○ FINAL: Pipe Masters (needs all breaks, lessons, PIPE INVITE)"), quest.champ||pipeReady()?C.good:C.txt);
   y+=4; ctx.font='bold 9px "Courier New",monospace'; line('TRICKS (while riding)  — hold arrow, tap Z / X',C.gold);
   ctx.font='bold 10px "Courier New",monospace';
   TRICKS.forEach((T,i)=>{ const ok=T.rank<=r, cx=bx+12+(i%2)*(bw/2-6), cy=y+Math.floor(i/2)*14;   // 2 columns, bigger + bolder
@@ -1806,16 +1833,16 @@ function drawIronwood(x,base){   // wispy casuarina: dark needles in drooping ti
     for(let k=-wd;k<=wd;k+=2) px(x+k,ty+Math.abs(k)*0.25+((k*13+i)%3),1,5+((k+i)%3),i%2?'#2a5a3a':'#356a44'); }
 }
 /* ===================== FINALE: PIPE MASTERS heat at Pipeline =====================
-   Reach PIPE INVITE, talk to da head judge on da Pipeline sand (B). 60-second heat vs Kelly, Jamie
+   Reach PIPE INVITE, talk to Kelly Slater (judging) on da Pipeline sand (B). 60-second heat vs Andy, Jamie
    and Mason; your best TWO waves count (score out of 10 each). Win = Pipe Masters champ. */
 let heat={ on:false, t:0, scores:[], opp:[] };
 const JUDGE={ x:166, y:SHORE+30 };
 function bestTwo(a){ const b=[...a].sort((x,y)=>y-x); return (b[0]||0)+(b[1]||0); }
 function startHeat(){
   heat={ on:true, t:60*60, scores:[],
-    opp:[ {n:'KELLY SLATER', s:+rnd(13.5,16.5).toFixed(1)}, {n:"JAMIE O'BRIEN", s:+rnd(12,15).toFixed(1)}, {n:'MASON HO', s:+rnd(11,14).toFixed(1)} ] };
+    opp:[ {n:'ANDY IRONS', s:+rnd(13.5,16.5).toFixed(1)}, {n:"JAMIE O'BRIEN", s:+rnd(12,15).toFixed(1)}, {n:'MASON HO', s:+rnd(11,14).toFixed(1)} ] };
   beep(660,.15,'square'); setTimeout(()=>beep(880,.2,'square'),160);
-  setMsg("🎺 PIPE MASTERS — HEAT ON! 60 seconds, best TWO waves count. Kelly Slater: 'Pipe's MY living room, kook.'",300);
+  setMsg("🎺 PIPE MASTERS — HEAT ON! 60 seconds, best TWO waves count. Kelly Slater (judging): 'Pipe's MY living room, kook. Try not embarrass yourself.'",300);
 }
 function heatRide(secs,style,combo){
   const sc=Math.min(10, secs*1.7 + style/45 + (combo>1?combo*0.4:0));
@@ -1831,7 +1858,7 @@ function tickHeat(){
   if(place===1){ quest.champ=true; saveQuest(); gainXP(60); beep(990,.3,'triangle');
     setMsg("🏆 PIPE MASTERS CHAMPION! "+mine.toFixed(1)+" beats "+field[1].n+" ("+field[1].s.toFixed(1)+"). Kelly Slater: 'Lucky waves, kook... OK, dose were good.' Trophy stay at your place.",420); }
   else { beep(300,.2,'triangle');
-    setMsg("Heat ovah — you placed #"+place+" wit' "+mine.toFixed(1)+". Winner: "+field[0].n+" ("+field[0].s.toFixed(1)+"). Kelly: 'Bettah luck next year, grom.' Talk to da judge to try again.",420); }
+    setMsg("Heat ovah — you placed #"+place+" wit' "+mine.toFixed(1)+". Winner: "+field[0].n+" ("+field[0].s.toFixed(1)+"). Kelly: 'Bettah luck next year, grom.' Talk to Kelly at da judges' tent to try again.",420); }
 }
 function drawPipeMasters(){
   // contest scaffolding: judges' tower, banner, flags, little crowd on da sand
@@ -1844,9 +1871,10 @@ function drawPipeMasters(){
   ctx.fillText('PIPE MASTERS',(x0+x1)/2,top+25); ctx.textAlign='left';
   for(const [fx,fc] of [[x0-6,'#ffd23f'],[x1+6,'#2fbfae']]){ px(fx,top-34,1,22,'#ccc'); px(fx+1,top-34+(frame>>4)%2,8,5,fc); }
   for(let i=0;i<14;i++){ const cx=150+((i*37)%120), cy=SHORE+56+((i*13)%14); px(cx,cy,3,6,['#e0533a','#2b6cb0','#ffd23f','#f2f2f2','#2f8a4a'][i%5]); px(cx,cy-3,3,3,'#c88a4e'); }
-  // da head judge wit' a clipboard
+  // Kelly Slater judging da heat, wit' a clipboard and his black cap
   softShadow(JUDGE.x,JUDGE.y+13,9); drawDude(JUDGE.x,JUDGE.y,'#c88a4e','#1f3a6a',1,'stand',0,'#f2f2f2');
-  px(JUDGE.x+5,JUDGE.y-2,5,7,'#d8c070'); nameTag('HEAD JUDGE',JUDGE.x,JUDGE.y-18,C.gold);
+  px(JUDGE.x-3,JUDGE.y-12,7,2,'#2a2a2a');
+  px(JUDGE.x+5,JUDGE.y-2,5,7,'#d8c070'); nameTag('KELLY SLATER',JUDGE.x,JUDGE.y-18,C.gold);
 }
 function drawBreakScenery(){
   const sc=beach.screen;
