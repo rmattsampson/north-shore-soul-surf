@@ -522,7 +522,9 @@ const SHOP = [
   { id:'shirt_rash',   kind:'shirt',  name:'Rashguard',     price:200, color:'#2b6cb0', perk:'tough' }, // tiny perk: survive 1 extra hit
   { id:'shirt_aloha',  kind:'shirt',  name:'Aloha Shirt',   price:260, color:'#e0533a', perk:'' },
   { id:'board_chandler',kind:'board', name:"Chandler's Gun", price:0, color:'#f2ead8', perk:'longboard', hidden:true }, // earned, not bought
-  { id:'shaveice',     kind:'treat',  name:'Shave Ice',     price:40,  color:'#7ad9ff', perk:'treat' }  // a gift you carry (Andy likes)
+  { id:'shaveice',     kind:'treat',  name:'Rainbow Shave Ice', price:40, color:'#7ad9ff', perk:'treat' },  // a gift you carry (Andy likes)
+  { id:'shaveice_lh',  kind:'treat',  name:'Li Hing Mui',   price:40,  color:'#ff8cc0', perk:'treat' },
+  { id:'shaveice_az',  kind:'treat',  name:'Azuki + Mochi', price:45,  color:'#c8a0e0', perk:'treat' }
 ];
 try{ if(!localStorage.getItem('nsss_coins_reset_v2')){ setCoins(0); localStorage.setItem('nsss_coins_reset_v2','1'); } }catch(e){}
 let coins=getCoins(), owned=loadOwned(), equip=loadEquip();
@@ -796,9 +798,13 @@ function update(){
 }
 
 /* ---- SHOP: simple buy menu overlaid on the beach ---- */
-let shop={ sel:0 };
-function openShop(){ state='shop'; shop.sel=0; beep(680,.09,'triangle'); }
-function shopList(){ return SHOP.filter(i=>!i.hidden || owned.includes(i.id)); }
+let shop={ sel:0, kind:'surf' };
+function openShop(kind){ state='shop'; shop.kind=kind||'surf'; shop.sel=0; beep(680,.09,'triangle'); }
+function shopList(){ return SHOP.filter(i=>(!i.hidden || owned.includes(i.id)) && (shop.kind==='ice' ? i.kind==='treat' : i.kind!=='treat')); }
+// both shops live on KAM HWY now (inland): surf shop = da old general store, shave ice = stand across da road
+const SURF_SHOP={ x:90, y:SEATOP+114 }, ICE_STAND={ x:110, y:H-14 };
+const nearSurfShop = ()=>beach.screen===SCR.KAMHWY && near(player.x,player.y,SURF_SHOP.x,SURF_SHOP.y,26);
+const nearIceStand = ()=>beach.screen===SCR.KAMHWY && near(player.x,player.y,ICE_STAND.x,ICE_STAND.y-4,28);
 function updShop(){
   const SL=shopList();
   if(consume('up'))   shop.sel=(shop.sel+SL.length-1)%SL.length;
@@ -923,17 +929,14 @@ function updBeach(){
     }
   }
   if(b.screen===SCR.SKATE && nearSkateBoard() && consume('b')){ startSkating(); return; }
+  if(nearSurfShop() && consume('b')){ openShop('surf'); return; }
+  if(nearIceStand() && consume('b')){ openShop('ice'); return; }
   if(b.screen===SCR.PIPE && near(player.x,player.y,JUDGE.x,JUDGE.y,26) && consume('b')){
     if(heat.on) setMsg("Kelly Slater (judging): 'Heat stay running — go surf! "+Math.ceil(heat.t/60)+" seconds left, kook.'",160);
     else if(!pipeReady()) setMsg("Kelly Slater (judging): 'Pipe Masters is da final, kook. You still need: "+pipeMissing().join(', ')+".'",300);
     else startHeat();
   }
   if(b.screen===SCR.TOWN){
-    // SHOP: walk up to da shave-ice stand, press B
-    if(near(player.x,player.y,b.iceShop.x,b.iceShop.y,24)){
-      if(consume('b')){ openShop(); return; }
-      
-    }
     // say HI to the locals
     for(const f of b.folks){ if(f.cool>0) f.cool--;
       if(near(player.x,player.y,f.x,f.y,18) && f.cool===0){
@@ -1696,7 +1699,6 @@ function drawBeachProps(){
   drawBreakScenery();
   // TOWN screen: shave-ice shop, surf shack, locals
   if(b.screen===SCR.TOWN){
-    drawIceShop(b.iceShop.x, b.iceShop.y);
     for(const f of b.folks){ softShadow(f.x,f.y+12,10);
       drawDude(f.x,f.y,'#a86a34','#2f8a6a',1,'stand',frame); }
   }
@@ -2156,11 +2158,13 @@ function drawNewLand(){
     // general store: plantation false-front, porch, screen door
     { const [a,b2,c2,d]=KAM.store; px(a,b2,c2-a,d-b2,'#c8a46a'); for(let x=a;x<c2;x+=6) px(x,b2,1,d-b2,'#a8844e');
       px(a-4,b2-14,c2-a+8,16,'#a83a2a'); px(a-4,b2-14,c2-a+8,2,'#c85a4a');
-      ctx.fillStyle='#ffe9a8'; ctx.font='bold 7px monospace'; ctx.textAlign='center'; ctx.fillText('GENERAL STORE',(a+c2)/2,b2-4); ctx.textAlign='left';
+      ctx.fillStyle='#ffe9a8'; ctx.font='bold 7px monospace'; ctx.textAlign='center'; ctx.fillText('SURF SHOP',(a+c2)/2,b2-4); ctx.textAlign='left';
       px(a-2,b2+20,c2-a+4,3,'#6a4a28'); for(const x of [a,a+40,c2-40,c2-3]) px(x,b2+22,3,d-b2-22,'#f2ead8');
       px((a+c2)/2-7,b2+28,14,d-b2-28,'#3a2a1a'); px((a+c2)/2-6,b2+29,12,d-b2-30,'#5a5a5a');
       px(a+6,b2+30,24,14,lit?'#ffd98a':'#8fb0bf'); px(c2-30,b2+30,24,14,lit?'#ffd98a':'#8fb0bf');
-      px(a+8,d-8,18,6,'#c0392b'); px(a+8,d-8,18,2,'#e0533a'); }                                   // soda cooler out front
+      for(const [i,bc] of [['#2fbfae'],['#ffd23f'],['#e0533a'],['#f2ead8']].entries()){ const x=a+6+i*7; px(x,d-30,5,30,bc[0]); px(x+2,d-30,1,30,'#ffffff'); px(x,d-30,5,2,shade(bc[0],30)); }   // boards racked out front
+      for(const [i,bc] of [['#f2ead8'],['#2f8aa8'],['#ff8cc0']].entries()){ const x=c2-28+i*7; px(x,d-30,5,30,bc[0]); px(x+2,d-30,1,30,'#ffffff'); }
+      px((a+c2)/2-14,b2+22,28,5,'#14233a'); ctx.fillStyle='#ffd23f'; ctx.font='bold 5px monospace'; ctx.textAlign='center'; ctx.fillText('OPEN',(a+c2)/2,b2+26); ctx.textAlign='left'; }
     // shrimp truck: white box truck, painted shrimp, menu board + picnic table
     { const [a,b2,c2,d]=KAM.truck; px(a,b2,c2-a,d-b2-8,'#f2f2f2'); px(a,b2,c2-a,2,'#ffffff'); px(c2-22,b2+8,22,d-b2-16,'#e8e8e8');
       px(c2-18,b2+12,12,8,'#8fb0bf'); px(a+8,b2+8,30,12,'#3a3a3a'); px(a+8,b2+8,30,2,'#ffd23f');
@@ -2182,8 +2186,9 @@ function drawNewLand(){
     for(let x=0;x<W;x+=20){ px(x,ry+18,12,1,'#ffd23f'); px(x,ry+20,12,1,'#ffd23f'); }
     for(let x=W/2-18;x<W/2+18;x+=8) px(x,ry+3,5,34,'#e8e8e8');
     gradBand(0,ry+40,W,H-ry-40,'#4a8a4a','#3a7a3c',6); px(0,ry+40,W,4,'#9a4a2a');
-    for(let i=0;i<10;i++){ const tx=(i*53+20)%W; if(Math.abs(tx-W/2)<30) continue; px(tx,H-26,3,16,'#5a3a1a'); px(tx-6,H-34,15,8,i%2?'#7a2a5a':'#2f8a4a'); }   // ti plants
+    for(let i=0;i<10;i++){ const tx=(i*53+20)%W; if(Math.abs(tx-W/2)<30 || Math.abs(tx-ICE_STAND.x)<40) continue; px(tx,H-26,3,16,'#5a3a1a'); px(tx-6,H-34,15,8,i%2?'#7a2a5a':'#2f8a4a'); }   // ti plants
     drawDirtPath(W/2-12,W/2+12,ry+44,H);                                                   // path on down to da skate park
+    drawIceShop(ICE_STAND.x, ICE_STAND.y);                                                 // shave ice: its own stand now
     { const sx=W/2+34, sy=H-40; px(sx,sy,58,16,'#1a1030'); px(sx,sy,58,2,'#ff3fa8'); px(sx+28,sy+16,2,10,'#6a6a6a');
       ctx.fillStyle='#2fe0d0'; ctx.font='bold 7px monospace'; ctx.fillText('SKATE PARK ▼',sx+3,sy+11); }
   }
@@ -2272,7 +2277,7 @@ function drawNewLand(){
 }
 function newLandSolids(){
   const sc=beach.screen, f=r=>[r[0],r[1],r[2],r[3]];
-  if(sc===SCR.KAMHWY) return [f(KAM.store),f(KAM.truck),f(KAM.bus),[KAM.lineX-5,KAM.truck[3]-14,KAM.lineX+KAM_LINE.length*11-6,KAM.truck[3]]];
+  if(sc===SCR.KAMHWY) return [f(KAM.store),[ICE_STAND.x-24,ICE_STAND.y-24,ICE_STAND.x+24,ICE_STAND.y-8],f(KAM.truck),f(KAM.bus),[KAM.lineX-5,KAM.truck[3]-14,KAM.lineX+KAM_LINE.length*11-6,KAM.truck[3]]];
   if(sc===SCR.CANE) return [f(CANE_TRUCK)];
   if(sc===SCR.SKATE) return skateSolids();
   if(sc===SCR.HUIHALE) return [[HUI.x-85,HUI.base-58,HUI.x+85,HUI.base-6],[W/2-34,HUI.base+18,W/2-22,HUI.base+28],[W/2+22,HUI.base+18,W/2+34,HUI.base+28]];
@@ -2281,7 +2286,8 @@ function newLandSolids(){
 function newLandLooks(sc){
   const L=[], add=(id,x,y,r,lines)=>L.push([id,x,y,r,lines]);
   if(sc===SCR.KAMHWY){
-    add('store',90,SEATOP+116,40,["General store. Spam musubi, sunscreen, and one cold POG.","Uncle behind da counter knows everybody's name.","Board wax by da register. Every flavor of coconut."]);
+    add('store',90,SEATOP+116,40,["NORTH SHORE SURF CO. Boards, trunks, rash guards. Press B.","Uncle behind da counter knows everybody's name.","Board wax by da register. Every flavor of coconut."]);
+    add('shaveice',ICE_STAND.x,ICE_STAND.y-6,30,["Shave ice stand. Rainbow wit' ice cream on da bottom. Press B.","Line stay long, but worth it.","Li hing mui flavor. Da best."]);
     add('shrimp',318,SEATOP+116,40,["Garlic shrimp truck. Da line stay long fo' one reason.","Smells so good you might paddle back in fo' lunch.","Plate lunch: shrimp, two scoop rice. Ono."]);
     add('shrimpline',KAM.lineX+16,SEATOP+108,30,["Da line fo' garlic shrimp. Worth every minute, brah.","Uncle in front ordering fo' his whole ohana.","Tourist in back asking if da shrimp stay spicy. Yes."]);
     add('busstop',434,SEATOP+116,30,["Bus stop. Da bus to town comes... eventually.","Somebody left one boogie board on da bench.","Tourists waiting wit' dea surfboards. Kooks? Maybe."]);
@@ -2772,7 +2778,7 @@ function updCabin(){
     if(consume('b')){
       if(gifts>0){ gifts--; floatScore('SHAKA',player.x,player.y-18,C.gold); npcCool=300; beep(880,.1);
         setMsg("Andy Irons: 'Shave ice?! Now we talking. You can stay, brah.'",240); }
-      else { npcCool=300; beep(300,.08,'triangle'); setMsg("Andy Irons: 'Empty hands? Go get me one shave ice from town, brah.'",240); }
+      else { npcCool=300; beep(300,.08,'triangle'); setMsg("Andy Irons: 'Empty hands? Go get me one shave ice from da stand on Kam Highway, brah.'",240); }
     } else if(npcCool===0){ npcCool=600; beep(520,.07,'triangle'); setMsg("Andy Irons: 'What gifts have you brought me?'",240); }
   }
   if(nearBlank() && consume('b')){ player.waxing=180; player.facing = player.x<COVE_ROOM.blank.x ? 1 : -1; beep(640,.08,'triangle');
@@ -3118,7 +3124,6 @@ function inspectables(){
     if(onMyBeach(b.local)) add('local',b.local.x,b.local.y,22,["Local uncle walking his beach. Respect.","He drops stuff everywhere. Free souvenirs.","Uncle's been surfing here since before you was born."]);
     { const bx=buggyLX(); if(bx!==null) add('atv',bx,SHORE+16,28,["Lifeguard ATV. Dey own dis beach.","Lifeguards on patrol. Stay outta da way.","Red cross on da back. No mess wit' 'um."]); }
     if(scr===SCR.TOWN){
-      add('shaveice',b.iceShop.x,b.iceShop.y,30,["Shave ice stand. Rainbow wit' ice cream on da bottom.","Line stay long, but worth it.","Li hing mui flavor. Da best."]);
       for(const f of b.folks) add('folk',f.x,f.y,20,["Local folks talking story.","Dey stay planning one beach party.","Auntie wen' offer you one plate lunch."]);
     }
     if(scr===SCR.SURF) add('chandler',b.chandler.x,b.chandler.y+6,28,["Chandler. Shapes da best guns on da North Shore.","His hale smells like resin and incense.","He says: 'Surf wit' your heart, not your ego.'"]);
@@ -3167,7 +3172,8 @@ function drawKeyHint(){
     const rid=atDoorSpot();
     if(rid) act = b.doorOpen===rid ? ['B',(ROOMS[rid].enter==='up'?'/ ↑':'/ ↓')+' walk in'] : ['B','open door'];
     else if(b.screen===SCR.MYHOUSE){ const HM=myHammock(); if(near(player.x,player.y,HM.x,HM.y,40)) act=['B','sleep']; }
-    else if(b.screen===SCR.TOWN && near(player.x,player.y,b.iceShop.x,b.iceShop.y,24)) act=['B','shop'];
+    else if(nearSurfShop()) act=['B','surf shop'];
+    else if(nearIceStand()) act=['B','shave ice'];
     else if(b.screen===SCR.SURF && near(player.x,player.y,b.chandler.x,b.chandler.y+6,26)) act=['B','talk to Chandler'];
     else if(b.screen===SCR.PIPE && near(player.x,player.y,JUDGE.x,JUDGE.y,26)) act=['B',heat.on?'heat info':'enter Pipe Masters'];
     else if(b.screen===SCR.SKATE && player.skating) act=['B','drop board · Z ollie · X grind'];
@@ -3422,9 +3428,10 @@ function drawShop(){
   const bw=320, bh=236, bx=(W-bw)/2, by=(H-bh)/2;
   px(bx,by,bw,bh,'#14233a'); ctx.strokeStyle=C.good; ctx.lineWidth=2; ctx.strokeRect(bx+1,by+1,bw-2,bh-2);
   // striped header like the awning
-  for(let i=0;i<bw/10;i++) px(bx+i*10,by,10,10,i%2?'#ff5a7a':'#fff');
+  const ice=shop.kind==='ice';
+  for(let i=0;i<bw/10;i++) px(bx+i*10,by,10,10,i%2?(ice?'#ff5a7a':'#2f8aa8'):'#fff');
   ctx.textAlign='center'; ctx.fillStyle='#14233a'; ctx.font='bold 10px "Courier New",monospace';
-  ctx.fillText('SHAVE ICE & SURF SHOP',W/2,by+8);
+  ctx.fillText(ice?'🍧 SHAVE ICE STAND':'🏄 NORTH SHORE SURF CO.',W/2,by+8);
   ctx.fillStyle=C.gold; ctx.font='bold 11px "Courier New",monospace';
   ctx.fillText('🪙 '+coins+' coins',W/2,by+24);
   ctx.font='9px "Courier New",monospace'; ctx.textAlign='left';
@@ -3457,7 +3464,7 @@ function drawHUD(){
   px(0,0,W,16,'#00000059');
   ctx.font='bold 11px "Courier New",monospace'; ctx.textAlign='left';
 
-  ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText(state==='beach'?(BREAK[beach.screen]?'🏝 '+BREAK[beach.screen].name:IS_DOWN(beach.screen)?'🌿 NORTH SHORE':'🏖 BEACH'):state==='shop'?'🍧 SHOP':state==='cabin'?ROOMS[room].label:'🌊 LINEUP',W/2,12);
+  ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText(state==='beach'?(BREAK[beach.screen]?'🏝 '+BREAK[beach.screen].name:IS_DOWN(beach.screen)?'🌿 NORTH SHORE':'🏖 BEACH'):state==='shop'?(shop.kind==='ice'?'🍧 SHAVE ICE':'🏄 SURF SHOP'):state==='cabin'?ROOMS[room].label:'🌊 LINEUP',W/2,12);
   ctx.textAlign='left'; ctx.fillStyle=C.gold; ctx.font='bold 10px "Courier New",monospace';
   ctx.fillText('🪙 '+coins, 6, 12);
   if(heat.on){ const b2=bestTwo(heat.scores), lead=heat.opp.reduce((m,o)=>o.s>m.s?o:m,heat.opp[0]);
