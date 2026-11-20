@@ -542,7 +542,6 @@ applyEquip();
 // general reputation, not quotes.
 const PROS = [
   { name:'Laird Hamilton',    line:"'Did you see that one?!'" },
-  { name:'Kelly Slater',      line:"the GOAT just paddled out." },
   { name:'Eddie Aikau',       line:"'Eddie would go.' Respect." },
   { name:'Gerry Lopez',       line:"Mr. Pipeline, smooth as glass." },
   { name:'Duke Kahanamoku',   line:"da father of surfing himself." },
@@ -769,7 +768,7 @@ function spawnCrash(x,len,messy){
    ============================================================ */
 function update(){
   frame++; seaPhase++; music();
-  if(player.injured>0 && state!=='water'){ player.injured--; if(player.injured===0){ player.recover=0; setMsg("Bite all healed up. Go surf, braddah! 🤙",120); beep(540,.14,'triangle'); } }   // heals on its own on land (~12 s)
+  if(player.injured>0 && state!=='water'){ player.injured--; if(player.injured===0){ player.recover=0; setMsg(player.hurtBy==='wave'?"Shook off da beating from dat set wave. Go surf, braddah! 🤙":"Bite all healed up. Go surf, braddah! 🤙",120,true); beep(540,.14,'triangle'); } }   // heals on its own on land (~12 s)
   dayT = (dayT + 1/DAY_LEN) % 1;   // advance the day/night clock
   if(msgT>0)msgT--; if(flashT>0){ flashT--; flash.y-=0.4; }
   if(consume('mute')){ muted=!muted; setMsg(muted?"🔇 muted":"🔊 sound on",60); }
@@ -1053,10 +1052,10 @@ const KELLY_LINES=[
   "Retire? I tried once. Didn't take.",
   "Is dat a thruster? Cute.",
   "Somebody tell Sterling da rulez are MY rulez.",
-  "I'm fifty-something and still getting barreled. What's your excuse?",
+  "I don't paddle out fo' free. You couldn't afford da show.",
   "Nice board. Shape 'um in one Tempe wave tank?",
-  "Pipe's flat. I'll make it break.",
-  "Watch me paddle out. Take notes, kook.",
+  "Pipe's flat. Good. Mo' time fo' me to judge you.",
+  "I watch from da sand. Take notes, kook.",
   "Signed my own autograph on dat cooler. You're welcome.",
   "Where's Sterling? I need somebody fo' beat.",
 ];
@@ -1146,14 +1145,9 @@ function tickKelly(){
       if(state==='beach' && onMyBeach(K)){
         setMsg("Kelly Slater: '"+KELLY_LINES[kellyIdx%KELLY_LINES.length]+"'",200); kellyIdx++; beep(520,.08,'triangle'); }
       K.said++; }
-    // done talkin' on his last beach? he grabs his board and paddles out to show everybody how it's done
-    if(K.hops<=0 && K.said>=stops.length && (K.dir>0?K.x>W*0.88:K.x<W*0.12)){ kellyPaddleOut(BEACH_ROW[K.s]); b.kelly=null; b.kellyT=ri(3600,6000); }
+    // Kelly NEVER surfs: he just walks da sand talkin' trash, den strolls off
   }
 }
-function kellyPaddleOut(sc){ const LU=lineup(sc); if(LU.pro && LU.pro.bit) return;
-  const line="'"+KELLY_LINES[kellyIdx%KELLY_LINES.length]+"'"; kellyIdx++;
-  LU.pro={ name:'Kelly Slater', line, kelly:true, female:false, x:rnd(60,W-60), y:SEATOP+12, t:ri(900,1400), surf:false, wave:null };
-  if(beach.screen===sc && (state==='beach'||state==='water')){ setMsg("Kelly Slater grabs his board: "+line+" Watch an' learn, kooks.",180); beep(520,.1,'triangle'); } }
 // a lone beach tourist (original character) occasionally strolls across
 function tickTourist(){
   const b=beach; if(!beachBuilt) return;
@@ -1387,7 +1381,7 @@ function tickLineup(){
     }
     s.x+=s.vx; s.y=Math.max(SEATOP+12, Math.min(SEABOT-10, s.y+s.vy));
     if(inSea && near(player.x,player.y,s.x,s.y,16)&&!player.injured){
-      player.injured=720; beep(60,.6,'sawtooth',.07);   // ~12 s on land to heal
+      player.injured=720; player.hurtBy='shark'; beep(60,.6,'sawtooth',.07);   // ~12 s on land to heal
       setMsg("Shark wen' buss you up! Paddle in (DOWN) — heals in ~12 s on da sand, or Chandler fixes you quick.",200,true);
       w.surfing=false; w.cur=null; player.downT=36; s.hunt=false; }
     if(s.hunt && LU.pro && !LU.pro.bit && near(LU.pro.x,LU.pro.y,s.x,s.y,16)){   // takes out da pro (Hui stay untouched — even da sharks respect da Hui)
@@ -1435,7 +1429,7 @@ const BIG_CLOSEOUT_Y= SHORE-56;   // still riding a big one past here = it deton
 function bigWaveSlam(reason){ const w=water;
   if(w.cur) w.cur.rode=true;
   w.surfing=false; w.cur=null; w.combo=0; w.style=0; w.warned=false;
-  player.injured=720; player.downT=70; player.invuln=150; player.trickT=0;
+  player.injured=720; player.hurtBy='wave'; player.downT=70; player.invuln=150; player.trickT=0;
   player.y=SEABOT-4;                                   // washed all da way in to da shallows
   for(let i=0;i<24;i++) w.spray.push({ x:player.x+rnd(-20,20), y:player.y-6, vx:rnd(-3,3), vy:rnd(-4,-1), life:ri(20,40), kind:'foam' });
   beep(55,.7,'sawtooth',.08); beep(90,.4,'triangle',.06);
