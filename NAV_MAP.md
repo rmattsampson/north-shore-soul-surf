@@ -21,7 +21,7 @@ Two rows of screens, west (left) to east (right). Each beach has a land screen d
 | WAIMEA (7) | beach | COVE | PIPELINE | paddle out (Charger) | CANE FIELDS | |
 | PIPE (8) | beach | WAIMEA | SUNSET | paddle out (final: all levels) | HUI CLUBHOUSE | Pipe Masters judge |
 | SUNSET (9) | beach | PIPELINE | wall | paddle out (Local) | LOOKOUT | |
-| KAMHWY (10) | land | wall | MY PLACE | HALEIWA | -- | SURF SHOP (B: boards, trunks, shirts), SHAVE ICE stand (B: treats for Andy), shrimp truck + line, bus |
+| KAMHWY (10) | land | wall | MY PLACE | HALEIWA | -- | SURF SHOP door (B, then UP to walk in: boards, trunks, shirts and wax, pay as you grab), SHAVE ICE stand (B: treats for Andy), shrimp truck + line, bus |
 | MYHOUSE (4) | land | KAM HWY | RCVA HOUSE | TOWN | -- | MY PLACE door |
 | HOUSE (3) | land | MY PLACE | SHAPING BARN | SURF | -- | RCVA door, Auntie's (across trail), Billabong yard |
 | COVEDOWN (5) | land | RCVA HOUSE | CANE | COVE | -- | Shaping Barn door |

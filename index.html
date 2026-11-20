@@ -929,7 +929,6 @@ function updBeach(){
     }
   }
   if(b.screen===SCR.SKATE && nearSkateBoard() && consume('b')){ startSkating(); return; }
-  if(nearSurfShop() && consume('b')){ openShop('surf'); return; }
   if(nearIceStand() && consume('b')){ openShop('ice'); return; }
   if(b.screen===SCR.PIPE && near(player.x,player.y,JUDGE.x,JUDGE.y,26) && consume('b')){
     if(heat.on) setMsg("Kelly Slater (judging): 'Heat stay running — go surf! "+Math.ceil(heat.t/60)+" seconds left, kook.'",160);
@@ -2160,7 +2159,7 @@ function drawNewLand(){
       px(a-4,b2-14,c2-a+8,16,'#a83a2a'); px(a-4,b2-14,c2-a+8,2,'#c85a4a');
       ctx.fillStyle='#ffe9a8'; ctx.font='bold 7px monospace'; ctx.textAlign='center'; ctx.fillText('SURF SHOP',(a+c2)/2,b2-4); ctx.textAlign='left';
       px(a-2,b2+20,c2-a+4,3,'#6a4a28'); for(const x of [a,a+40,c2-40,c2-3]) px(x,b2+22,3,d-b2-22,'#f2ead8');
-      px((a+c2)/2-7,b2+28,14,d-b2-28,'#3a2a1a'); px((a+c2)/2-6,b2+29,12,d-b2-30,'#5a5a5a');
+      px((a+c2)/2-7,b2+28,14,d-b2-28,'#3a2a1a'); px((a+c2)/2-6,b2+29,12,d-b2-30,beach.doorOpen==='surfshop'?'#ffd98a':'#5a5a5a');
       px(a+6,b2+30,24,14,lit?'#ffd98a':'#8fb0bf'); px(c2-30,b2+30,24,14,lit?'#ffd98a':'#8fb0bf');
       for(const [i,bc] of [['#2fbfae'],['#ffd23f'],['#e0533a'],['#f2ead8']].entries()){ const x=a+6+i*7; px(x,d-30,5,30,bc[0]); px(x+2,d-30,1,30,'#ffffff'); px(x,d-30,5,2,shade(bc[0],30)); }   // boards racked out front
       for(const [i,bc] of [['#f2ead8'],['#2f8aa8'],['#ff8cc0']].entries()){ const x=c2-28+i*7; px(x,d-30,5,30,bc[0]); px(x+2,d-30,1,30,'#ffffff'); }
@@ -2169,7 +2168,7 @@ function drawNewLand(){
     { const [a,b2,c2,d]=KAM.truck; px(a,b2,c2-a,d-b2-8,'#f2f2f2'); px(a,b2,c2-a,2,'#ffffff'); px(c2-22,b2+8,22,d-b2-16,'#e8e8e8');
       px(c2-18,b2+12,12,8,'#8fb0bf'); px(a+8,b2+8,30,12,'#3a3a3a'); px(a+8,b2+8,30,2,'#ffd23f');
       ctx.fillStyle='#ff8a5a'; ctx.beginPath(); ctx.ellipse(a+50,b2+18,10,5,0.3,0,Math.PI*2); ctx.fill(); px(a+40,b2+14,4,2,'#ff8a5a');
-      ctx.fillStyle='#c0392b'; ctx.font='bold 6px monospace'; ctx.fillText('GARLIC SHRIMP',a+4,b2+32);
+      ctx.fillStyle='#c0392b'; ctx.font='bold 6px monospace'; ctx.fillText('GARLIC SHRIMP',a+18,b2+28);
       for(const wx of [a+12,c2-14]){ px(wx-5,d-9,10,9,'#222'); px(wx-2,d-6,4,4,'#888'); }
       px(a+20,d+4,36,4,'#8a5a30'); px(a+22,d+8,3,8,'#5a3a1a'); px(a+50,d+8,3,8,'#5a3a1a'); }
     // da line at da shrimp truck window -- hungry locals and tourists, shuffling
@@ -2683,6 +2682,7 @@ const ROOMS = {
   trail:  { label:"🍌 AUNTIE'S",  screen:SCR.HOUSE,    sx:W/2,       sy:TRAIL_HOUSE_BASE+4, enter:'up',
             zone:[W/2-64, TRAIL_HOUSE_BASE-70, W/2+64, H] },   // anywhere around her house: from da trail above OR at her front door
   hui:    { label:'🤙 DA HUI',     screen:SCR.HUIHALE,  sx:W/2,       sy:HUI.base+2,     enter:'up', needRank:2 },   // members + Chargers only
+  surfshop:{ label:'🏄 NORTH SHORE SURF CO.', screen:SCR.KAMHWY, sx:90, sy:SEATOP+100, enter:'up' },             // walk-in surf shop on Kam Hwy
 };
 function atDoorSpot(){
   if(state!=='beach' || !IS_DOWN(beach.screen)) return null;
@@ -2728,12 +2728,103 @@ function drawFrontStairs(cx,yTop,yBot,n,open){
 const RCVA_ROOM  = { couch:[84,170,196,206], coffee:[112,222,170,242], tv:[262,120,322,146], fridge:[384,120,412,170], stairs:[350,196,412,292], andy:{x:140,y:186} };
 const COVE_ROOM  = { bed:[76,236,150,276], bench:[72,124,176,150], horses:[196,196,292,216], rack:[330,124,412,150], resin:[382,250,404,282], turtle:{x:318,y:200}, blank:{x:244,y:206} };
 const AUNTIE_ROOM= { counter:[70,120,214,150], table:[250,190,330,226], chair:[356,236,402,282], auntie:{x:150,y:166} };
+/* ===================== NORTH SHORE SURF CO. (walk-in shop on Kam Hwy) =====================
+   Four sections: BOARDS on da back wall, TRUNKS rack (left), SHIRTS rack (right), WAX at da counter
+   wit' Uncle Kimo. Walk up to anything, a tag shows name + price; B = pay right den and it's yours
+   (and you put it on). Already own it? B just puts it on. Walk out da door when you're pau. */
+const SURF_ROOM={
+  clerk:{ x:356, y:86 },
+  counter:[284,118,412,148],
+  trunksRack:[86,192,196,202], shirtsRack:[286,192,396,202],
+  items:[   // x,y = where you STAND to grab it (spot); draw position comes from da section
+    { id:'board_teal',   sec:'board',  x:96,  y:130 }, { id:'board_red',    sec:'board', x:136, y:130 },
+    { id:'board_yellow', sec:'board',  x:176, y:130 }, { id:'board_purple', sec:'board', x:216, y:130 },
+    { id:'shorts_blue',  sec:'shorts', x:106, y:214 }, { id:'shorts_red',   sec:'shorts', x:141, y:214 }, { id:'shorts_floral', sec:'shorts', x:176, y:214 },
+    { id:'shirt_none',   sec:'shirt',  x:306, y:214 }, { id:'shirt_rash',   sec:'shirt',  x:341, y:214 }, { id:'shirt_aloha',   sec:'shirt',  x:376, y:214 },
+    { id:'wax_tropic',   sec:'wax',    x:302, y:158 }, { id:'wax_cool',     sec:'wax',    x:330, y:158 } ] };
+const STORE_WAX={ wax_tropic:{ name:'Tropic Wax', price:15, color:'#ffd23f' }, wax_cool:{ name:'Cool Water Wax', price:15, color:'#7ad9ff' } };
+function surfShopSolids(){ const R=SURF_ROOM, f=r=>[r[0],r[1],r[2],r[3]]; return [f(R.counter),f(R.trunksRack),f(R.shirtsRack),[228,190,252,204]]; }   // + display board stand
+function storeItem(it){ return it.sec==='wax' ? { ...STORE_WAX[it.id], id:it.id, kind:'wax', perk:'' } : SHOP.find(s=>s.id===it.id); }
+function nearShopItem(){ if(state!=='cabin'||room!=='surfshop') return null;
+  let best=null, bd=1e9; for(const it of SURF_ROOM.items){ const d=(player.x-it.x)**2+(player.y-it.y)**2; if(d<18*18 && d<bd){ bd=d; best=it; } } return best; }
+function shopItemAction(it){ const S=storeItem(it);
+  if(S.kind==='wax') return 'buy '+S.name+' 🪙'+S.price;
+  if(equip[S.kind]===S.id) return 'wearing it';
+  if(owned.includes(S.id)) return 'put on '+S.name;
+  return (S.price===0?'take ':'buy ')+S.name+(S.price?' 🪙'+S.price:''); }
+function buyInStore(it){ const S=storeItem(it);
+  if(S.kind==='wax'){
+    if(coins<S.price){ beep(160,.12,'sawtooth'); setMsg("Uncle Kimo: 'Need 🪙"+S.price+" fo' da wax, brah. Go get shot by da photographer at da Cove.'",220,true,true); return; }
+    coins-=S.price; setCoins(coins); player.wax=3; beep(880,.1); floatScore('-🪙'+S.price,player.x,player.y-22,C.gold);
+    setMsg("Paid 🪙"+S.price+". "+S.name+" on da board: next 3 waves catch easier.",220,true,true); return; }
+  if(equip[S.kind]===S.id){ setMsg("You already wearing da "+S.name+", brah.",120,true,true); return; }
+  if(!owned.includes(S.id)){
+    if(coins<S.price){ beep(160,.12,'sawtooth'); setMsg("Uncle Kimo: '"+S.name+" stay 🪙"+S.price+". You got 🪙"+coins+". Come back, brah.'",220,true,true); return; }
+    coins-=S.price; setCoins(coins); owned.push(S.id); saveOwned(owned);
+    if(S.price) floatScore('-🪙'+S.price,player.x,player.y-22,C.gold); beep(880,.1);
+    setMsg((S.price?"Paid 🪙"+S.price+". ":"")+S.name+" is yours! You put 'um on right away.",220,true,true); }
+  else { beep(760,.08,'triangle'); setMsg("Switched to da "+S.name+".",140,true,true); }
+  equip[S.kind]=S.id; saveEquip(equip); applyEquip(); }
+function drawShopTag(it){ const S=storeItem(it), own=S.kind!=='wax'&&owned.includes(S.id), on=S.kind!=='wax'&&equip[S.kind]===S.id;
+  const t1=S.name, t2= on?'WEARING' : own?'OWNED' : S.price===0?'FREE' : '🪙'+S.price;
+  ctx.font='bold 8px "Courier New",monospace'; const w=Math.max(ctx.measureText(t1).width,ctx.measureText(t2).width)+10;
+  const tx=clamp(it.x,CABIN.x0+w/2,CABIN.x1-w/2), ty=it.sec==='board'?CABIN.wallY+4: it.y-46;
+  px(tx-w/2,ty,w,22,'#14233a'); px(tx-w/2,ty,w,2,C.gold);
+  ctx.textAlign='center'; ctx.fillStyle=C.txt; ctx.fillText(t1,tx,ty+11);
+  ctx.fillStyle= on?C.good : own?'#8fb' : (coins>=S.price?C.gold:C.bad); ctx.fillText(t2,tx,ty+20); ctx.textAlign='left'; }
+function drawSurfShopRoom(){
+  const c=CABIN, R=SURF_ROOM, sel=nearShopItem();
+  // back wall: beachy blue planks, section signs
+  px(c.x0,c.wallY,c.x1-c.x0,c.floorY-c.wallY-8,'#cfeaf0'); for(let x=c.x0;x<c.x1;x+=12) px(x,c.wallY,1,c.floorY-c.wallY-8,'#b4d8e0');
+  const sign=(x,txt,col)=>{ ctx.font='bold 7px "Courier New",monospace'; const w=ctx.measureText(txt).width+8; px(x-w/2,c.wallY-10,w,10,col); ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.fillText(txt,x,c.wallY-2); ctx.textAlign='left'; };
+  sign(156,'BOARDS','#2f8aa8');
+  sign(348,'WAX & REGISTER','#e0533a');
+  // ---- BOARDS on da wall rack ----
+  px(c.x0+14,c.floorY-14,190,4,'#8a5a30');                                              // rack rail
+  for(const it of R.items.filter(i=>i.sec==='board')){ const S=storeItem(it), bx=it.x;
+    px(bx-5,c.wallY+8,10,c.floorY-c.wallY-14,S.color); px(bx-1,c.wallY+8,1,c.floorY-c.wallY-14,'#ffffff');
+    px(bx-5,c.wallY+8,10,3,shade(S.color,30)); px(bx-3,c.wallY+5,6,3,S.color);              // rounded nose
+    px(bx-2,c.floorY-20,4,5,'#3a3a3a');                                                    // fin
+    if(sel===it){ ctx.strokeStyle=C.gold; ctx.lineWidth=1; ctx.strokeRect(bx-7,c.wallY+3,14,c.floorY-c.wallY-9); } }
+  // surf posters + a longboard hung sideways ovah da door side
+  px(c.x0+228,c.wallY+8,40,26,'#ffd23f'); px(c.x0+230,c.wallY+10,36,22,'#2f8aa8'); px(c.x0+232,c.wallY+24,32,6,'#f2f2f2'); px(c.x0+240,c.wallY+14,14,6,'#ffd98a');
+  // ---- WAX counter + register + Uncle Kimo ----
+  const [ca,cb,cc,cd]=R.counter;
+  softShadow(R.clerk.x,R.clerk.y+13,9); drawDude(R.clerk.x,R.clerk.y,'#a86a34','#2f6a8a',1,'stand',frame,'#ffd23f','#d8d8d8');
+  nameTag('UNCLE KIMO',R.clerk.x,R.clerk.y-18,C.gold);
+  px(ca,cb,cc-ca,cd-cb,'#8a5a30'); px(ca,cb,cc-ca,3,'#b07a48'); px(ca,cd-3,cc-ca,3,'#5a3a1e');
+  for(let x=ca+6;x<cc;x+=14) px(x,cb+6,1,cd-cb-9,'#6a4426');
+  px(cc-36,cb-10,24,12,'#3a3a3a'); px(cc-34,cb-8,20,4,'#8fd0a0'); px(cc-30,cb+1,12,2,'#ffd23f');   // register
+  for(const it of R.items.filter(i=>i.sec==='wax')){ const S=storeItem(it);
+    px(it.x-5,cb-6,10,7,S.color); px(it.x-5,cb-6,10,2,'#fff6d0'); px(it.x-3,cb-3,6,1,shade(S.color,-40));
+    if(sel===it){ ctx.strokeStyle=C.gold; ctx.strokeRect(it.x-7,cb-8,14,11); } }
+  // ---- TRUNKS + SHIRTS racks (chrome bar on legs, clothes on hangers) ----
+  for(const [rack,sec,title] of [[R.trunksRack,'shorts','TRUNKS'],[R.shirtsRack,'shirt','SHIRTS']]){
+    const [a,b2,c2,d]=rack;
+    px(a,b2-28,2,d-b2+28,'#9aa0a4'); px(c2-2,b2-28,2,d-b2+28,'#9aa0a4'); px(a,b2-28,c2-a,2,'#c8ced2');
+    px(a-4,d,c2-a+8,3,'#7a8084');
+    ctx.font='bold 7px "Courier New",monospace'; ctx.fillStyle='#14233a'; ctx.textAlign='center'; ctx.fillText(title,(a+c2)/2,b2-32); ctx.textAlign='left';
+    for(const it of R.items.filter(i=>i.sec===sec)){ const S=storeItem(it), hx=it.x;
+      pxLine(hx,b2-26,hx-6,b2-22,'#555',1); pxLine(hx,b2-26,hx+6,b2-22,'#555',1);          // hanger
+      if(S.color==='none'){ ctx.font='bold 6px monospace'; ctx.fillStyle='#14233a'; ctx.textAlign='center'; ctx.fillText('NO',hx,b2-14); ctx.fillText('SHIRT',hx,b2-7); ctx.textAlign='left'; }
+      else if(sec==='shorts'){ px(hx-7,b2-22,14,8,S.color); px(hx-7,b2-14,6,8,S.color); px(hx+1,b2-14,6,8,S.color); px(hx-7,b2-22,14,2,shade(S.color,30));
+        if(S.id==='shorts_floral') for(const [fx,fy] of [[-4,-19],[3,-16],[-3,-10],[4,-9]]) px(hx+fx,b2+fy,2,2,'#ffd23f'); }
+      else { px(hx-8,b2-22,16,16,S.color); px(hx-11,b2-22,3,7,S.color); px(hx+8,b2-22,3,7,S.color); px(hx-2,b2-22,4,3,shade(S.color,-35));
+        if(S.id==='shirt_aloha') for(const [fx,fy] of [[-5,-18],[2,-14],[-3,-10],[4,-19]]) px(hx+fx,b2+fy,3,3,'#ffd23f'); }
+      if(sel===it){ ctx.strokeStyle=C.gold; ctx.lineWidth=1; ctx.strokeRect(hx-10,b2-27,20,24); } } }
+  // display board on a stand in da middle + a rug
+  px(212,232,56,26,'#c8505a'); px(214,234,52,22,'#e06a6a'); for(let x=216;x<266;x+=6) px(x,236,2,18,'#f2a0a0');
+  px(236,200,8,4,'#5a3a1a'); px(232,170,16,32,'#b06bff'); px(239,170,2,32,'#fff'); px(232,170,16,3,'#d090ff');
+  ctx.font='bold 6px monospace'; ctx.fillStyle='#14233a'; ctx.textAlign='center'; ctx.fillText('SHOP LOCAL',240,166); ctx.textAlign='left';
+  if(sel) drawShopTag(sel);
+}
 function cabinSolids(){
   const f=r=>[r[0],r[1],r[2],r[3]];
   const braz=[[CABIN.doorX-52,CABIN.y1-14,CABIN.doorX-40,CABIN.y1-4],[CABIN.doorX+40,CABIN.y1-14,CABIN.doorX+52,CABIN.y1-4]];
   if(room==='rcva'){ const r=RCVA_ROOM; return [...braz,f(r.couch),f(r.coffee),f(r.tv),f(r.fridge),f(r.stairs)]; }
   if(room==='cove'){ const r=COVE_ROOM; return [...braz,f(r.bed),f(r.bench),f(r.horses),f(r.rack),f(r.resin),[r.turtle.x-6,r.turtle.y+6,r.turtle.x+6,r.turtle.y+14]]; }
   if(room==='hui'){ const r=HUI_ROOM; return [...braz,f(r.couch),f(r.bar),f(r.pool),...r.crew.map(([x,y])=>[x-6,y+6,x+6,y+14])]; }
+  if(room==='surfshop') return [...braz,...surfShopSolids()];
   if(room==='trail'){ const r=AUNTIE_ROOM; return [...braz,f(r.counter),f(r.table),f(r.chair),[r.auntie.x-6,r.auntie.y+6,r.auntie.x+6,r.auntie.y+14]]; }
   const c=CABIN;
   return [...braz,f(c.bed), f(c.stand), f(c.table), f(c.bunk), ...c.pots.map(([x,y])=>[x-8,y-4,x+8,y+8])];
@@ -2773,6 +2864,9 @@ function updCabin(){
   if(atDoor && (keys.down || consume('b'))){ leaveCabin(); return; }
   // B next to the bed = sleep till morning (your own place only)
   if(room==='myplace' && nearCabinBed() && consume('b')){ sleepTilMorning(); }
+  if(room==='surfshop'){ const si=nearShopItem(); if(si && consume('b')){ buyInStore(si); return; }
+    if(npcCool>0) npcCool--; else if(near(player.x,player.y,SURF_ROOM.clerk.x,SURF_ROOM.clerk.y+56,46)){ npcCool=700; beep(560,.07,'triangle');
+      setMsg(pickLine('kimo',["Uncle Kimo: 'Howzit! Boards on da wall, trunks left, shirts right, wax at da counter. You pay as you grab.'","Uncle Kimo: 'Coins only, brah. Da photographer at da Cove pays good.'","Uncle Kimo: 'Dat Purple Rail? Shaped right here on da North Shore.'"]),300,true,true); } }
   if(npcCool>0) npcCool--;
   if(nearAndy()){
     if(consume('b')){
@@ -2797,6 +2891,7 @@ const ROOM_PAL = {
   rcva:   { frame:'#7a7c80', frameHi:'#a2a4a8', frameSh:'#4e5054', wain:'#5e5c54', wainHi:'#7c7a70', wainLn:'#3e3c36', tileA:'#b8b0a0', tileLn:'#a49c8c' },
   cove:   { frame:'#6a5238', frameHi:'#8a6e4e', frameSh:'#3e2e1e', wain:'#4e3a26', wainHi:'#6a5236', wainLn:'#2e2216', tileA:'#a08660', tileLn:'#8c7450' },
   hui:    { frame:'#3a2a1e', frameHi:'#5a4430', frameSh:'#1e140c', wain:'#2a1a10', wainHi:'#4a3020', wainLn:'#140c06', tileA:'#5a4430', tileLn:'#4a3624' },
+  surfshop:{ frame:'#5aa8b8', frameHi:'#7ac8d8', frameSh:'#3a7a8a', wain:'#e8dcc0', wainHi:'#fff6e0', wainLn:'#b8a888', tileA:'#e0d2b0', tileLn:'#ccbc98' },
   trail:  { frame:'#c89a5a', frameHi:'#e8c080', frameSh:'#8a6638', wain:'#a87a46', wainHi:'#c8965a', wainLn:'#7a5428', tileA:'#e8dcc0', tileLn:'#d4c6a6' },
 };
 function drawRoomShell(P){
@@ -2847,7 +2942,7 @@ function drawRoomWindow(wx,curtain){
 }
 function drawCabin(){
   drawRoomShell(ROOM_PAL[room]);
-  if(room==='rcva') drawRcvaRoom(); else if(room==='hui') drawHuiRoom(); else if(room==='cove') drawCoveRoom(); else if(room==='trail') drawAuntieRoom(); else drawMyPlaceRoom();
+  if(room==='surfshop') drawSurfShopRoom(); else if(room==='rcva') drawRcvaRoom(); else if(room==='hui') drawHuiRoom(); else if(room==='cove') drawCoveRoom(); else if(room==='trail') drawAuntieRoom(); else drawMyPlaceRoom();
   // player (board stays leaning outside by the door)
   const moving=keys.left||keys.right||keys.up||keys.down;
   softShadow(player.x, player.y+13, 10);
@@ -3049,6 +3144,13 @@ function pickLine(id,lines){ const i=(INSPECT_COUNTER[id]||0)%lines.length; INSP
 // everything you can look at, for wherever you are right now: {id, x, y, r, lines}
 function inspectables(){
   const out=[], add=(id,x,y,r,lines)=>out.push({id,x,y,r,lines});
+  if(state==='cabin' && room==='surfshop'){
+    add('kimo',SURF_ROOM.clerk.x,SURF_ROOM.clerk.y+40,40,["Uncle Kimo runs da shop. Knows every board on da North Shore.","He says da Purple Rail 'goes like stink' at Sunset.","Shaka on da register. Coins only."]);
+    add('display',240,200,30,["Display board: purple, glassed clean. 'SHOP LOCAL' sign.","Not fo' sale. Kimo's personal stick.","Da rail line on dis thing, brah. Art."]);
+    add('posters',CABIN.x0+248,CABIN.wallY+30,30,["Faded Pipe poster from da 80s.","Somebody signed it wit' one Sharpie. Can't read who.","Da wave in da poster stay bigger than da shop."]);
+    add('door',CABIN.doorX,CABIN.y1-14,22,["Door back out to Kam Highway.","Sand on da mat from a hundred customers.","Shaka sign on da door: 'Mahalo, come again.'"]);
+    return out;
+  }
   if(state==='cabin' && room==='hui'){
     add('crew',135,196,44,["Da Hui crew. Dey watched you surf. Dat's why you're in here.","'Respect da ocean, respect da locals, and you good wit' us.'","Dey stay planning tomorrow's session. Big swell coming."]);
     add('photo',240,124,46,["Huge framed photo: one monster wave and one tiny surfer.","Da biggest day anybody remembers.","Nobody tells you who da surfer is. You gotta ask."]);
@@ -3166,13 +3268,12 @@ function doInspect(){
 function drawKeyHint(){
   if(state!=='beach' && state!=='cabin') return;
   let act=null;
-  if(state==='cabin'){ if(atCabinDoor()) act=['↓','walk out']; else if(nearCabinBed()) act=['B','sleep']; else if(nearAndy()) act=['B','give gift']; else if(nearTurtle() && quest.lesson>=LESSONS.length && !quest.gun) act=['B','get your board']; else if(player.waxing>0) act=['B','stop waxing']; else if(nearBlank()) act=['B','help Turtle wax']; }
+  if(state==='cabin'){ const si=nearShopItem(); if(si) act=['B',shopItemAction(si)]; else if(atCabinDoor()) act=['↓','walk out']; else if(nearCabinBed()) act=['B','sleep']; else if(nearAndy()) act=['B','give gift']; else if(nearTurtle() && quest.lesson>=LESSONS.length && !quest.gun) act=['B','get your board']; else if(player.waxing>0) act=['B','stop waxing']; else if(nearBlank()) act=['B','help Turtle wax']; }
   else {
     const b=beach;
     const rid=atDoorSpot();
     if(rid) act = b.doorOpen===rid ? ['B',(ROOMS[rid].enter==='up'?'/ ↑':'/ ↓')+' walk in'] : ['B','open door'];
     else if(b.screen===SCR.MYHOUSE){ const HM=myHammock(); if(near(player.x,player.y,HM.x,HM.y,40)) act=['B','sleep']; }
-    else if(nearSurfShop()) act=['B','surf shop'];
     else if(nearIceStand()) act=['B','shave ice'];
     else if(b.screen===SCR.SURF && near(player.x,player.y,b.chandler.x,b.chandler.y+6,26)) act=['B','talk to Chandler'];
     else if(b.screen===SCR.PIPE && near(player.x,player.y,JUDGE.x,JUDGE.y,26)) act=['B',heat.on?'heat info':'enter Pipe Masters'];
