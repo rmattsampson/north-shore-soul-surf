@@ -1288,7 +1288,7 @@ function updWater(){
 
 // da lineup at each beach keeps living while you're on da sand: Hui + pros keep surfing, sharks stay
 function lineup(sc){ const w=water; w.lineups=w.lineups||{}; const k=(sc===undefined?beach.screen:sc);
-  return w.lineups[k] || (w.lineups[k]={ huis:[], pro:null, shark:null, huiT:ri(260,480), proT:ri(360,700), sharkT:ri(620,1100) }); }
+  return w.lineups[k] || (w.lineups[k]={ huis:[], pro:null, shark:null, huiT:ri(260,480), proT:ri(360,700), sharkT:ri(1240,2200) }); }   // sharks half as often
 function tickLineup(){
   if(!beachBuilt || IS_DOWN(beach.screen) || (state!=='beach' && state!=='water')) return;
   const w=water, LU=lineup(), inSea=(state==='water');
@@ -1387,7 +1387,7 @@ function tickLineup(){
     if(s.hunt && LU.pro && !LU.pro.bit && near(LU.pro.x,LU.pro.y,s.x,s.y,16)){   // takes out da pro (Hui stay untouched — even da sharks respect da Hui)
       LU.pro.bit=true; s.hunt=false; s.dir=s.x<W/2?-1:1; beep(70,.4,'sawtooth',.05);
       setMsg("🦈 Shark wen' hit "+LU.pro.name+"! Dey okay — paddlin' back to shore.",170); }
-    if(s.x>W+30||s.x<-30){ LU.shark=null; LU.sharkT=ri(660,1080); } }
+    if(s.x>W+30||s.x<-30){ LU.shark=null; LU.sharkT=ri(1320,2160); } }
 }
 function trick(name,pts,col,id){ const w=water; w.combo++; w.style+=pts;
   score+=pts*w.combo; floatScore((w.combo>1?('x'+w.combo+' '):'')+name,player.x,player.y-16,col);
