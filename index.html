@@ -583,6 +583,8 @@ let beachBuilt=false;
 // you leave a screen; when you RETURN to a screen you were already on, drop back there (nudged inward)
 // instead of the default spawn. Edge spawns still apply on the first visit to a screen.
 let scrPos=loadScrPos();
+// drop malformed saved entries (non-finite / out of bounds) so a stale or hand-edited save can't place anyone off-map
+for(const k of Object.keys(scrPos)){ const p=scrPos[k]; if(!p||!Number.isFinite(p.x)||!Number.isFinite(p.y)||p.x<0||p.x>W||p.y<0||p.y>H) delete scrPos[k]; }
 function rememberPos(sc){ if(sc===undefined||sc===null) return; scrPos[sc]={x:Math.round(player.x), y:Math.round(player.y)}; saveScrPos(scrPos); }
 // restore saved position for a screen, nudged a few px toward center so you don't instantly re-trigger
 // the edge you came from. returns true if a saved position was applied.
@@ -593,7 +595,7 @@ function restorePos(sc){ const p=scrPos[sc]; if(!p) return false;
   // nudge inward from any edge so we clear the transition trigger bands
   if(x<=12) x=16; else if(x>=W-12) x=W-16;
   if(y<=yLo+4) y=yLo+8; else if(y>=yHi-2) y=yHi-6;
-  player.x=clamp(x,12,W-12); player.y=clamp(y,yLo,yHi);
+  beach.screen=sc; placePlayerFree(sc,clamp(x,12,W-12),clamp(y,yLo,yHi),null);   // never restore into a fence/wall/pocket
   return true;
 }
 
@@ -603,13 +605,38 @@ function restorePos(sc){ const p=scrPos[sc]; if(!p) return false;
 function goScreen(sc, x, y){
   beach.screen=sc;
   const land=IS_DOWN(sc), yLo=land?SEATOP+10:SHORE+4, yHi=land?H-10:H-14;
-  player.x=clamp(x,12,W-12); player.y=clamp(y,yLo,yHi);
-  const rs=solidsNow(); if(!feetHit(player.x,player.y,rs)) return;
-  const x0=player.x, y0=player.y;
-  for(let r=4;r<=120;r+=4){                                   // ring search, nearest first; stay off da trigger edges
-    for(const [dx,dy] of [[0,r],[0,-r],[r,0],[-r,0],[r,r],[-r,r],[r,-r],[-r,-r]]){
-      const nx=clamp(x0+dx,14,W-14), ny=clamp(y0+dy,yLo+4,yHi-4);
-      if(!feetHit(nx,ny,rs)){ player.x=nx; player.y=ny; return; } } }
+  const px0=clamp(x,12,W-12), py0=clamp(y,yLo,yHi);
+  // which edge you came in from decides where da reachable-search starts
+  const edge = x<=16?'L' : x>=W-16?'R' : y<=yLo+12?'T' : 'B';
+  placePlayerFree(sc,px0,py0,edge);
+}
+// Put da player at da free spot nearest (x,y) dat is REACHABLE from da entry edge (BFS on a 4px grid over
+// da same solids da movement code uses). Never lands inside a fence/wall/house/water, nor in a closed pocket.
+// edge: 'L','R','T','B' = entry edge, or null = any edge (used for restored positions).
+// shortcut: 4px grid, 8-ish px feet box; fine for current solids, revisit if a gap narrower than ~10px is added.
+function placePlayerFree(sc,x,y,edge){
+  const land=IS_DOWN(sc), yLo=(land?SEATOP+10:SHORE+4)+4, yHi=(land?H-10:H-14)-4, xLo=14, xHi=W-14;
+  player.x=x; player.y=y;
+  const rs=solidsNow();
+  const reach=freeReachable(rs,xLo,xHi,yLo,yHi,edge);
+  if(!reach) return;                                           // nothing computed: keep da clamped spot
+  const gx=Math.round((x-xLo)/4), gy=Math.round((y-yLo)/4);
+  const key=(i,j)=>i+','+j;
+  if(reach.has(key(gx,gy)) && !feetHit(x,y,rs)) return;      // already fine
+  let best=null, bd=1e9;
+  for(const k of reach){ const [i,j]=k.split(',').map(Number), cx=xLo+i*4, cy=yLo+j*4, d=(cx-x)*(cx-x)+(cy-y)*(cy-y);
+    if(d<bd){ bd=d; best=[cx,cy]; } }
+  if(best){ player.x=best[0]; player.y=best[1]; }
+}
+function freeReachable(rs,xLo,xHi,yLo,yHi,edge){
+  const nx=Math.floor((xHi-xLo)/4), ny=Math.floor((yHi-yLo)/4), seen=new Set(), q=[];
+  const key=(i,j)=>i+','+j;
+  const push=(i,j)=>{ if(i<0||j<0||i>nx||j>ny) return; const k=key(i,j); if(seen.has(k)) return;
+    if(feetHit(xLo+i*4,yLo+j*4,rs)) return; seen.add(k); q.push([i,j]); };
+  for(let i=0;i<=nx;i++){ if(!edge||edge==='T') push(i,0); if(!edge||edge==='B') push(i,ny); }
+  for(let j=0;j<=ny;j++){ if(!edge||edge==='L') push(0,j); if(!edge||edge==='R') push(nx,j); }
+  for(let h=0;h<q.length;h++){ const [i,j]=q[h]; push(i+1,j); push(i-1,j); push(i,j+1); push(i,j-1); }
+  return seen.size?seen:null;
 }
 
 function buildBeach(){
@@ -2136,7 +2163,8 @@ function solidsNow(){
         out.push([BB.x-42, houseBand+30, BB.x+42, houseBand+70]);                          // Billabong house
         out.push([BB.f0-1, BB.ft-9, BB.f1+4, BB.ft-1],   // picket fence: back row
                  [BB.f0-1, BB.fb-11, BB.f1+4, BB.fb],  //   front row
-                 [BB.f0-1, BB.ft-9, BB.f0+4, BB.fb],   //   left side (along the path)
+                 [BB.f0-1, BB.ft-9, BB.f0+4, BB.gy0],  //   left side (along the path), above the gate
+                 [BB.f0-1, BB.gy1, BB.f0+4, BB.fb],    //   left side, below the gate (gate gap gy0..gy1 stays open)
                  [BB.f1-1, BB.ft-9, BB.f1+4, BB.fb]);  //   right side
       } else out.push([16,wy,W/2-22,wy+12], [W/2+16,wy,W-16,wy+12]); }
   }
@@ -2370,7 +2398,9 @@ function billabongLayout(){
   const houseBand=SEATOP+10, roadY=SEATOP+140;
   return { x:382, base:houseBand+70,                 // house center + ground line
            p0:W/2-12, p1:W/2+12,                     // dirt path down the middle of the screen
-           f0:292, f1:452, ft:houseBand+16, fb:roadY-18 }; // fence box: left/right/top/bottom (gap on da right so you can walk on to da Cove side)
+           f0:292, f1:452, ft:houseBand+16, fb:roadY-18,
+           gy0:roadY-18-70, gy1:roadY-18-34 }; // gate gap in da LEFT fence run (faces da path): y gy0..gy1
+ // fence box: left/right/top/bottom (gap on da right so you can walk on to da Cove side)
 }
 function drawBillabongYard(BB){
   const fence='#efe6d2', fenceSh='#b8ae96';
@@ -2378,7 +2408,14 @@ function drawBillabongYard(BB){
   for(let x=BB.f0; x<=BB.f1; x+=6){ px(x,BB.ft-8,3,8,fence); px(x,BB.ft-9,3,1,'#fff'); }
   px(BB.f0,BB.ft-5,BB.f1-BB.f0+3,1,fenceSh);
   // side fence runs (left side borders the path)
-  for(let y=BB.ft; y<BB.fb; y+=8){ px(BB.f0,y,3,7,fence); px(BB.f1,y,3,7,fence); }
+  for(let y=BB.ft; y<BB.fb; y+=8){ px(BB.f1,y,3,7,fence); if(y+7<=BB.gy0-2||y>=BB.gy1+2) px(BB.f0,y,3,7,fence); }
+  // da GATE (left run, facing da path): two tall posts with caps, a gap, and da gate leaf swung open inside
+  { const gx=BB.f0, post='#d9cdb0', cap='#fff';
+    px(gx-1,BB.gy0-6,5,8,post); px(gx-1,BB.gy0-8,5,2,cap); px(gx+3,BB.gy0-6,1,8,fenceSh);
+    px(gx-1,BB.gy1-2,5,8,post); px(gx-1,BB.gy1+4,5,2,'#b8ae96'); px(gx-1,BB.gy1-4,5,2,cap);
+    px(gx+5,BB.gy0+2,3,BB.gy1-BB.gy0-4,fence); px(gx+5,BB.gy0+4,3,1,fenceSh); px(gx+5,BB.gy1-6,3,1,fenceSh);  // leaf swung open
+    px(gx+3,BB.gy0+4,2,1,'#8a7a5a'); px(gx+3,BB.gy1-6,2,1,'#8a7a5a');                                           // hinges
+    px(gx-3,BB.gy0+6,3,BB.gy1-BB.gy0-10,'#c9a96a'); }                                                          // worn dirt at da opening
   // the house
   drawBillabongHouse(BB.x, BB.base);
   // Sterling Spencer pops up from behind the left fence run when you walk past
